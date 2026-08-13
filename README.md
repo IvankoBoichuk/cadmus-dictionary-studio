@@ -24,6 +24,73 @@ Stories.
 The API and worker are separate processes built from one modular-monolith
 backend. They are not independent microservices. See docs/architecture.md.
 
+## Local environment with Docker Compose
+
+Docker Compose is the standard way to run Cadmus locally. At this stage it
+builds and starts the implemented FastAPI `api` service. PostgreSQL, Redis,
+the worker, MinIO, and the frontend are not placeholders in this baseline;
+their owning Stories add them when their implementations exist.
+
+Prerequisites:
+
+- Docker Engine or Docker Desktop with Docker Compose v2;
+- ports used by the configured services must be available (`8000` by default
+  for the API).
+
+The checked-in defaults are safe for local use and require no `.env` file. To
+customize them, copy the example and edit the untracked file:
+
+~~~bash
+cp .env.example .env
+~~~
+
+Validate, build, and start the environment from the repository root:
+
+~~~bash
+docker compose config
+docker compose build
+docker compose up
+~~~
+
+To start in the background and verify the API:
+
+~~~bash
+docker compose up --build -d
+docker compose ps
+curl --fail http://localhost:8000/health
+~~~
+
+The API container should report `healthy`, and the health endpoint returns a
+JSON response whose `status` is `ok`. If `CADMUS_API_PORT` is changed, use that
+port in the URL. View logs and stop the environment with:
+
+~~~bash
+docker compose logs --no-color
+docker compose logs --follow
+docker compose down
+~~~
+
+The current baseline has no persistent volumes, so no volume cleanup is
+necessary. Future stateful services must document their named volumes and the
+explicit, destructive cleanup command when they are introduced.
+
+Convenience targets mirror the common workflow:
+
+~~~bash
+make compose-build
+make compose-up
+make compose-logs
+make compose-down
+~~~
+
+Every future Story that introduces a Cadmus component or infrastructure
+dependency must integrate it into Docker Compose and verify it through the
+standard Compose commands in the same change set. Specifically, `BH-178` adds
+the React frontend, `BH-179` adds PostgreSQL and Alembic migration execution,
+`BH-180` adds Redis and the background worker, and `BH-181` adds MinIO and its
+S3-compatible configuration. See `infrastructure/README.md` for the extension
+rules.
+
 ## Root commands
 
 ~~~bash
