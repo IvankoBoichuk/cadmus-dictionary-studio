@@ -216,3 +216,50 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node and frontend
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+coverage/
+.vite/
+.turbo/
+playwright-report/
+test-results/
+
+# Secrets and local configuration
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Runtime data, uploads, models, and local volumes
+data/
+storage/
+uploads/
+artifacts/
+models/
+volumes/
+minio-data/
+postgres-data/
+redis-data/
+*.sqlite
+*.sqlite3
+
+# Generated OCR/export outputs and private documents
+*.alto.xml
+*.page.xml
+ocr-output/
+exports/
+source-documents/
+private-fixtures/
