@@ -1,6 +1,49 @@
 name: cadmus-dictionary-studio
 
 services:
+  postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_DB: ${CADMUS_DATABASE_NAME:-cadmus}
+      POSTGRES_USER: ${CADMUS_DATABASE_USER:-cadmus}
+      POSTGRES_PASSWORD: ${CADMUS_DATABASE_PASSWORD:-cadmus-local}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    command:
+      - alembic
+      - upgrade
+      - head
+    environment: &database-environment
+      CADMUS_DATABASE_NAME: ${CADMUS_DATABASE_NAME:-cadmus}
+      CADMUS_DATABASE_USER: ${CADMUS_DATABASE_USER:-cadmus}
+      CADMUS_DATABASE_PASSWORD: ${CADMUS_DATABASE_PASSWORD:-cadmus-local}
+      CADMUS_DATABASE_HOST: postgres
+      CADMUS_DATABASE_PORT: 5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cadmus
+    restart: "no"
+
   api:
     build:
       context: .
@@ -9,6 +52,12 @@ services:
       CADMUS_ENVIRONMENT: ${CADMUS_ENVIRONMENT:-development}
       CADMUS_NAME: ${CADMUS_NAME:-cadmus-api}
       CADMUS_VERSION: ${CADMUS_VERSION:-0.1.0}
+      <<: *database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     init: true
     ports:
       - "${CADMUS_API_PORT:-8000}:8000"
@@ -28,6 +77,54 @@ services:
       start_period: 5s
     stop_grace_period: 10s
 
+  postgres-test:
+    profiles:
+      - test
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_DB: cadmus_test
+      POSTGRES_USER: cadmus_test
+      POSTGRES_PASSWORD: cadmus-test-only
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U cadmus_test -d cadmus_test
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+  integration-test:
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: test
+    command:
+      - pytest
+      - -p
+      - no:cacheprovider
+      - -m
+      - integration
+      - tests/integration
+    environment:
+      CADMUS_ENVIRONMENT: test
+      CADMUS_TEST_DATABASE_URL: >-
+        postgresql+psycopg://cadmus_test:cadmus-test-only@postgres-test:5432/cadmus_test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    networks:
+      - cadmus
+
 networks:
   cadmus:
     driver: bridge
+
+volumes:
+  postgres-data:
