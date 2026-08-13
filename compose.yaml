@@ -1,0 +1,33 @@
+name: cadmus-dictionary-studio
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      CADMUS_ENVIRONMENT: ${CADMUS_ENVIRONMENT:-development}
+      CADMUS_NAME: ${CADMUS_NAME:-cadmus-api}
+      CADMUS_VERSION: ${CADMUS_VERSION:-0.1.0}
+    init: true
+    ports:
+      - "${CADMUS_API_PORT:-8000}:8000"
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    stop_grace_period: 10s
+
+networks:
+  cadmus:
+    driver: bridge

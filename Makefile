@@ -1,4 +1,4 @@
-.PHONY: help install api test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api compose-build compose-up compose-down compose-logs test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -6,6 +6,10 @@ help:
 	@echo "Cadmus repository commands:"
 	@echo "  make install       Install locked workspace dependencies"
 	@echo "  make api           Run the FastAPI development server"
+	@echo "  make compose-build Build the local Compose services"
+	@echo "  make compose-up    Build and start the local environment"
+	@echo "  make compose-down  Stop the local environment"
+	@echo "  make compose-logs  Follow local environment logs"
 	@echo "  make test          Run backend tests"
 	@echo "  make lint          Run Ruff lint checks"
 	@echo "  make format-check  Check Python formatting"
@@ -17,6 +21,18 @@ install:
 
 api:
 	$(UV) run --locked --package cadmus-api uvicorn cadmus_api.main:create_app --factory
+
+compose-build:
+	docker compose build
+
+compose-up:
+	docker compose up --build
+
+compose-down:
+	docker compose down
+
+compose-logs:
+	docker compose logs --follow
 
 test:
 	$(UV) run --locked pytest
@@ -41,6 +57,9 @@ structure-check:
 	test -s AGENTS.md
 	test -s LICENSE.md
 	test -s .gitignore
+	test -s .dockerignore
+	test -s .env.example
+	test -s compose.yaml
 	test -s docs/architecture.md
 	test -s docs/decisions/0001-modular-monolith-with-worker.md
 	test -s docs/decisions/0002-postgresql-and-object-storage.md

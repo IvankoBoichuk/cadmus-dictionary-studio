@@ -49,17 +49,27 @@ make lint
 make format-check
 make type-check
 make verify
+docker compose config
+docker compose build
+docker compose up
+docker compose down
 ~~~
 
 The commands require Python 3.12 and uv 0.12.x. `make install` synchronizes all
 workspace packages from `uv.lock`. `make api` starts the FastAPI application
 factory locally. `make verify` checks lock consistency, whitespace, lint,
-repository structure, formatting, types, and backend tests.
+repository structure, formatting, types, and backend tests. Docker Compose v2
+is required for the Compose commands; the root `compose.yaml` is the standard
+local runtime entrypoint.
 
 Frontend and worker build, test, lint, and type-check commands are not available
 yet. Stories introducing those toolchains must update this section with exact
 commands that work from a clean checkout. Once a command is documented here,
 keeping it executable is part of every subsequent change.
+
+Every Story that adds a component or infrastructure dependency must integrate
+it into Docker Compose and verify it with the standard Compose commands in the
+same change set.
 
 ## Architecture rules
 
