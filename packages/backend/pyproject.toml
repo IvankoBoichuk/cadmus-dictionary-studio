@@ -1,0 +1,16 @@
+[project]
+name = "cadmus-backend"
+version = "0.1.0"
+description = "Shared application and domain package for Cadmus Dictionary Studio"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic-settings>=2.14.2,<2.15.0",
+]
+
+[build-system]
+requires = ["uv-build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "cadmus"
+module-root = "src"

@@ -4,8 +4,9 @@ Cadmus is an information system for transforming scans and PDFs of printed
 dictionaries into reviewed, structured lexicographic data while preserving
 source provenance.
 
-The project is currently in its architecture and repository-bootstrap phase.
-Application code is introduced by separate Jira Stories.
+The repository contains the initial FastAPI backend scaffold. Domain features,
+the worker, persistence, and the web client are introduced by separate Jira
+Stories.
 
 ## Repository structure
 
@@ -26,13 +27,31 @@ backend. They are not independent microservices. See docs/architecture.md.
 ## Root commands
 
 ~~~bash
-make help
+make install
+make api
+make test
+make lint
+make format-check
+make type-check
 make verify
 ~~~
 
-make verify performs the checks available during the bootstrap phase. Backend,
-frontend, worker, and quality-tooling Stories will extend the root commands
-when their real toolchains are introduced.
+Python 3.12 and uv 0.12.x are required. `make install` creates the locked local
+environment. `make api` starts the API on `http://127.0.0.1:8000`; OpenAPI is
+available at `/openapi.json`, Swagger UI at `/docs`, and liveness at `/health`.
+
+The API reads its metadata from environment variables. All are optional and
+have safe local defaults:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `CADMUS_NAME` | `cadmus-api` | service name and OpenAPI title |
+| `CADMUS_ENVIRONMENT` | `development` | deployment environment |
+| `CADMUS_VERSION` | `0.1.0` | service and OpenAPI version |
+
+`make verify` checks lock consistency, whitespace, repository structure, lint,
+formatting, types, and backend tests. It does not require PostgreSQL, Redis,
+object storage, or Docker.
 
 ## Development workflow
 
@@ -45,4 +64,3 @@ when their real toolchains are introduced.
 ## License
 
 No open-source license has been selected yet. See LICENSE.md.
-
