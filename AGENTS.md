@@ -39,17 +39,11 @@ Backend modules are identity, projects, sources, processing, document, lexicogra
 
 Only claim a check passed when its command actually ran successfully.
 
-The repository is currently in its documentation/bootstrap phase. Available commands:
+The repository is currently in its documentation/bootstrap phase. Run the
+available root verification:
 
 ~~~bash
-git diff --check
-test -s README.md
-test -s AGENTS.md
-test -s docs/architecture.md
-test -s docs/decisions/0001-modular-monolith-with-worker.md
-test -s docs/decisions/0002-postgresql-and-object-storage.md
-test -s docs/decisions/0003-provider-neutral-processing-pipeline.md
-test -s docs/decisions/0004-provenance-first-data-model.md
+make verify
 ~~~
 
 Application build, test, lint, format, and type-check commands do not exist yet because application scaffolding is outside BH-185. Stories introducing backend, frontend, and quality tooling must update this section in the same change set with exact commands that work from a clean checkout.
