@@ -39,20 +39,27 @@ Backend modules are identity, projects, sources, processing, document, lexicogra
 
 Only claim a check passed when its command actually ran successfully.
 
-The repository is currently in its documentation/bootstrap phase. Run the
-available root verification:
+Run development and verification commands from the repository root:
 
 ~~~bash
+make install
+make api
+make test
+make lint
+make format-check
+make type-check
 make verify
 ~~~
 
-Application build, test, lint, format, and type-check commands do not exist yet because application scaffolding is outside BH-185. Stories introducing backend, frontend, and quality tooling must update this section in the same change set with exact commands that work from a clean checkout.
+The commands require Python 3.12 and uv 0.12.x. `make install` synchronizes all
+workspace packages from `uv.lock`. `make api` starts the FastAPI application
+factory locally. `make verify` checks lock consistency, whitespace, lint,
+repository structure, formatting, types, and backend tests.
 
-Until then:
-
-- do not invent commands or add placeholder checks that always succeed;
-- report application build/test/lint/type-check as “not available yet”;
-- once a command is documented here, keeping it executable is part of every subsequent change.
+Frontend and worker build, test, lint, and type-check commands are not available
+yet. Stories introducing those toolchains must update this section with exact
+commands that work from a clean checkout. Once a command is documented here,
+keeping it executable is part of every subsequent change.
 
 ## Architecture rules
 

@@ -1,0 +1,22 @@
+[project]
+name = "cadmus-api"
+version = "0.1.0"
+description = "FastAPI transport for Cadmus Dictionary Studio"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "cadmus-backend",
+    "fastapi>=0.141.1,<0.142.0",
+    "pydantic>=2.13.4,<2.14.0",
+    "uvicorn>=0.52.3,<0.53.0",
+]
+
+[build-system]
+requires = ["uv-build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+cadmus-backend = { workspace = true }
+
+[tool.uv.build-backend]
+module-name = "cadmus_api"
+module-root = "src"
