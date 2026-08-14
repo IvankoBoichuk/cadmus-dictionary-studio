@@ -147,12 +147,13 @@ Run real migration tests against an isolated PostgreSQL service and ephemeral
 
 ~~~bash
 make test-integration
-docker compose --profile test down
 ~~~
 
 These tests refuse to run unless the database name ends in `_test`. They check
 connectivity, clean upgrade, current revision, idempotent upgrade,
-downgrade/re-upgrade, expected schema objects, and failed credentials.
+downgrade/re-upgrade, expected schema objects, and failed credentials. The
+target always stops and removes `postgres-test`, including when tests fail or
+the command is interrupted, so it does not keep the Compose network in use.
 
 Every future Story that introduces a Cadmus component or infrastructure
 dependency must integrate it into Docker Compose and verify it through the

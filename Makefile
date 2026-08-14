@@ -54,7 +54,13 @@ db-downgrade:
 	docker compose run --rm migrate alembic downgrade -1
 
 test-integration:
-	docker compose --profile test run --rm integration-test
+	@cleanup() { \
+		docker compose --profile test rm --stop --force postgres-test; \
+	}; \
+	status=0; \
+	trap cleanup EXIT HUP INT TERM; \
+	docker compose --profile test run --rm integration-test || status=$$?; \
+	exit $$status
 
 compose-build:
 	docker compose build
