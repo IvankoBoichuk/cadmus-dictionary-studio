@@ -15,8 +15,10 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
+COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY packages/backend/pyproject.toml packages/backend/pyproject.toml
 COPY apps/api/src apps/api/src
+COPY apps/worker/src apps/worker/src
 COPY packages/backend/src packages/backend/src
 COPY alembic.ini alembic.ini
 COPY migrations migrations
@@ -39,10 +41,13 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
+COPY apps/worker/pyproject.toml apps/worker/pyproject.toml
 COPY packages/backend/pyproject.toml packages/backend/pyproject.toml
 COPY apps/api/src apps/api/src
+COPY apps/worker/src apps/worker/src
 COPY packages/backend/src packages/backend/src
 COPY apps/api/tests apps/api/tests
+COPY apps/worker/tests apps/worker/tests
 COPY packages/backend/tests packages/backend/tests
 COPY tests tests
 COPY alembic.ini alembic.ini

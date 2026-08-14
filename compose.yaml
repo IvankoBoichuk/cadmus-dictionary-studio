@@ -1,6 +1,29 @@
 name: cadmus-dictionary-studio
 
 services:
+  redis:
+    image: redis:7.2.15-bookworm
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${CADMUS_REDIS_PORT:-6379}:6379"
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    stop_grace_period: 10s
+
   postgres:
     image: postgres:17.6-bookworm
     environment:
@@ -54,12 +77,18 @@ services:
       CADMUS_ENVIRONMENT: ${CADMUS_ENVIRONMENT:-development}
       CADMUS_NAME: ${CADMUS_NAME:-cadmus-api}
       CADMUS_VERSION: ${CADMUS_VERSION:-0.1.0}
+      CADMUS_REDIS_HOST: redis
+      CADMUS_REDIS_PORT: 6379
+      CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
+      CADMUS_REDIS_RESULT_DATABASE: ${CADMUS_REDIS_RESULT_DATABASE:-1}
       <<: *database-environment
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     init: true
     ports:
       - "${CADMUS_API_PORT:-8000}:8000"
@@ -78,6 +107,42 @@ services:
       retries: 5
       start_period: 5s
     stop_grace_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    command:
+      - celery
+      - --app
+      - cadmus_worker.celery_app:celery_app
+      - worker
+      - --loglevel
+      - INFO
+    environment:
+      CADMUS_ENVIRONMENT: ${CADMUS_ENVIRONMENT:-development}
+      CADMUS_REDIS_HOST: redis
+      CADMUS_REDIS_PORT: 6379
+      CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
+      CADMUS_REDIS_RESULT_DATABASE: ${CADMUS_REDIS_RESULT_DATABASE:-1}
+    depends_on:
+      redis:
+        condition: service_healthy
+    init: true
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          celery --app cadmus_worker.celery_app:celery_app inspect ping
+          --destination "celery@$${HOSTNAME}" --timeout 2
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    stop_grace_period: 30s
 
   postgres-test:
     profiles:
@@ -130,3 +195,4 @@ networks:
 
 volumes:
   postgres-data:
+  redis-data:

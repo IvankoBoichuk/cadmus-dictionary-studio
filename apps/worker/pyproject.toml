@@ -1,0 +1,19 @@
+[project]
+name = "cadmus-worker"
+version = "0.1.0"
+description = "Background-job entrypoints for Cadmus Dictionary Studio"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "cadmus-backend",
+]
+
+[build-system]
+requires = ["uv-build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+cadmus-backend = { workspace = true }
+
+[tool.uv.build-backend]
+module-name = "cadmus_worker"
+module-root = "src"

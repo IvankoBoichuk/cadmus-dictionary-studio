@@ -44,6 +44,8 @@ Run development and verification commands from the repository root:
 ~~~bash
 make install
 make api
+make worker
+make redis-up
 make test
 make lint
 make format-check
