@@ -4,9 +4,9 @@ Cadmus is an information system for transforming scans and PDFs of printed
 dictionaries into reviewed, structured lexicographic data while preserving
 source provenance.
 
-The repository contains the FastAPI backend scaffold and its PostgreSQL 17 / SQLAlchemy
-2 / Alembic persistence foundation. Domain models, the worker, object storage,
-and the web client are introduced by separate Jira Stories.
+The repository contains the FastAPI backend scaffold, its PostgreSQL 17 / SQLAlchemy
+2 / Alembic persistence foundation, and a Redis-backed Celery worker. Domain
+models, object storage, and the web client are introduced by separate Jira Stories.
 
 ## Repository structure
 
@@ -26,16 +26,18 @@ backend. They are not independent microservices. See docs/architecture.md.
 
 ## Local environment with Docker Compose
 
-Docker Compose is the standard way to run Cadmus locally. It starts PostgreSQL,
-applies all Alembic migrations with the one-shot `migrate` service, and starts
-the API only after PostgreSQL is healthy and migrations complete successfully.
-Redis, the worker, MinIO, and the frontend are not placeholders; their owning
-Stories add them when their implementations exist.
+Docker Compose is the standard way to run Cadmus locally. It starts PostgreSQL
+and Redis, applies all Alembic migrations with the one-shot `migrate` service,
+then starts the API and Celery worker after their dependencies are ready. MinIO
+and the frontend are not placeholders; their owning Stories add them when
+their implementations exist.
 
 Prerequisites:
 
 - Docker Engine or Docker Desktop with Docker Compose v2;
 - port `8000` (or `CADMUS_API_PORT`) must be available for the API;
+- port `6379` (or `CADMUS_REDIS_PORT`) must be available for host-side Redis
+  access;
 - PostgreSQL is published on `CADMUS_POSTGRES_PORT` (`5432` by default) for
   local tools such as DBeaver.
 
@@ -62,10 +64,23 @@ docker compose ps
 curl --fail http://localhost:8000/health
 ~~~
 
-The `postgres` and `api` containers should report `healthy`; `migrate` should
-exit with status 0. The health endpoint returns a JSON response whose `status`
-is `ok`. If `CADMUS_API_PORT` is changed, use that port in the URL. View logs
-and stop the environment with:
+The `postgres`, `redis`, `api`, and `worker` containers should report `healthy`;
+`migrate` should exit with status 0. The health endpoint returns a JSON response
+whose `status` is `ok`. If `CADMUS_API_PORT` is changed, use that port in the URL.
+
+Submit the deterministic infrastructure task and poll its result:
+
+~~~bash
+curl --fail --request POST http://localhost:8000/tasks/test \
+  --header 'Content-Type: application/json' \
+  --data '{"value":"hello"}'
+curl --fail http://localhost:8000/tasks/test/<task_id>
+~~~
+
+The first call returns `202 Accepted` with a `task_id`; the polling endpoint
+eventually returns `status: "succeeded"` and `result: {"echo": "hello"}`.
+Worker logs contain structured JSON events with the task ID; task inputs and
+results are excluded from info-level logs. View logs and stop the environment with:
 
 ~~~bash
 docker compose logs --no-color
@@ -73,9 +88,9 @@ docker compose logs --follow
 docker compose down
 ~~~
 
-`docker compose down` preserves the `postgres-data` named volume. The following
-command permanently deletes the local PostgreSQL database and must only be used
-when its data can be discarded:
+`docker compose down` preserves the `postgres-data` and `redis-data` named
+volumes. The following command permanently deletes the local PostgreSQL database
+and queued Redis data and must only be used when both can be discarded:
 
 ~~~bash
 make compose-reset DESTRUCTIVE=1
@@ -142,6 +157,26 @@ make api
 value for the host process. Normal Compose services override the host to
 `postgres` and port to `5432`.
 
+## Redis and background worker
+
+The worker uses Celery 5.6 with Redis as both broker and short-lived result
+backend. API and worker share the `cadmus-backend` package, but Celery entrypoints
+remain thin adapters. Redis 7.2 is deliberately selected from its maintained
+BSD-3-Clause line; the Compose image is pinned to `redis:7.2.15-bookworm`.
+
+Start only Redis, or run the worker on the host against published Redis:
+
+~~~bash
+make redis-up
+make worker
+~~~
+
+Redis database 0 is the broker and database 1 stores task results for one hour.
+Compose overrides `CADMUS_REDIS_HOST` to the internal service name `redis`.
+If Redis becomes unavailable after startup, task submission and polling return
+HTTP 503 with a stable `Task queue is unavailable` detail instead of leaking a
+transport exception.
+
 Run real migration tests against an isolated PostgreSQL service and ephemeral
 `tmpfs` data directory:
 
@@ -168,6 +203,7 @@ rules.
 ~~~bash
 make install
 make api
+make worker
 make test
 make lint
 make format-check
@@ -194,6 +230,12 @@ have safe local defaults:
 | `CADMUS_DATABASE_PORT` | `5432` | PostgreSQL port seen by the current process |
 | `CADMUS_DATABASE_URL` | unset | optional complete SQLAlchemy URL overriding the fields above |
 | `CADMUS_POSTGRES_PORT` | `5432` | PostgreSQL port published to the local host |
+| `CADMUS_REDIS_HOST` | `localhost` | host processes use this; Compose injects `redis` |
+| `CADMUS_REDIS_PORT` | `6379` | Redis port seen by the process and published locally |
+| `CADMUS_REDIS_BROKER_DATABASE` | `0` | Redis database used by the Celery broker |
+| `CADMUS_REDIS_RESULT_DATABASE` | `1` | Redis database used for Celery task results |
+| `CADMUS_REDIS_BROKER_URL` | unset | optional complete broker URL override |
+| `CADMUS_REDIS_RESULT_BACKEND_URL` | unset | optional complete result backend URL override |
 
 The application constructs the effective SQLAlchemy URL in one typed settings
 method. Password fields and the full URL are secret-valued and must not be

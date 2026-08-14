@@ -1,4 +1,4 @@
-.PHONY: help install api postgres-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker postgres-up redis-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -6,7 +6,9 @@ help:
 	@echo "Cadmus repository commands:"
 	@echo "  make install       Install locked workspace dependencies"
 	@echo "  make api           Run the FastAPI development server"
+	@echo "  make worker        Run the Celery worker"
 	@echo "  make postgres-up   Start PostgreSQL and wait for its health check"
+	@echo "  make redis-up      Start Redis and wait for its health check"
 	@echo "  make db-upgrade    Apply all migrations through Compose"
 	@echo "  make db-revision MESSAGE='...'  Create an Alembic revision"
 	@echo "  make db-current    Show the current database revision"
@@ -30,8 +32,14 @@ install:
 api:
 	$(UV) run --locked --package cadmus-api uvicorn cadmus_api.main:create_app --factory
 
+worker:
+	$(UV) run --locked --package cadmus-worker celery --app cadmus_worker.celery_app:celery_app worker --loglevel INFO
+
 postgres-up:
 	docker compose up -d --wait postgres
+
+redis-up:
+	docker compose up -d --wait redis
 
 db-upgrade:
 	docker compose run --rm migrate
@@ -84,7 +92,7 @@ format-check:
 	$(UV) run --locked ruff format --check .
 
 type-check:
-	$(UV) run --locked mypy apps/api/src apps/api/tests packages/backend/src packages/backend/tests tests/integration
+	$(UV) run --locked mypy apps/api/src apps/api/tests apps/worker/src apps/worker/tests packages/backend/src packages/backend/tests tests/integration
 
 lock-check:
 	$(UV) lock --check

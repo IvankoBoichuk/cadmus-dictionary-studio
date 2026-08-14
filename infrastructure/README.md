@@ -15,9 +15,11 @@ Implemented stateful infrastructure:
 - `BH-179` adds pinned PostgreSQL, the `postgres-data` named volume, health
   ordering, a configurable local host port, Alembic execution, and an isolated
   test profile.
+- `BH-180` adds pinned Redis 7.2 from its BSD-3-Clause release line, the
+  `redis-data` named volume, a health check, and readiness ordering for the API
+  and Celery worker.
 
 Remaining extension points are deliberately not placeholders:
 
 - `BH-178` adds the React frontend service;
-- `BH-180` adds Redis and the background worker, including readiness ordering;
 - `BH-181` adds MinIO, its named volume, health check, and bucket initialization.

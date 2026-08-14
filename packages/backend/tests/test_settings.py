@@ -13,6 +13,8 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.database_host == "localhost"
     assert settings.database_port == 5432
     assert settings.sqlalchemy_database_url().drivername == "postgresql+psycopg"
+    assert settings.celery_broker_url() == "redis://localhost:6379/0"
+    assert settings.celery_result_backend_url() == "redis://localhost:6379/1"
 
 
 def test_settings_are_read_from_environment(
@@ -26,6 +28,10 @@ def test_settings_are_read_from_environment(
     monkeypatch.setenv("CADMUS_DATABASE_PASSWORD", "not-logged")
     monkeypatch.setenv("CADMUS_DATABASE_HOST", "database.internal")
     monkeypatch.setenv("CADMUS_DATABASE_PORT", "5433")
+    monkeypatch.setenv("CADMUS_REDIS_HOST", "queue.internal")
+    monkeypatch.setenv("CADMUS_REDIS_PORT", "6380")
+    monkeypatch.setenv("CADMUS_REDIS_BROKER_DATABASE", "2")
+    monkeypatch.setenv("CADMUS_REDIS_RESULT_DATABASE", "3")
 
     settings = Settings()
 
@@ -38,6 +44,8 @@ def test_settings_are_read_from_environment(
     assert database_url.password == "not-logged"
     assert database_url.host == "database.internal"
     assert database_url.port == 5433
+    assert settings.celery_broker_url() == "redis://queue.internal:6380/2"
+    assert settings.celery_result_backend_url() == "redis://queue.internal:6380/3"
 
 
 def test_full_database_url_overrides_individual_connection_fields(
@@ -60,10 +68,40 @@ def test_full_database_url_overrides_individual_connection_fields(
 
 
 def test_settings_representations_do_not_expose_database_credentials() -> None:
-    settings = Settings(database_password=SecretStr("highly-sensitive"))
+    settings = Settings(
+        database_password=SecretStr("highly-sensitive"),
+        redis_broker_url=SecretStr("redis://:broker-secret@localhost:6379/0"),
+        redis_result_backend_url=SecretStr("redis://:result-secret@localhost:6379/1"),
+    )
 
     assert "highly-sensitive" not in repr(settings)
+    assert "broker-secret" not in repr(settings)
+    assert "result-secret" not in repr(settings)
     assert "highly-sensitive" not in str(settings.sqlalchemy_database_url())
+
+
+def test_full_redis_urls_override_individual_connection_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CADMUS_REDIS_HOST", "ignored-host")
+    monkeypatch.setenv(
+        "CADMUS_REDIS_BROKER_URL",
+        "redis://:broker-secret@broker.internal:6379/4",
+    )
+    monkeypatch.setenv(
+        "CADMUS_REDIS_RESULT_BACKEND_URL",
+        "redis://:result-secret@results.internal:6379/5",
+    )
+
+    settings = Settings()
+
+    assert (
+        settings.celery_broker_url() == "redis://:broker-secret@broker.internal:6379/4"
+    )
+    assert (
+        settings.celery_result_backend_url()
+        == "redis://:result-secret@results.internal:6379/5"
+    )
 
 
 def test_database_url_encodes_reserved_password_characters() -> None:
