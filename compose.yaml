@@ -164,6 +164,35 @@ services:
       start_period: 5s
     stop_grace_period: 10s
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    environment:
+      CADMUS_API_UPSTREAM: api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    init: true
+    ports:
+      - "${CADMUS_WEB_PORT:-5173}:8080"
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://127.0.0.1:8080/healthz
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    stop_grace_period: 10s
+
   worker:
     build:
       context: .

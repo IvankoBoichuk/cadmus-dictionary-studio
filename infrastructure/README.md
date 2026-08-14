@@ -23,6 +23,11 @@ Implemented stateful infrastructure:
   bucket before the API starts. The server is AGPL-3.0 and its archived
   upstream requires a new maintenance/licensing review before production use.
 
-Remaining extension points are deliberately not placeholders:
+Implemented stateless services:
 
-- `BH-178` adds the React frontend service;
+- `BH-178` builds the React frontend with Bun, serves its production assets
+  through Nginx, publishes the configurable host port, and proxies same-origin
+  `/api` requests to the Compose API service.
+
+Future extension points are added only by their owning Stories; there are no
+placeholder services in the Compose file.

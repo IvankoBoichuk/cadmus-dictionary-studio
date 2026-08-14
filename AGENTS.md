@@ -45,6 +45,11 @@ Run development and verification commands from the repository root:
 make install
 make api
 make worker
+make web
+make web-build
+make web-test
+make web-lint
+make web-type-check
 make redis-up
 make minio-up
 make test
@@ -58,18 +63,20 @@ docker compose up
 docker compose down
 ~~~
 
-The commands require Python 3.12 and uv 0.12.x. `make install` synchronizes all
-workspace packages from `uv.lock`. `make api` starts the FastAPI application
-factory locally. `make verify` checks lock consistency, whitespace, lint,
-repository structure, formatting, types, and backend tests. Docker Compose v2
+The commands require Python 3.12, uv 0.12.x, and Bun 1.3.x. `make install`
+synchronizes all Python workspace packages from `uv.lock` and frontend packages
+from `apps/web/bun.lock`. `make api` starts the FastAPI application factory
+locally; `make web` starts the Vite frontend. `make verify` checks both lockfiles,
+whitespace, lint, repository structure, formatting, Python and TypeScript types,
+backend and frontend tests, and the production frontend build. Docker Compose v2
 is required for the Compose commands; `make minio-up` starts MinIO and its
 idempotent bucket initializer, and the root `compose.yaml` is the standard local
 runtime entrypoint.
 
-Frontend and worker build, test, lint, and type-check commands are not available
-yet. Stories introducing those toolchains must update this section with exact
-commands that work from a clean checkout. Once a command is documented here,
-keeping it executable is part of every subsequent change.
+Worker build, test, lint, and type-check commands beyond the shared backend
+checks are not available yet. Stories introducing that toolchain must update
+this section with exact commands that work from a clean checkout. Once a command
+is documented here, keeping it executable is part of every subsequent change.
 
 Every Story that adds a component or infrastructure dependency must integrate
 it into Docker Compose and verify it with the standard Compose commands in the

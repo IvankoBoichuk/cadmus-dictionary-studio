@@ -1,6 +1,7 @@
 .git
 .github
 .venv
+**/.venv
 .env
 .env.*
 !.env.example
@@ -12,9 +13,12 @@ __pycache__
 .ruff_cache
 build
 dist
+**/dist
 coverage
 htmlcov
 node_modules
+**/node_modules
+**/.tmp
 .pnpm-store
 data
 storage
