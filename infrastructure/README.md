@@ -13,9 +13,8 @@ services own clearly named persistent volumes; stateless services do not.
 Implemented stateful infrastructure:
 
 - `BH-179` adds pinned PostgreSQL, the `postgres-data` named volume, health
-  ordering, Alembic execution, and an isolated test profile;
-- `infrastructure/compose.host.yaml` is an opt-in override for publishing the
-  database port during host-side backend development.
+  ordering, a configurable local host port, Alembic execution, and an isolated
+  test profile.
 
 Remaining extension points are deliberately not placeholders:
 

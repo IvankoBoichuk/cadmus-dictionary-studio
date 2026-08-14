@@ -1,4 +1,4 @@
-.PHONY: help install api postgres-up postgres-host-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api postgres-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -7,7 +7,6 @@ help:
 	@echo "  make install       Install locked workspace dependencies"
 	@echo "  make api           Run the FastAPI development server"
 	@echo "  make postgres-up   Start PostgreSQL and wait for its health check"
-	@echo "  make postgres-host-up  Start PostgreSQL with an explicit host port"
 	@echo "  make db-upgrade    Apply all migrations through Compose"
 	@echo "  make db-revision MESSAGE='...'  Create an Alembic revision"
 	@echo "  make db-current    Show the current database revision"
@@ -33,9 +32,6 @@ api:
 
 postgres-up:
 	docker compose up -d --wait postgres
-
-postgres-host-up:
-	docker compose -f compose.yaml -f infrastructure/compose.host.yaml up -d --wait postgres
 
 db-upgrade:
 	docker compose run --rm migrate

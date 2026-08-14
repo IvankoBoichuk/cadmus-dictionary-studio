@@ -36,8 +36,8 @@ Prerequisites:
 
 - Docker Engine or Docker Desktop with Docker Compose v2;
 - port `8000` (or `CADMUS_API_PORT`) must be available for the API;
-- PostgreSQL is internal to the Compose network unless the documented host
-  override is explicitly used.
+- PostgreSQL is published on `CADMUS_POSTGRES_PORT` (`5432` by default) for
+  local tools such as DBeaver.
 
 The checked-in defaults are safe for local use and require no `.env` file. To
 customize them, copy the example and edit the untracked file:
@@ -95,9 +95,10 @@ make compose-down
 
 ## PostgreSQL and migrations
 
-The development database uses the pinned image `postgres:17.6-bookworm` and is
-not published to the host by default. Containers connect to the Compose service
-name `postgres`, never `localhost`. Start only PostgreSQL and apply migrations:
+The development database uses the pinned image `postgres:17.6-bookworm`.
+Containers connect to the Compose service name `postgres`, while host tools
+connect to `localhost:${CADMUS_POSTGRES_PORT:-5432}`. Start only PostgreSQL and
+apply migrations:
 
 ~~~bash
 docker compose up -d --wait postgres
@@ -128,11 +129,10 @@ There are no domain tables yet. Alembic owns `public.alembic_version`; future
 SQLAlchemy persistence models register tables on
 `cadmus.infrastructure.database.metadata` and therefore live in `cadmus`.
 
-To run the backend on the host while PostgreSQL remains in Compose, explicitly
-enable the checked-in override that publishes a configurable local port:
+To run the backend on the host while PostgreSQL remains in Compose:
 
 ~~~bash
-docker compose -f compose.yaml -f infrastructure/compose.host.yaml up -d --wait postgres
+docker compose up -d --wait postgres
 docker compose run --rm migrate
 make api
 ~~~
@@ -193,7 +193,7 @@ have safe local defaults:
 | `CADMUS_DATABASE_HOST` | `localhost` | host processes use this; Compose injects `postgres` |
 | `CADMUS_DATABASE_PORT` | `5432` | PostgreSQL port seen by the current process |
 | `CADMUS_DATABASE_URL` | unset | optional complete SQLAlchemy URL overriding the fields above |
-| `CADMUS_POSTGRES_PORT` | `5432` | host port used only by the explicit Compose override |
+| `CADMUS_POSTGRES_PORT` | `5432` | PostgreSQL port published to the local host |
 
 The application constructs the effective SQLAlchemy URL in one typed settings
 method. Password fields and the full URL are secret-valued and must not be

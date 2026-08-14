@@ -9,6 +9,8 @@ services:
       POSTGRES_PASSWORD: ${CADMUS_DATABASE_PASSWORD:-cadmus-local}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${CADMUS_POSTGRES_PORT:-5432}:5432"
     networks:
       - cadmus
     healthcheck:
