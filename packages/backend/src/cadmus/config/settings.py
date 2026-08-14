@@ -45,6 +45,17 @@ class Settings(BaseSettings):
     redis_result_database: int = Field(default=1, ge=0)
     redis_broker_url: SecretStr | None = None
     redis_result_backend_url: SecretStr | None = None
+    object_storage_endpoint: str = Field(default="localhost:9000", min_length=1)
+    object_storage_access_key: SecretStr = Field(
+        default=SecretStr("cadmus-local-access"),
+        min_length=3,
+    )
+    object_storage_secret_key: SecretStr = Field(
+        default=SecretStr("cadmus-local-secret"),
+        min_length=8,
+    )
+    object_storage_bucket: str = Field(default="cadmus", min_length=3)
+    object_storage_secure: bool = False
 
     def sqlalchemy_database_url(self) -> URL:
         """Return the single effective database URL without logging credentials."""

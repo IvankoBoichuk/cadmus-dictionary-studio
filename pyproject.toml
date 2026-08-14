@@ -16,7 +16,7 @@ members = ["apps/api", "apps/worker", "packages/backend"]
 addopts = "-ra"
 testpaths = ["apps/api/tests", "apps/worker/tests", "packages/backend/tests"]
 markers = [
-    "integration: requires the isolated PostgreSQL service from Compose",
+    "integration: requires isolated PostgreSQL and MinIO services from Compose",
 ]
 
 [tool.ruff]

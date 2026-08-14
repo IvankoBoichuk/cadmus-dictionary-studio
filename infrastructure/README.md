@@ -18,8 +18,11 @@ Implemented stateful infrastructure:
 - `BH-180` adds pinned Redis 7.2 from its BSD-3-Clause release line, the
   `redis-data` named volume, a health check, and readiness ordering for the API
   and Celery worker.
+- `BH-181` builds the pinned MinIO security release from source, adds the
+  `minio-data` named volume and health check, and initializes the configured
+  bucket before the API starts. The server is AGPL-3.0 and its archived
+  upstream requires a new maintenance/licensing review before production use.
 
 Remaining extension points are deliberately not placeholders:
 
 - `BH-178` adds the React frontend service;
-- `BH-181` adds MinIO, its named volume, health check, and bucket initialization.

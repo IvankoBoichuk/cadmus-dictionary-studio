@@ -5,8 +5,9 @@ dictionaries into reviewed, structured lexicographic data while preserving
 source provenance.
 
 The repository contains the FastAPI backend scaffold, its PostgreSQL 17 / SQLAlchemy
-2 / Alembic persistence foundation, and a Redis-backed Celery worker. Domain
-models, object storage, and the web client are introduced by separate Jira Stories.
+2 / Alembic persistence foundation, a Redis-backed Celery worker, and local
+S3-compatible object storage backed by MinIO. Domain models and the web client
+are introduced by separate Jira Stories.
 
 ## Repository structure
 
@@ -26,11 +27,10 @@ backend. They are not independent microservices. See docs/architecture.md.
 
 ## Local environment with Docker Compose
 
-Docker Compose is the standard way to run Cadmus locally. It starts PostgreSQL
-and Redis, applies all Alembic migrations with the one-shot `migrate` service,
-then starts the API and Celery worker after their dependencies are ready. MinIO
-and the frontend are not placeholders; their owning Stories add them when
-their implementations exist.
+Docker Compose is the standard way to run Cadmus locally. It starts PostgreSQL,
+Redis, and MinIO, initializes the configured object-storage bucket, applies all
+Alembic migrations, then starts the API and Celery worker after their
+dependencies are ready. The frontend is added by its owning Story.
 
 Prerequisites:
 
@@ -40,6 +40,8 @@ Prerequisites:
   access;
 - PostgreSQL is published on `CADMUS_POSTGRES_PORT` (`5432` by default) for
   local tools such as DBeaver.
+- ports `9000` and `9001` (or `CADMUS_MINIO_API_PORT` and
+  `CADMUS_MINIO_CONSOLE_PORT`) must be available for the MinIO API and console.
 
 The checked-in defaults are safe for local use and require no `.env` file. To
 customize them, copy the example and edit the untracked file:
@@ -64,9 +66,10 @@ docker compose ps
 curl --fail http://localhost:8000/health
 ~~~
 
-The `postgres`, `redis`, `api`, and `worker` containers should report `healthy`;
-`migrate` should exit with status 0. The health endpoint returns a JSON response
-whose `status` is `ok`. If `CADMUS_API_PORT` is changed, use that port in the URL.
+The `postgres`, `redis`, `minio`, `api`, and `worker` containers should report
+`healthy`; `migrate` and `object-storage-init` should exit with status 0. The
+health endpoint returns a JSON response whose `status` is `ok`. If
+`CADMUS_API_PORT` is changed, use that port in the URL.
 
 Submit the deterministic infrastructure task and poll its result:
 
@@ -88,9 +91,10 @@ docker compose logs --follow
 docker compose down
 ~~~
 
-`docker compose down` preserves the `postgres-data` and `redis-data` named
-volumes. The following command permanently deletes the local PostgreSQL database
-and queued Redis data and must only be used when both can be discarded:
+`docker compose down` preserves the `postgres-data`, `redis-data`, and
+`minio-data` named volumes. The following command permanently deletes the local
+PostgreSQL database, queued Redis data, and MinIO objects and must only be used
+when all three can be discarded:
 
 ~~~bash
 make compose-reset DESTRUCTIVE=1
@@ -98,6 +102,34 @@ make compose-reset DESTRUCTIVE=1
 
 This runs `docker compose down --volumes`. The explicit flag is a guard against
 accidental data loss.
+
+## MinIO and S3-compatible object storage
+
+The local S3 API is published at `http://localhost:9000`; the administration
+console is at `http://localhost:9001`. Start MinIO alone and run the idempotent
+bucket initializer with:
+
+~~~bash
+make minio-up
+docker compose ps minio object-storage-init
+~~~
+
+Host-side API processes use `localhost:9000`. Compose injects the internal
+endpoint `minio:9000`, so application code contains no MinIO URL. The API
+composition root creates the `ObjectStorage` adapter from typed environment
+settings; upload HTTP endpoints remain outside BH-181.
+
+The checked-in access values are explicitly disposable local/test defaults,
+not deployable credentials. Set unique secrets through the environment or an
+untracked `.env` outside local development. Do not commit real access keys.
+`object-storage-init` safely creates `CADMUS_OBJECT_STORAGE_BUCKET` only when it
+does not already exist.
+
+The Python client is the Apache-2.0 MinIO SDK and speaks the S3-compatible API.
+The local MinIO server is AGPL-3.0 and built from the pinned upstream security
+release `RELEASE.2025-10-15T17-29-55Z`; it is a local infrastructure process,
+not linked into application code. The upstream community repository is archived,
+so production adoption requires a fresh maintenance and licensing review.
 
 Convenience targets mirror the common workflow:
 
@@ -177,18 +209,18 @@ If Redis becomes unavailable after startup, task submission and polling return
 HTTP 503 with a stable `Task queue is unavailable` detail instead of leaking a
 transport exception.
 
-Run real migration tests against an isolated PostgreSQL service and ephemeral
-`tmpfs` data directory:
+Run real migration and object-storage contract tests against isolated PostgreSQL
+and MinIO services with ephemeral `tmpfs` data directories:
 
 ~~~bash
 make test-integration
 ~~~
 
 These tests refuse to run unless the database name ends in `_test`. They check
-connectivity, clean upgrade, current revision, idempotent upgrade,
-downgrade/re-upgrade, expected schema objects, and failed credentials. The
-target always stops and removes `postgres-test`, including when tests fail or
-the command is interrupted, so it does not keep the Compose network in use.
+database connectivity and reversible migrations, then upload, read, and delete
+a redistributable fixture through the application-owned storage contract. The
+target always removes its isolated PostgreSQL and MinIO services, including on
+failure or interruption.
 
 Every future Story that introduces a Cadmus component or infrastructure
 dependency must integrate it into Docker Compose and verify it through the
@@ -236,6 +268,13 @@ have safe local defaults:
 | `CADMUS_REDIS_RESULT_DATABASE` | `1` | Redis database used for Celery task results |
 | `CADMUS_REDIS_BROKER_URL` | unset | optional complete broker URL override |
 | `CADMUS_REDIS_RESULT_BACKEND_URL` | unset | optional complete result backend URL override |
+| `CADMUS_OBJECT_STORAGE_ENDPOINT` | `localhost:9000` | S3-compatible endpoint without a URL scheme; Compose injects `minio:9000` |
+| `CADMUS_OBJECT_STORAGE_ACCESS_KEY` | local-only value | S3 access key; override outside local development |
+| `CADMUS_OBJECT_STORAGE_SECRET_KEY` | local-only value | S3 secret key; override outside local development |
+| `CADMUS_OBJECT_STORAGE_BUCKET` | `cadmus` | bucket initialized and used by the adapter |
+| `CADMUS_OBJECT_STORAGE_SECURE` | `false` | enable TLS for the S3 connection |
+| `CADMUS_MINIO_API_PORT` | `9000` | MinIO S3 API port published to the host |
+| `CADMUS_MINIO_CONSOLE_PORT` | `9001` | MinIO console port published to the host |
 
 The application constructs the effective SQLAlchemy URL in one typed settings
 method. Password fields and the full URL are secret-valued and must not be
@@ -244,7 +283,7 @@ not production credentials.
 
 `make verify` checks lock consistency, whitespace, repository structure, lint,
 formatting, types, and unit tests. It does not require PostgreSQL, Redis, object
-storage, or Docker; PostgreSQL contract tests run separately with
+storage, or Docker; PostgreSQL and MinIO contract tests run separately with
 `make test-integration`.
 
 ## Development workflow
