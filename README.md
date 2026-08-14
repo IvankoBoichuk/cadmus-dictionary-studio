@@ -4,10 +4,10 @@ Cadmus is an information system for transforming scans and PDFs of printed
 dictionaries into reviewed, structured lexicographic data while preserving
 source provenance.
 
-The repository contains the FastAPI backend scaffold, its PostgreSQL 17 / SQLAlchemy
-2 / Alembic persistence foundation, a Redis-backed Celery worker, and local
-S3-compatible object storage backed by MinIO. Domain models and the web client
-are introduced by separate Jira Stories.
+The repository contains a React / TypeScript / Vite web client, the FastAPI
+backend scaffold, its PostgreSQL 17 / SQLAlchemy 2 / Alembic persistence
+foundation, a Redis-backed Celery worker, and local S3-compatible object storage
+backed by MinIO. Domain models are introduced by separate Jira Stories.
 
 ## Repository structure
 
@@ -29,13 +29,15 @@ backend. They are not independent microservices. See docs/architecture.md.
 
 Docker Compose is the standard way to run Cadmus locally. It starts PostgreSQL,
 Redis, and MinIO, initializes the configured object-storage bucket, applies all
-Alembic migrations, then starts the API and Celery worker after their
-dependencies are ready. The frontend is added by its owning Story.
+Alembic migrations, then starts the API, Celery worker, and production-built web
+client after their dependencies are ready.
 
 Prerequisites:
 
 - Docker Engine or Docker Desktop with Docker Compose v2;
+- Python 3.12, uv 0.12.x, and Bun 1.3.x for host-side development commands;
 - port `8000` (or `CADMUS_API_PORT`) must be available for the API;
+- port `5173` (or `CADMUS_WEB_PORT`) must be available for the frontend;
 - port `6379` (or `CADMUS_REDIS_PORT`) must be available for host-side Redis
   access;
 - PostgreSQL is published on `CADMUS_POSTGRES_PORT` (`5432` by default) for
@@ -58,18 +60,22 @@ docker compose build
 docker compose up --build
 ~~~
 
-To start in the background and verify the API:
+To start in the background and verify the API and frontend:
 
 ~~~bash
 docker compose up --build -d
 docker compose ps
 curl --fail http://localhost:8000/health
+curl --fail http://localhost:5173/
+curl --fail http://localhost:5173/api/health
 ~~~
 
-The `postgres`, `redis`, `minio`, `api`, and `worker` containers should report
-`healthy`; `migrate` and `object-storage-init` should exit with status 0. The
-health endpoint returns a JSON response whose `status` is `ok`. If
-`CADMUS_API_PORT` is changed, use that port in the URL.
+The `postgres`, `redis`, `minio`, `api`, `worker`, and `web` containers should
+report `healthy`; `migrate` and `object-storage-init` should exit with status 0.
+The frontend is served from its published port and proxies `/api/health` over
+the internal Compose network. Both API health endpoints return JSON whose
+`status` is `ok`. If a published port is changed, use its configured value in
+the corresponding host URL.
 
 Submit the deterministic infrastructure task and poll its result:
 
@@ -224,11 +230,10 @@ failure or interruption.
 
 Every future Story that introduces a Cadmus component or infrastructure
 dependency must integrate it into Docker Compose and verify it through the
-standard Compose commands in the same change set. Specifically, `BH-178` adds
-the React frontend, `BH-179` adds PostgreSQL and Alembic migration execution,
-`BH-180` adds Redis and the background worker, and `BH-181` adds MinIO and its
-S3-compatible configuration. See `infrastructure/README.md` for the extension
-rules.
+standard Compose commands in the same change set. The current foundation was
+added by `BH-178` (React frontend), `BH-179` (PostgreSQL and Alembic), `BH-180`
+(Redis and worker), and `BH-181` (MinIO). See `infrastructure/README.md` for the
+extension rules.
 
 ## Root commands
 
@@ -236,6 +241,11 @@ rules.
 make install
 make api
 make worker
+make web
+make web-build
+make web-test
+make web-lint
+make web-type-check
 make test
 make lint
 make format-check
@@ -243,15 +253,19 @@ make type-check
 make verify
 ~~~
 
-Python 3.12 and uv 0.12.x are required. `make install` creates the locked local
-environment. `make api` starts the API on `http://127.0.0.1:8000`; OpenAPI is
-available at `/openapi.json`, Swagger UI at `/docs`, and liveness at `/health`.
+Python 3.12, uv 0.12.x, and Bun 1.3.x are required. `make install` creates the
+locked Python and frontend environments. `make api` starts the API on
+`http://127.0.0.1:8000`; OpenAPI is available at `/openapi.json`, Swagger UI at
+`/docs`, and liveness at `/health`. `make web` starts Vite on
+`http://localhost:5173` and proxies `/api` to the local API.
 
 The API reads its metadata from environment variables. All are optional and
 have safe local defaults:
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `CADMUS_API_PORT` | `8000` | API port published to the local host |
+| `CADMUS_WEB_PORT` | `5173` | production frontend port published to the local host |
 | `CADMUS_NAME` | `cadmus-api` | service name and OpenAPI title |
 | `CADMUS_ENVIRONMENT` | `development` | deployment environment |
 | `CADMUS_VERSION` | `0.1.0` | service and OpenAPI version |
@@ -282,8 +296,9 @@ logged. `.env` remains ignored; `.env.example` contains local-only defaults,
 not production credentials.
 
 `make verify` checks lock consistency, whitespace, repository structure, lint,
-formatting, types, and unit tests. It does not require PostgreSQL, Redis, object
-storage, or Docker; PostgreSQL and MinIO contract tests run separately with
+formatting, Python and TypeScript types, backend and frontend unit tests, and the
+production frontend build. It does not require PostgreSQL, Redis, object storage,
+or Docker; PostgreSQL and MinIO contract tests run separately with
 `make test-integration`.
 
 ## Development workflow

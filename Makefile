@@ -1,4 +1,4 @@
-.PHONY: help install api worker postgres-up redis-up minio-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker web web-build web-test web-lint web-type-check postgres-up redis-up minio-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -7,6 +7,11 @@ help:
 	@echo "  make install       Install locked workspace dependencies"
 	@echo "  make api           Run the FastAPI development server"
 	@echo "  make worker        Run the Celery worker"
+	@echo "  make web           Run the Vite frontend development server"
+	@echo "  make web-build     Build the production frontend"
+	@echo "  make web-test      Run frontend tests"
+	@echo "  make web-lint      Run frontend lint checks"
+	@echo "  make web-type-check  Run the frontend TypeScript check"
 	@echo "  make postgres-up   Start PostgreSQL and wait for its health check"
 	@echo "  make redis-up      Start Redis and wait for its health check"
 	@echo "  make minio-up      Start MinIO and initialize its bucket"
@@ -29,12 +34,28 @@ help:
 
 install:
 	$(UV) sync --all-packages --locked
+	cd apps/web && bun install --frozen-lockfile
 
 api:
 	$(UV) run --locked --package cadmus-api uvicorn cadmus_api.main:create_app --factory
 
 worker:
 	$(UV) run --locked --package cadmus-worker celery --app cadmus_worker.celery_app:celery_app worker --loglevel INFO
+
+web:
+	cd apps/web && bun run dev
+
+web-build:
+	cd apps/web && bun run build
+
+web-test:
+	cd apps/web && bun run test
+
+web-lint:
+	cd apps/web && bun run lint
+
+web-type-check:
+	cd apps/web && bun run type-check
 
 postgres-up:
 	docker compose up -d --wait postgres
@@ -89,18 +110,22 @@ compose-reset:
 
 test:
 	$(UV) run --locked pytest
+	cd apps/web && bun run test
 
 lint:
 	$(UV) run --locked ruff check .
+	cd apps/web && bun run lint
 
 format-check:
 	$(UV) run --locked ruff format --check .
 
 type-check:
 	$(UV) run --locked mypy apps/api/src apps/api/tests apps/worker/src apps/worker/tests packages/backend/src packages/backend/tests tests/integration
+	cd apps/web && bun run type-check
 
 lock-check:
 	$(UV) lock --check
+	cd apps/web && bun install --frozen-lockfile --lockfile-only
 
 diff-check:
 	git diff --check
@@ -127,4 +152,4 @@ structure-check:
 	test -d fixtures
 	test -d tests
 
-verify: lock-check diff-check structure-check lint format-check type-check test
+verify: lock-check diff-check structure-check lint format-check type-check test web-build
