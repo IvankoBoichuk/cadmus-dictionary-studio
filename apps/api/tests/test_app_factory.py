@@ -2,6 +2,7 @@ from cadmus.config import Environment, Settings
 from cadmus_api.main import create_app
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
 
 
 def test_application_factory_uses_typed_settings() -> None:
@@ -25,7 +26,8 @@ def test_application_factory_returns_independent_instances() -> None:
 
 
 def test_openapi_is_available_and_documents_health_contract() -> None:
-    with TestClient(create_app()) as client:
+    test_engine = create_engine("sqlite+pysqlite:///:memory:")
+    with TestClient(create_app(database_engine=test_engine)) as client:
         response = client.get("/openapi.json")
 
     assert response.status_code == 200

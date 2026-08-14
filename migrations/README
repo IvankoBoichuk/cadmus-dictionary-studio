@@ -1,0 +1,4 @@
+Cadmus database migrations are managed by Alembic.
+
+The connection URL comes from CADMUS_DATABASE_* settings. Domain models must
+register their SQLAlchemy tables on cadmus.infrastructure.database.metadata.

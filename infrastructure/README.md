@@ -10,10 +10,14 @@ commands in the same change set. Extend the existing `cadmus` network and add
 health-based dependency ordering where one service requires another. Stateful
 services own clearly named persistent volumes; stateless services do not.
 
-Planned extension points are deliberately not placeholders:
+Implemented stateful infrastructure:
+
+- `BH-179` adds pinned PostgreSQL, the `postgres-data` named volume, health
+  ordering, a configurable local host port, Alembic execution, and an isolated
+  test profile.
+
+Remaining extension points are deliberately not placeholders:
 
 - `BH-178` adds the React frontend service;
-- `BH-179` adds PostgreSQL, its named volume, health check, and the mechanism
-  for running Alembic migrations;
 - `BH-180` adds Redis and the background worker, including readiness ordering;
 - `BH-181` adds MinIO, its named volume, health check, and bucket initialization.

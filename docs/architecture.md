@@ -237,3 +237,10 @@ cadmus-dictionary-studio/
 - [x] Ключові рішення зафіксовані ADR у `docs/decisions/`.
 - [x] Реалізація авторизації, OCR, layout analysis і словникової логіки не входить у цю зміну.
 
+## 13. Persistence foundation
+
+BH-179 реалізує PostgreSQL і керовані Alembic migrations без випередження
+предметної моделі. SQLAlchemy mappings належать infrastructure layer і
+реєструються на спільній metadata у PostgreSQL schema `cadmus`; предметний код
+не імпортує SQLAlchemy. Деталі та відхилені альтернативи зафіксовано в
+ADR-0005.

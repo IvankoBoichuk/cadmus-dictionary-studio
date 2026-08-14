@@ -15,6 +15,9 @@ members = ["apps/api", "packages/backend"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["apps/api/tests", "packages/backend/tests"]
+markers = [
+    "integration: requires the isolated PostgreSQL service from Compose",
+]
 
 [tool.ruff]
 line-length = 88
