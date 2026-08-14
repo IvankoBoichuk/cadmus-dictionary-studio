@@ -50,6 +50,7 @@ COPY apps/api/tests apps/api/tests
 COPY apps/worker/tests apps/worker/tests
 COPY packages/backend/tests packages/backend/tests
 COPY tests tests
+COPY fixtures fixtures
 COPY alembic.ini alembic.ini
 COPY migrations migrations
 

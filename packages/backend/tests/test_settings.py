@@ -15,6 +15,9 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.sqlalchemy_database_url().drivername == "postgresql+psycopg"
     assert settings.celery_broker_url() == "redis://localhost:6379/0"
     assert settings.celery_result_backend_url() == "redis://localhost:6379/1"
+    assert settings.object_storage_endpoint == "localhost:9000"
+    assert settings.object_storage_bucket == "cadmus"
+    assert settings.object_storage_secure is False
 
 
 def test_settings_are_read_from_environment(
@@ -32,6 +35,11 @@ def test_settings_are_read_from_environment(
     monkeypatch.setenv("CADMUS_REDIS_PORT", "6380")
     monkeypatch.setenv("CADMUS_REDIS_BROKER_DATABASE", "2")
     monkeypatch.setenv("CADMUS_REDIS_RESULT_DATABASE", "3")
+    monkeypatch.setenv("CADMUS_OBJECT_STORAGE_ENDPOINT", "objects.internal:9443")
+    monkeypatch.setenv("CADMUS_OBJECT_STORAGE_ACCESS_KEY", "configured-access")
+    monkeypatch.setenv("CADMUS_OBJECT_STORAGE_SECRET_KEY", "configured-secret")
+    monkeypatch.setenv("CADMUS_OBJECT_STORAGE_BUCKET", "source-artifacts")
+    monkeypatch.setenv("CADMUS_OBJECT_STORAGE_SECURE", "true")
 
     settings = Settings()
 
@@ -46,6 +54,11 @@ def test_settings_are_read_from_environment(
     assert database_url.port == 5433
     assert settings.celery_broker_url() == "redis://queue.internal:6380/2"
     assert settings.celery_result_backend_url() == "redis://queue.internal:6380/3"
+    assert settings.object_storage_endpoint == "objects.internal:9443"
+    assert settings.object_storage_access_key.get_secret_value() == "configured-access"
+    assert settings.object_storage_secret_key.get_secret_value() == "configured-secret"
+    assert settings.object_storage_bucket == "source-artifacts"
+    assert settings.object_storage_secure is True
 
 
 def test_full_database_url_overrides_individual_connection_fields(
@@ -72,11 +85,15 @@ def test_settings_representations_do_not_expose_database_credentials() -> None:
         database_password=SecretStr("highly-sensitive"),
         redis_broker_url=SecretStr("redis://:broker-secret@localhost:6379/0"),
         redis_result_backend_url=SecretStr("redis://:result-secret@localhost:6379/1"),
+        object_storage_access_key=SecretStr("storage-access"),
+        object_storage_secret_key=SecretStr("storage-secret"),
     )
 
     assert "highly-sensitive" not in repr(settings)
     assert "broker-secret" not in repr(settings)
     assert "result-secret" not in repr(settings)
+    assert "storage-access" not in repr(settings)
+    assert "storage-secret" not in repr(settings)
     assert "highly-sensitive" not in str(settings.sqlalchemy_database_url())
 
 

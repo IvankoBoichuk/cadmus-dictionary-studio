@@ -46,6 +46,7 @@ make install
 make api
 make worker
 make redis-up
+make minio-up
 make test
 make lint
 make format-check
@@ -61,8 +62,9 @@ The commands require Python 3.12 and uv 0.12.x. `make install` synchronizes all
 workspace packages from `uv.lock`. `make api` starts the FastAPI application
 factory locally. `make verify` checks lock consistency, whitespace, lint,
 repository structure, formatting, types, and backend tests. Docker Compose v2
-is required for the Compose commands; the root `compose.yaml` is the standard
-local runtime entrypoint.
+is required for the Compose commands; `make minio-up` starts MinIO and its
+idempotent bucket initializer, and the root `compose.yaml` is the standard local
+runtime entrypoint.
 
 Frontend and worker build, test, lint, and type-check commands are not available
 yet. Stories introducing those toolchains must update this section with exact

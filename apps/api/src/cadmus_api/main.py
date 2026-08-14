@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 
 from cadmus.config import Settings
 from cadmus.infrastructure.database import create_database_engine
+from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.processing import TaskQueue
+from cadmus.sources import ObjectStorage
 from fastapi import FastAPI
 from sqlalchemy import Engine, text
 
@@ -18,6 +20,7 @@ def create_app(
     settings: Settings | None = None,
     database_engine: Engine | None = None,
     task_queue: TaskQueue | None = None,
+    object_storage: ObjectStorage | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -43,6 +46,11 @@ def create_app(
         task_queue
         if task_queue is not None
         else CeleryTaskQueue(create_celery_client(app_settings))
+    )
+    app.state.object_storage = (
+        object_storage
+        if object_storage is not None
+        else create_object_storage(app_settings)
     )
     app.include_router(create_health_router(app_settings))
     app.include_router(create_tasks_router(app.state.task_queue))

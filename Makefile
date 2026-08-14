@@ -1,4 +1,4 @@
-.PHONY: help install api worker postgres-up redis-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker postgres-up redis-up minio-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -9,6 +9,7 @@ help:
 	@echo "  make worker        Run the Celery worker"
 	@echo "  make postgres-up   Start PostgreSQL and wait for its health check"
 	@echo "  make redis-up      Start Redis and wait for its health check"
+	@echo "  make minio-up      Start MinIO and initialize its bucket"
 	@echo "  make db-upgrade    Apply all migrations through Compose"
 	@echo "  make db-revision MESSAGE='...'  Create an Alembic revision"
 	@echo "  make db-current    Show the current database revision"
@@ -41,6 +42,9 @@ postgres-up:
 redis-up:
 	docker compose up -d --wait redis
 
+minio-up:
+	docker compose up -d --wait minio object-storage-init
+
 db-upgrade:
 	docker compose run --rm migrate
 
@@ -59,7 +63,8 @@ db-downgrade:
 
 test-integration:
 	@cleanup() { \
-		docker compose --profile test rm --stop --force postgres-test; \
+		docker compose --profile test rm --stop --force \
+			postgres-test minio-test object-storage-test-init; \
 	}; \
 	status=0; \
 	trap cleanup EXIT HUP INT TERM; \

@@ -1,6 +1,60 @@
 name: cadmus-dictionary-studio
 
 services:
+  minio:
+    build:
+      context: .
+      dockerfile: infrastructure/minio/Dockerfile
+    command:
+      - server
+      - /data
+      - --console-address
+      - :9001
+    environment:
+      MINIO_ROOT_USER: ${CADMUS_OBJECT_STORAGE_ACCESS_KEY:-cadmus-local-access}
+      MINIO_ROOT_PASSWORD: ${CADMUS_OBJECT_STORAGE_SECRET_KEY:-cadmus-local-secret}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${CADMUS_MINIO_API_PORT:-9000}:9000"
+      - "${CADMUS_MINIO_CONSOLE_PORT:-9001}:9001"
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://127.0.0.1:9000/minio/health/ready
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+
+  object-storage-init:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    command:
+      - python
+      - -m
+      - cadmus.infrastructure.initialize_object_storage
+    environment: &object-storage-environment
+      CADMUS_OBJECT_STORAGE_ENDPOINT: minio:9000
+      CADMUS_OBJECT_STORAGE_ACCESS_KEY: ${CADMUS_OBJECT_STORAGE_ACCESS_KEY:-cadmus-local-access}
+      CADMUS_OBJECT_STORAGE_SECRET_KEY: ${CADMUS_OBJECT_STORAGE_SECRET_KEY:-cadmus-local-secret}
+      CADMUS_OBJECT_STORAGE_BUCKET: ${CADMUS_OBJECT_STORAGE_BUCKET:-cadmus}
+      CADMUS_OBJECT_STORAGE_SECURE: "false"
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - cadmus
+    restart: "no"
+
   redis:
     image: redis:7.2.15-bookworm
     command:
@@ -81,8 +135,10 @@ services:
       CADMUS_REDIS_PORT: 6379
       CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
       CADMUS_REDIS_RESULT_DATABASE: ${CADMUS_REDIS_RESULT_DATABASE:-1}
-      <<: *database-environment
+      <<: [*database-environment, *object-storage-environment]
     depends_on:
+      object-storage-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       migrate:
@@ -165,6 +221,55 @@ services:
       retries: 15
       start_period: 5s
 
+  minio-test:
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: infrastructure/minio/Dockerfile
+    environment:
+      MINIO_ROOT_USER: cadmus-test-access
+      MINIO_ROOT_PASSWORD: cadmus-test-secret
+    tmpfs:
+      - /data
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://127.0.0.1:9000/minio/health/ready
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+  object-storage-test-init:
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
+    command:
+      - python
+      - -m
+      - cadmus.infrastructure.initialize_object_storage
+    environment: &test-object-storage-environment
+      CADMUS_OBJECT_STORAGE_ENDPOINT: minio-test:9000
+      CADMUS_OBJECT_STORAGE_ACCESS_KEY: cadmus-test-access
+      CADMUS_OBJECT_STORAGE_SECRET_KEY: cadmus-test-secret
+      CADMUS_OBJECT_STORAGE_BUCKET: cadmus-test
+      CADMUS_OBJECT_STORAGE_SECURE: "false"
+    depends_on:
+      minio-test:
+        condition: service_healthy
+    networks:
+      - cadmus
+    restart: "no"
+
   integration-test:
     profiles:
       - test
@@ -181,11 +286,14 @@ services:
       - tests/integration
     environment:
       CADMUS_ENVIRONMENT: test
+      <<: *test-object-storage-environment
       CADMUS_TEST_DATABASE_URL: >-
         postgresql+psycopg://cadmus_test:cadmus-test-only@postgres-test:5432/cadmus_test
     depends_on:
       postgres-test:
         condition: service_healthy
+      object-storage-test-init:
+        condition: service_completed_successfully
     networks:
       - cadmus
 
@@ -194,5 +302,6 @@ networks:
     driver: bridge
 
 volumes:
+  minio-data:
   postgres-data:
   redis-data:
