@@ -1,83 +1,18 @@
-import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { API, fieldErrorsFrom } from "../api";
-
-type RegistrationField = "email" | "password" | "password_confirmation";
-type FieldErrors = Partial<Record<RegistrationField, string>>;
-
-const MINIMUM_PASSWORD_LENGTH = 12;
-
-function validate(
-  email: string,
-  password: string,
-  confirmation: string,
-): FieldErrors {
-  const errors: FieldErrors = {};
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-    errors.email = "Введіть коректну email-адресу.";
-  }
-  if (password.length < MINIMUM_PASSWORD_LENGTH) {
-    errors.password = `Пароль має містити щонайменше ${MINIMUM_PASSWORD_LENGTH} символів.`;
-  }
-  if (password !== confirmation) {
-    errors.password_confirmation = "Паролі не збігаються.";
-  }
-  return errors;
-}
+import { useRegistrationForm } from "../hooks/useRegistrationForm";
 
 export function RegisterPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const form = useRegistrationForm();
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const clientErrors = validate(email, password, confirmation);
-    setErrors(clientErrors);
-    setMessage(null);
-    setSubmissionError(null);
-    if (Object.keys(clientErrors).length > 0) return;
-
-    setSubmitting(true);
-    try {
-      const response = await API.auth.register({
-        email,
-        password,
-        password_confirmation: confirmation,
-      });
-      setMessage(
-        response.message ??
-          "Акаунт створено. Перевірте email, щоб активувати його.",
-      );
-    } catch (error) {
-      const apiErrors = fieldErrorsFrom(error);
-      if (apiErrors) {
-        setErrors({
-          email: apiErrors.email,
-          password: apiErrors.password,
-          password_confirmation: apiErrors.password_confirmation,
-        });
-      } else {
-        setSubmissionError("Сервіс реєстрації недоступний. Спробуйте пізніше.");
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (message) {
+  if (form.message) {
     return (
       <main className="auth-page" id="main-content">
         <section className="auth-card auth-card--result" aria-labelledby="page-title">
           <p className="eyebrow">Реєстрація завершена</p>
           <h1 id="page-title">Перевірте email</h1>
           <p className="result-message" role="status">
-            {message}
+            {form.message}
           </p>
           <Link to="/">Повернутися на головну</Link>
         </section>
@@ -94,22 +29,20 @@ export function RegisterPage() {
           Створіть акаунт за допомогою email і пароля. Після цього ми надішлемо
           посилання для підтвердження.
         </p>
-        <form noValidate onSubmit={submit}>
+        <form noValidate onSubmit={form.submit}>
           <div className="form-field">
             <label htmlFor="email">Email</label>
             <input
               id="email"
-              name="email"
               type="email"
               autoComplete="email"
-              value={email}
-              aria-invalid={Boolean(errors.email)}
-              aria-describedby={errors.email ? "email-error" : undefined}
-              onChange={(event) => setEmail(event.target.value)}
+              {...form.getFieldProps("email")}
+              aria-invalid={Boolean(form.errors.email)}
+              aria-describedby={form.errors.email ? "email-error" : undefined}
             />
-            {errors.email && (
+            {form.errors.email && (
               <p className="field-error" id="email-error">
-                {errors.email}
+                {form.errors.email}
               </p>
             )}
           </div>
@@ -117,18 +50,16 @@ export function RegisterPage() {
             <label htmlFor="password">Пароль</label>
             <input
               id="password"
-              name="password"
               type="password"
               autoComplete="new-password"
-              value={password}
-              aria-invalid={Boolean(errors.password)}
-              aria-describedby={errors.password ? "password-error" : undefined}
-              onChange={(event) => setPassword(event.target.value)}
+              {...form.getFieldProps("password")}
+              aria-invalid={Boolean(form.errors.password)}
+              aria-describedby={form.errors.password ? "password-error" : undefined}
             />
             <p className="field-hint">Щонайменше 12 символів.</p>
-            {errors.password && (
+            {form.errors.password && (
               <p className="field-error" id="password-error">
-                {errors.password}
+                {form.errors.password}
               </p>
             )}
           </div>
@@ -136,31 +67,29 @@ export function RegisterPage() {
             <label htmlFor="password-confirmation">Підтвердження пароля</label>
             <input
               id="password-confirmation"
-              name="password_confirmation"
               type="password"
               autoComplete="new-password"
-              value={confirmation}
-              aria-invalid={Boolean(errors.password_confirmation)}
+              {...form.getFieldProps("password_confirmation")}
+              aria-invalid={Boolean(form.errors.password_confirmation)}
               aria-describedby={
-                errors.password_confirmation
+                form.errors.password_confirmation
                   ? "password-confirmation-error"
                   : undefined
               }
-              onChange={(event) => setConfirmation(event.target.value)}
             />
-            {errors.password_confirmation && (
+            {form.errors.password_confirmation && (
               <p className="field-error" id="password-confirmation-error">
-                {errors.password_confirmation}
+                {form.errors.password_confirmation}
               </p>
             )}
           </div>
-          {submissionError && (
+          {form.submissionError && (
             <p className="form-error" role="alert">
-              {submissionError}
+              {form.submissionError}
             </p>
           )}
-          <button disabled={submitting} type="submit">
-            {submitting ? "Створюємо акаунт…" : "Створити акаунт"}
+          <button disabled={form.submitting} type="submit">
+            {form.submitting ? "Створюємо акаунт…" : "Створити акаунт"}
           </button>
         </form>
       </section>

@@ -97,6 +97,23 @@ same change set.
 - Keep the module graph in docs/architecture.md acyclic.
 - Store stable relationships relationally; JSONB is for variable provider output/configuration.
 
+## Frontend API and async-state rules
+
+- React components must not call `fetch` directly. Add typed operations to the
+  shared API facade and derive request/response types from the OpenAPI contract.
+- Parse responses, normalize HTTP/network/malformed-response failures, and pass
+  abort cancellation through once in the shared API transport rather than
+  repeating `try/catch` in page components.
+- Put non-trivial form state, validation, submission, and API error mapping in a
+  focused hook; page components should primarily bind fields and render state.
+- Put lifecycle-bound asynchronous workflows in focused hooks and expose a
+  discriminated state to presentation components.
+- Account for React Strict Mode when an effect triggers a one-time mutation;
+  deduplicate the request so development replays cannot consume a token twice.
+- Do not add a form or data-fetching library only for anticipated reuse. Add a
+  dependency when current Story behavior demonstrates repeated complexity and
+  document its concrete use, license, and maintenance/security review.
+
 ## GRASP and design guidance
 
 Apply GRASP pragmatically:

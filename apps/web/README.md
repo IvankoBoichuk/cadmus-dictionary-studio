@@ -37,7 +37,9 @@ make web-api-types-check
 no runtime code to the browser bundle; the application transport remains the
 native Fetch API behind the facade. The shared request function normalizes HTTP,
 network, and malformed-response failures; the email-verification hook owns its
-React lifecycle and deduplicates the one-time request in Strict Mode.
+React lifecycle and deduplicates the one-time request in Strict Mode. Registration
+form state, validation, submission, and field-error mapping live in a focused
+hook so the page remains a presentation component.
 
 The browser-facing base path defaults to `/api`. A build for a different
 deployment can set `VITE_API_BASE_URL`; this value is public and must never
