@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     )
     object_storage_bucket: str = Field(default="cadmus", min_length=3)
     object_storage_secure: bool = False
+    public_web_url: str = Field(default="http://localhost:5173", min_length=1)
+    verification_token_lifetime_hours: int = Field(default=24, ge=1, le=168)
+    smtp_host: str = Field(default="localhost", min_length=1)
+    smtp_port: int = Field(default=1025, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_use_tls: bool = False
+    smtp_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    email_from: str = Field(default="Cadmus <noreply@cadmus.local>", min_length=3)
 
     def sqlalchemy_database_url(self) -> URL:
         """Return the single effective database URL without logging credentials."""

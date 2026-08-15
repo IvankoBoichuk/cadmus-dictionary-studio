@@ -2,6 +2,7 @@
 
 from logging.config import fileConfig
 
+import cadmus.infrastructure.identity  # noqa: F401
 from alembic import context
 from cadmus.config import Settings
 from cadmus.infrastructure.database import metadata

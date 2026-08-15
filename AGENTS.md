@@ -52,6 +52,7 @@ make web-lint
 make web-type-check
 make redis-up
 make minio-up
+make mailpit-up
 make test
 make lint
 make format-check

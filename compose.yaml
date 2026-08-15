@@ -1,6 +1,23 @@
 name: cadmus-dictionary-studio
 
 services:
+  mailpit:
+    image: axllent/mailpit:v1.30.0
+    ports:
+      - "${CADMUS_MAILPIT_UI_PORT:-8025}:8025"
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - /mailpit
+        - readyz
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    stop_grace_period: 10s
+
   minio:
     build:
       context: .
@@ -131,12 +148,18 @@ services:
       CADMUS_ENVIRONMENT: ${CADMUS_ENVIRONMENT:-development}
       CADMUS_NAME: ${CADMUS_NAME:-cadmus-api}
       CADMUS_VERSION: ${CADMUS_VERSION:-0.1.0}
+      CADMUS_PUBLIC_WEB_URL: http://localhost:${CADMUS_WEB_PORT:-5173}
+      CADMUS_SMTP_HOST: mailpit
+      CADMUS_SMTP_PORT: 1025
+      CADMUS_EMAIL_FROM: Cadmus <noreply@cadmus.local>
       CADMUS_REDIS_HOST: redis
       CADMUS_REDIS_PORT: 6379
       CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
       CADMUS_REDIS_RESULT_DATABASE: ${CADMUS_REDIS_RESULT_DATABASE:-1}
       <<: [*database-environment, *object-storage-environment]
     depends_on:
+      mailpit:
+        condition: service_healthy
       object-storage-init:
         condition: service_completed_successfully
       postgres:
@@ -275,6 +298,22 @@ services:
       retries: 15
       start_period: 5s
 
+  mailpit-test:
+    profiles:
+      - test
+    image: axllent/mailpit:v1.30.0
+    networks:
+      - cadmus
+    healthcheck:
+      test:
+        - CMD
+        - /mailpit
+        - readyz
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
   object-storage-test-init:
     profiles:
       - test
@@ -315,10 +354,14 @@ services:
       - tests/integration
     environment:
       CADMUS_ENVIRONMENT: test
+      CADMUS_TEST_SMTP_HOST: mailpit-test
+      CADMUS_TEST_MAILPIT_URL: http://mailpit-test:8025
       <<: *test-object-storage-environment
       CADMUS_TEST_DATABASE_URL: >-
         postgresql+psycopg://cadmus_test:cadmus-test-only@postgres-test:5432/cadmus_test
     depends_on:
+      mailpit-test:
+        condition: service_healthy
       postgres-test:
         condition: service_healthy
       object-storage-test-init:

@@ -22,6 +22,9 @@ Implemented stateful infrastructure:
   `minio-data` named volume and health check, and initializes the configured
   bucket before the API starts. The server is AGPL-3.0 and its archived
   upstream requires a new maintenance/licensing review before production use.
+- `BH-5` adds Mailpit `v1.30.0` as an MIT-licensed local/test SMTP boundary,
+  health ordering for the API, and an isolated integration-test service. Real
+  deployments configure an external SMTP provider instead.
 
 Implemented stateless services:
 

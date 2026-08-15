@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 
 pytestmark = pytest.mark.integration
 
-EXPECTED_REVISION = "bh179_0001"
+EXPECTED_REVISION = "bh5_0002"
 
 
 def _test_database_url() -> str:
@@ -55,7 +55,10 @@ def test_postgresql_connection_and_reversible_idempotent_migration() -> None:
     with engine.connect() as connection:
         inspector = inspect(connection)
         assert "cadmus" in inspector.get_schema_names()
-        assert inspector.get_table_names(schema="cadmus") == []
+        assert sorted(inspector.get_table_names(schema="cadmus")) == [
+            "email_verification_tokens",
+            "users",
+        ]
         assert inspector.get_table_names(schema="public") == ["alembic_version"]
 
     command.upgrade(alembic_config, "head")

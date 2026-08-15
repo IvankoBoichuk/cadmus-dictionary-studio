@@ -1,9 +1,8 @@
 # Web application
 
-React 19, TypeScript, and Vite client for Cadmus Dictionary Studio. BH-178
-provides only the application shell, routing, environment configuration, and API
-availability state. Authentication, OCR overlays, review, and other business
-screens remain outside this Story.
+React 19, TypeScript, and Vite client for Cadmus Dictionary Studio. It contains
+the application shell and the BH-5 registration and email-verification screens.
+Login, OCR overlays, review, and other business screens remain outside BH-5.
 
 ## Local development
 
@@ -15,7 +14,8 @@ make api
 make web
 ~~~
 
-The frontend is available at `http://localhost:5173`. Vite sends same-origin
+The frontend is available at `http://localhost:5173`; registration is at
+`/register`. Vite sends same-origin
 requests under `/api` to `http://127.0.0.1:8000` by default. Override the host
 development proxy when necessary:
 

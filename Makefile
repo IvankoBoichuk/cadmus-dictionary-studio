@@ -1,4 +1,4 @@
-.PHONY: help install api worker web web-build web-test web-lint web-type-check postgres-up redis-up minio-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker web web-build web-test web-lint web-type-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -15,6 +15,7 @@ help:
 	@echo "  make postgres-up   Start PostgreSQL and wait for its health check"
 	@echo "  make redis-up      Start Redis and wait for its health check"
 	@echo "  make minio-up      Start MinIO and initialize its bucket"
+	@echo "  make mailpit-up    Start the local email inbox"
 	@echo "  make db-upgrade    Apply all migrations through Compose"
 	@echo "  make db-revision MESSAGE='...'  Create an Alembic revision"
 	@echo "  make db-current    Show the current database revision"
@@ -66,6 +67,9 @@ redis-up:
 minio-up:
 	docker compose up -d --wait minio object-storage-init
 
+mailpit-up:
+	docker compose up -d --wait mailpit
+
 db-upgrade:
 	docker compose run --rm migrate
 
@@ -85,11 +89,11 @@ db-downgrade:
 test-integration:
 	@cleanup() { \
 		docker compose --profile test rm --stop --force \
-			postgres-test minio-test object-storage-test-init; \
+			postgres-test minio-test object-storage-test-init mailpit-test; \
 	}; \
 	status=0; \
 	trap cleanup EXIT HUP INT TERM; \
-	docker compose --profile test run --rm integration-test || status=$$?; \
+	docker compose --profile test run --build --rm integration-test || status=$$?; \
 	exit $$status
 
 compose-build:

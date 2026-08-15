@@ -18,6 +18,10 @@ def test_settings_have_safe_local_defaults() -> None:
     assert settings.object_storage_endpoint == "localhost:9000"
     assert settings.object_storage_bucket == "cadmus"
     assert settings.object_storage_secure is False
+    assert settings.public_web_url == "http://localhost:5173"
+    assert settings.verification_token_lifetime_hours == 24
+    assert settings.smtp_host == "localhost"
+    assert settings.smtp_port == 1025
 
 
 def test_settings_are_read_from_environment(
@@ -40,6 +44,10 @@ def test_settings_are_read_from_environment(
     monkeypatch.setenv("CADMUS_OBJECT_STORAGE_SECRET_KEY", "configured-secret")
     monkeypatch.setenv("CADMUS_OBJECT_STORAGE_BUCKET", "source-artifacts")
     monkeypatch.setenv("CADMUS_OBJECT_STORAGE_SECURE", "true")
+    monkeypatch.setenv("CADMUS_PUBLIC_WEB_URL", "https://cadmus.example")
+    monkeypatch.setenv("CADMUS_VERIFICATION_TOKEN_LIFETIME_HOURS", "48")
+    monkeypatch.setenv("CADMUS_SMTP_HOST", "mail.internal")
+    monkeypatch.setenv("CADMUS_SMTP_PORT", "2525")
 
     settings = Settings()
 
@@ -59,6 +67,10 @@ def test_settings_are_read_from_environment(
     assert settings.object_storage_secret_key.get_secret_value() == "configured-secret"
     assert settings.object_storage_bucket == "source-artifacts"
     assert settings.object_storage_secure is True
+    assert settings.public_web_url == "https://cadmus.example"
+    assert settings.verification_token_lifetime_hours == 48
+    assert settings.smtp_host == "mail.internal"
+    assert settings.smtp_port == 2525
 
 
 def test_full_database_url_overrides_individual_connection_fields(
@@ -87,6 +99,7 @@ def test_settings_representations_do_not_expose_database_credentials() -> None:
         redis_result_backend_url=SecretStr("redis://:result-secret@localhost:6379/1"),
         object_storage_access_key=SecretStr("storage-access"),
         object_storage_secret_key=SecretStr("storage-secret"),
+        smtp_password=SecretStr("smtp-secret"),
     )
 
     assert "highly-sensitive" not in repr(settings)
@@ -94,6 +107,7 @@ def test_settings_representations_do_not_expose_database_credentials() -> None:
     assert "result-secret" not in repr(settings)
     assert "storage-access" not in repr(settings)
     assert "storage-secret" not in repr(settings)
+    assert "smtp-secret" not in repr(settings)
     assert "highly-sensitive" not in str(settings.sqlalchemy_database_url())
 
 

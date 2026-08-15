@@ -33,6 +33,11 @@ button {
   font-weight: 650;
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 button:focus-visible,
 a:focus-visible {
   outline: 3px solid #d58d36;
@@ -115,6 +120,115 @@ h1 {
   color: #50605a;
   font-size: clamp(1rem, 2vw, 1.25rem);
   line-height: 1.7;
+}
+
+.primary-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 999px;
+  color: #fff;
+  background: #245847;
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.auth-page {
+  display: grid;
+  min-height: calc(100vh - 4.5rem);
+  padding: 2rem 1rem;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(100%, 34rem);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid #d6dbd2;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(35 57 49 / 8%);
+}
+
+.auth-card h1 {
+  max-width: none;
+  margin-bottom: 1rem;
+  font-size: clamp(2.3rem, 8vw, 3.75rem);
+  line-height: 1.03;
+}
+
+.auth-intro,
+.result-message {
+  color: #50605a;
+  line-height: 1.6;
+}
+
+.auth-card form {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+.form-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.form-field label {
+  font-weight: 700;
+}
+
+.form-field input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #9aa7a1;
+  border-radius: 0.55rem;
+  color: #1d2925;
+  background: #fff;
+  font: inherit;
+}
+
+.form-field input:focus-visible {
+  border-color: #245847;
+  outline: 3px solid #dcebe5;
+}
+
+.form-field input[aria-invalid="true"] {
+  border-color: #b43c2d;
+}
+
+.field-hint,
+.field-error,
+.form-error {
+  margin-bottom: 0;
+  font-size: 0.88rem;
+}
+
+.field-hint {
+  color: #61726b;
+}
+
+.field-error,
+.form-error,
+.result-message--error {
+  color: #9a3024;
+}
+
+.auth-card form button {
+  justify-self: start;
+  margin-top: 0.5rem;
+}
+
+.auth-card--result {
+  text-align: center;
+}
+
+.auth-card--result h1 {
+  margin-inline: auto;
+}
+
+.result-message--success {
+  color: #17663f;
 }
 
 .status-card {
