@@ -31,6 +31,9 @@ class FailingEmailSender:
     def send_verification(self, recipient: str, verification_url: str) -> None:
         raise ConnectionError("SMTP is unavailable")
 
+    def send_password_reset(self, recipient: str, reset_url: str) -> None:
+        raise ConnectionError("SMTP is unavailable")
+
 
 def test_registration_persists_only_protected_credentials_and_activates_once() -> None:
     database_url = os.environ["CADMUS_TEST_DATABASE_URL"]

@@ -30,6 +30,18 @@ type SessionResponse =
 type LogoutOperation = paths["/auth/logout"]["post"];
 type LogoutResponse =
   LogoutOperation["responses"][200]["content"]["application/json"];
+type ForgotPasswordOperation = paths["/auth/forgot-password"]["post"];
+type ForgotPasswordRequest =
+  ForgotPasswordOperation["requestBody"]["content"]["application/json"];
+type ForgotPasswordResponse =
+  ForgotPasswordOperation["responses"][200]["content"]["application/json"];
+type ResetPasswordOperation = paths["/auth/reset-password"]["post"];
+type ResetPasswordRequest =
+  ResetPasswordOperation["requestBody"]["content"]["application/json"];
+type ResetPasswordResponse =
+  ResetPasswordOperation["responses"][200]["content"]["application/json"];
+type PasswordResetErrorResponse =
+  ResetPasswordOperation["responses"][400]["content"]["application/json"];
 
 export type ApiErrorKind = "http" | "network" | "invalid-response";
 
@@ -174,6 +186,28 @@ export const API = {
         () => verificationRequests.delete(request.token),
       );
       return verificationRequest;
+    },
+
+    forgotPassword(
+      request: ForgotPasswordRequest,
+      options?: RequestOptions,
+    ): Promise<ForgotPasswordResponse> {
+      return post<ForgotPasswordRequest, ForgotPasswordResponse, ValidationErrorResponse>(
+        "/auth/forgot-password",
+        request,
+        options,
+      );
+    },
+
+    resetPassword(
+      request: ResetPasswordRequest,
+      options?: RequestOptions,
+    ): Promise<ResetPasswordResponse> {
+      return post<
+        ResetPasswordRequest,
+        ResetPasswordResponse,
+        PasswordResetErrorResponse | FieldErrorsResponse | ValidationErrorResponse
+      >("/auth/reset-password", request, options);
     },
   },
 } as const;

@@ -12,6 +12,10 @@ from cadmus.identity import (
     AuthenticationFailure,
     AuthenticationService,
     DuplicateEmailError,
+    PasswordResetError,
+    PasswordResetFailure,
+    PasswordResetService,
+    PasswordResetValidationError,
     RegistrationService,
     RegistrationValidationError,
 )
@@ -107,6 +111,49 @@ class LogoutResponse(BaseModel):
     message: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Bounded password-reset request input carried only in a POST body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=254)
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Neutral outcome that never discloses whether the email is registered."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    message: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Password reset confirmation carried only in a POST body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=512)
+    new_password: str = Field(min_length=1, max_length=1024)
+    new_password_confirmation: str = Field(min_length=1, max_length=1024)
+
+
+class ResetPasswordResponse(BaseModel):
+    """Public password reset outcome."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    message: str
+
+
+class PasswordResetErrorResponse(BaseModel):
+    """Safe reset-token error contract."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: PasswordResetFailure
+    message: str
+
+
 SESSION_COOKIE_NAME = "cadmus_session"
 
 
@@ -125,6 +172,7 @@ FIELD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 def create_auth_router(
     registration: RegistrationService,
     authentication: AuthenticationService,
+    password_reset: PasswordResetService,
     session_lifetime: timedelta,
     secure_cookie: bool,
 ) -> APIRouter:
@@ -298,5 +346,64 @@ def create_auth_router(
                 content={"code": error.reason, "message": messages[error.reason]},
             )
         return VerificationResponse(message="Email підтверджено. Акаунт активовано.")
+
+    @router.post(
+        "/forgot-password",
+        response_model=ForgotPasswordResponse,
+        summary="Request a one-time password reset link",
+    )
+    def forgot_password(
+        request: ForgotPasswordRequest,
+    ) -> ForgotPasswordResponse:
+        password_reset.request_reset(request.email)
+        return ForgotPasswordResponse(
+            message=(
+                "Якщо такий email зареєстровано, ми надіслали інструкції "
+                "для відновлення пароля."
+            )
+        )
+
+    @router.post(
+        "/reset-password",
+        response_model=ResetPasswordResponse,
+        responses={
+            status.HTTP_400_BAD_REQUEST: {
+                "model": PasswordResetErrorResponse,
+                "description": "The reset token is invalid, expired, or used",
+            },
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": FieldErrorsResponse,
+                "description": "The new password is invalid",
+            },
+        },
+        summary="Set a new password with a one-time reset token",
+    )
+    def reset_password(
+        request: ResetPasswordRequest,
+    ) -> ResetPasswordResponse | JSONResponse:
+        try:
+            password_reset.reset_password(
+                request.token,
+                request.new_password,
+                request.new_password_confirmation,
+            )
+        except PasswordResetValidationError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"errors": error.errors},
+            )
+        except PasswordResetError as error:
+            messages = {
+                PasswordResetFailure.INVALID: (
+                    "Посилання для відновлення пароля недійсне."
+                ),
+                PasswordResetFailure.EXPIRED: "Термін дії посилання минув.",
+                PasswordResetFailure.USED: "Це посилання вже було використано.",
+            }
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"code": error.reason, "message": messages[error.reason]},
+            )
+        return ResetPasswordResponse(message="Пароль змінено. Тепер ви можете увійти.")
 
     return router

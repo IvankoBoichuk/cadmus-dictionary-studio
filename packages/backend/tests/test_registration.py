@@ -10,6 +10,7 @@ from cadmus.identity import (
     ActivationFailure,
     AuthenticatedSession,
     DuplicateEmailError,
+    PasswordResetToken,
     RegistrationService,
     RegistrationValidationError,
     User,
@@ -38,6 +39,9 @@ class MemoryIdentityRepository:
     def get_verification_token(self, token_digest: str) -> VerificationToken | None:
         return self.tokens.get(token_digest)
 
+    def get_password_reset_token(self, token_digest: str) -> PasswordResetToken | None:
+        return None
+
     def get_session(self, token_digest: str) -> AuthenticatedSession | None:
         return self.sessions.get(token_digest)
 
@@ -47,11 +51,17 @@ class MemoryIdentityRepository:
     def add_verification_token(self, token: VerificationToken) -> None:
         self.tokens[token.token_digest] = token
 
+    def add_password_reset_token(self, token: PasswordResetToken) -> None:
+        raise AssertionError("not used by registration")
+
     def add_session(self, session: AuthenticatedSession) -> None:
         self.sessions[session.token_digest] = session
 
     def delete_session(self, token_digest: str) -> None:
         self.sessions.pop(token_digest, None)
+
+    def delete_sessions_for_user(self, user_id: UUID) -> None:
+        raise AssertionError("not used by registration")
 
 
 class MemoryUnitOfWork:
@@ -97,9 +107,15 @@ class RecordingEmailSender:
     def send_verification(self, recipient: str, verification_url: str) -> None:
         self.deliveries.append((recipient, verification_url))
 
+    def send_password_reset(self, recipient: str, reset_url: str) -> None:
+        raise AssertionError("not used by registration")
+
 
 class FailingEmailSender:
     def send_verification(self, recipient: str, verification_url: str) -> None:
+        raise ConnectionError("SMTP is unavailable")
+
+    def send_password_reset(self, recipient: str, reset_url: str) -> None:
         raise ConnectionError("SMTP is unavailable")
 
 

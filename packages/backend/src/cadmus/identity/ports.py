@@ -5,7 +5,12 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
-from cadmus.identity.domain import AuthenticatedSession, User, VerificationToken
+from cadmus.identity.domain import (
+    AuthenticatedSession,
+    PasswordResetToken,
+    User,
+    VerificationToken,
+)
 
 
 class IdentityRepository(Protocol):
@@ -17,15 +22,23 @@ class IdentityRepository(Protocol):
 
     def get_verification_token(self, token_digest: str) -> VerificationToken | None: ...
 
+    def get_password_reset_token(
+        self, token_digest: str
+    ) -> PasswordResetToken | None: ...
+
     def get_session(self, token_digest: str) -> AuthenticatedSession | None: ...
 
     def add_user(self, user: User) -> None: ...
 
     def add_verification_token(self, token: VerificationToken) -> None: ...
 
+    def add_password_reset_token(self, token: PasswordResetToken) -> None: ...
+
     def add_session(self, session: AuthenticatedSession) -> None: ...
 
     def delete_session(self, token_digest: str) -> None: ...
+
+    def delete_sessions_for_user(self, user_id: UUID) -> None: ...
 
 
 class IdentityUnitOfWork(Protocol):
@@ -73,7 +86,17 @@ class SessionTokenProvider(Protocol):
     def digest(self, token: str) -> str: ...
 
 
+class PasswordResetTokenProvider(Protocol):
+    """Secure password-reset-token generation and digesting boundary."""
+
+    def issue(self) -> tuple[str, str]: ...
+
+    def digest(self, token: str) -> str: ...
+
+
 class EmailSender(Protocol):
     """Delivery boundary for identity emails."""
 
     def send_verification(self, recipient: str, verification_url: str) -> None: ...
+
+    def send_password_reset(self, recipient: str, reset_url: str) -> None: ...

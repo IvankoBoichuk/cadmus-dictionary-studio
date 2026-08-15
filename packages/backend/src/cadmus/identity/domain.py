@@ -51,6 +51,24 @@ class VerificationToken:
 
 
 @dataclass
+class PasswordResetToken:
+    """A single-use, expiring password reset credential."""
+
+    id: UUID
+    user_id: UUID
+    token_digest: str
+    expires_at: datetime
+    created_at: datetime
+    consumed_at: datetime | None = None
+
+    def consume(self, consumed_at: datetime) -> None:
+        """Mark this token as irreversibly used."""
+        if self.consumed_at is not None:
+            raise ValueError("password reset token has already been consumed")
+        self.consumed_at = consumed_at
+
+
+@dataclass
 class AuthenticatedSession:
     """An expiring server-side session identified by a protected token digest."""
 
