@@ -45,30 +45,26 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const result = await API.auth.register({
+      const response = await API.auth.register({
         email,
         password,
         password_confirmation: confirmation,
       });
-      if (!result.ok) {
-        const apiErrors = fieldErrorsFrom(result.error);
-        if (apiErrors) {
-          setErrors({
-            email: apiErrors.email,
-            password: apiErrors.password,
-            password_confirmation: apiErrors.password_confirmation,
-          });
-        } else {
-          setSubmissionError("Не вдалося створити акаунт. Спробуйте ще раз.");
-        }
-        return;
-      }
       setMessage(
-        result.data.message ??
+        response.message ??
           "Акаунт створено. Перевірте email, щоб активувати його.",
       );
-    } catch {
-      setSubmissionError("Сервіс реєстрації недоступний. Спробуйте пізніше.");
+    } catch (error) {
+      const apiErrors = fieldErrorsFrom(error);
+      if (apiErrors) {
+        setErrors({
+          email: apiErrors.email,
+          password: apiErrors.password,
+          password_confirmation: apiErrors.password_confirmation,
+        });
+      } else {
+        setSubmissionError("Сервіс реєстрації недоступний. Спробуйте пізніше.");
+      }
     } finally {
       setSubmitting(false);
     }

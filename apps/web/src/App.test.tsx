@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -186,5 +187,44 @@ it("shows the activation error returned for an unusable token", async () => {
   });
   expect(
     screen.getByText("Це посилання вже було використано."),
+  ).toBeInTheDocument();
+});
+
+it("deduplicates one-time verification in React Strict Mode", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/verify-email#token=strict-mode-token",
+  );
+  const fetchMock = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({ message: "Email підтверджено. Акаунт активовано." }),
+      { status: 200 },
+    ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+
+  expect(
+    await screen.findByRole("heading", { name: "Акаунт активовано" }),
+  ).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+it("shows a controlled message when verification transport fails", async () => {
+  window.history.replaceState({}, "", "/verify-email#token=network-error-token");
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Network error")));
+
+  render(<App />);
+
+  expect(
+    await screen.findByText(
+      "Сервіс підтвердження недоступний. Спробуйте пізніше.",
+    ),
   ).toBeInTheDocument();
 });
