@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
@@ -461,6 +461,183 @@ it("logs out from an authenticated page and redirects to login", async () => {
     credentials: "same-origin",
     method: "POST",
   });
+});
+
+it("blocks forgot-password submission for an invalid email without calling fetch", async () => {
+  window.history.replaceState({}, "", "/forgot-password");
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Email"), {
+    target: { value: "invalid" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Надіслати інструкції" }));
+
+  expect(
+    await screen.findByText("Введіть коректну email-адресу."),
+  ).toBeInTheDocument();
+  expect(
+    fetchMock.mock.calls.some(([url]) => url === "/api/auth/forgot-password"),
+  ).toBe(false);
+});
+
+it("shows the same neutral confirmation for forgot-password regardless of account existence", async () => {
+  window.history.replaceState({}, "", "/forgot-password");
+  const neutralMessage =
+    "Якщо такий email зареєстровано, ми надіслали інструкції для відновлення пароля.";
+  const fetchMock = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/api/auth/session"
+      ? Promise.resolve(sessionResponse(false))
+      : Promise.resolve(
+          new Response(JSON.stringify({ message: neutralMessage }), { status: 200 }),
+        ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Email"), {
+    target: { value: "unknown@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Надіслати інструкції" }));
+
+  expect(
+    await screen.findByRole("heading", { name: "Перевірте email" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText(neutralMessage)).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledWith("/api/auth/forgot-password", {
+    credentials: "same-origin",
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "unknown@example.com" }),
+  });
+});
+
+it("shows an invalid-link state for reset-password with no token and never calls fetch", async () => {
+  window.history.replaceState({}, "", "/reset-password");
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+
+  expect(
+    await screen.findByRole("heading", { name: "Не вдалося відновити пароль" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Надіслати новий запит" }),
+  ).toHaveAttribute("href", "/forgot-password");
+  expect(
+    fetchMock.mock.calls.some(([url]) => url === "/api/auth/reset-password"),
+  ).toBe(false);
+});
+
+it("blocks reset-password submission for a weak or mismatched password", async () => {
+  window.history.replaceState({}, "", "/reset-password#token=one-time-token");
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Новий пароль"), {
+    target: { value: "short" },
+  });
+  fireEvent.change(screen.getByLabelText("Підтвердження пароля"), {
+    target: { value: "different" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Змінити пароль" }));
+
+  expect(
+    await screen.findByText("Пароль має містити щонайменше 12 символів."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Паролі не збігаються.")).toBeInTheDocument();
+  expect(
+    fetchMock.mock.calls.some(([url]) => url === "/api/auth/reset-password"),
+  ).toBe(false);
+});
+
+it("resets the password, keeps the token out of the URL, and links to login", async () => {
+  window.history.replaceState({}, "", "/reset-password#token=one-time-token");
+  const fetchMock = vi.fn((input: RequestInfo | URL) =>
+    String(input) === "/api/auth/session"
+      ? Promise.resolve(sessionResponse(false))
+      : Promise.resolve(
+          new Response(
+            JSON.stringify({ message: "Пароль змінено. Тепер ви можете увійти." }),
+            { status: 200 },
+          ),
+        ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Новий пароль"), {
+    target: { value: "new-long-enough-password" },
+  });
+  fireEvent.change(screen.getByLabelText("Підтвердження пароля"), {
+    target: { value: "new-long-enough-password" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Змінити пароль" }));
+
+  const heading = await screen.findByRole("heading", { name: "Пароль змінено" });
+  expect(heading).toBeInTheDocument();
+  const resultCard = heading.closest("section") as HTMLElement;
+  expect(within(resultCard).getByRole("link", { name: "Увійти" })).toHaveAttribute(
+    "href",
+    "/login",
+  );
+  expect(fetchMock).toHaveBeenCalledWith("/api/auth/reset-password", {
+    credentials: "same-origin",
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      token: "one-time-token",
+      new_password: "new-long-enough-password",
+      new_password_confirmation: "new-long-enough-password",
+    }),
+  });
+  expect(
+    fetchMock.mock.calls.every(
+      ([url]) =>
+        !String(url).includes("one-time-token") &&
+        !String(url).includes("new-long-enough-password"),
+    ),
+  ).toBe(true);
+});
+
+it("offers a new reset request for an expired or used token", async () => {
+  window.history.replaceState({}, "", "/reset-password#token=used-token");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) =>
+      String(input) === "/api/auth/session"
+        ? Promise.resolve(sessionResponse(false))
+        : Promise.resolve(
+            new Response(
+              JSON.stringify({
+                code: "used",
+                message: "Це посилання вже було використано.",
+              }),
+              { status: 400 },
+            ),
+          ),
+    ),
+  );
+
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Новий пароль"), {
+    target: { value: "new-long-enough-password" },
+  });
+  fireEvent.change(screen.getByLabelText("Підтвердження пароля"), {
+    target: { value: "new-long-enough-password" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Змінити пароль" }));
+
+  expect(
+    await screen.findByRole("heading", { name: "Не вдалося відновити пароль" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Це посилання вже було використано.")).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Надіслати новий запит" }),
+  ).toHaveAttribute("href", "/forgot-password");
 });
 
 it("keeps the authenticated state and reports an unconfirmed logout", async () => {

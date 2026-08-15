@@ -11,6 +11,7 @@ from uuid import uuid4
 from cadmus.identity.domain import (
     AccountStatus,
     AuthenticatedSession,
+    PasswordResetToken,
     User,
     VerificationToken,
 )
@@ -18,6 +19,7 @@ from cadmus.identity.ports import (
     EmailSender,
     IdentityUnitOfWorkFactory,
     PasswordHasher,
+    PasswordResetTokenProvider,
     SessionTokenProvider,
     VerificationTokenProvider,
 )
@@ -54,6 +56,30 @@ class ActivationError(ValueError):
     """A controlled verification-token failure."""
 
     def __init__(self, reason: ActivationFailure) -> None:
+        super().__init__(reason.value)
+        self.reason = reason
+
+
+class PasswordResetValidationError(ValueError):
+    """Field-addressable password reset input errors."""
+
+    def __init__(self, errors: Mapping[str, str]) -> None:
+        super().__init__("password reset data is invalid")
+        self.errors = dict(errors)
+
+
+class PasswordResetFailure(StrEnum):
+    """Safe public reasons why a password reset failed."""
+
+    INVALID = "invalid"
+    EXPIRED = "expired"
+    USED = "used"
+
+
+class PasswordResetError(ValueError):
+    """A controlled password-reset-token failure."""
+
+    def __init__(self, reason: PasswordResetFailure) -> None:
         super().__init__(reason.value)
         self.reason = reason
 
@@ -241,6 +267,100 @@ class RegistrationService:
         return user
 
 
+class PasswordResetService:
+    """Coordinates password-reset requests and confirmations through explicit ports."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: IdentityUnitOfWorkFactory,
+        password_hasher: PasswordHasher,
+        token_provider: PasswordResetTokenProvider,
+        email_sender: EmailSender,
+        public_web_url: str,
+        token_lifetime: timedelta = timedelta(hours=1),
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._password_hasher = password_hasher
+        self._token_provider = token_provider
+        self._email_sender = email_sender
+        self._public_web_url = public_web_url.rstrip("/")
+        self._token_lifetime = token_lifetime
+        self._clock = clock
+
+    def request_reset(self, email: str) -> None:
+        """Deliver a one-time reset link only for an existing active account.
+
+        Silently returns for a missing or non-active account so the caller's
+        response never discloses whether the email is registered.
+        """
+        normalized_email = email.strip().casefold()
+        now = self._clock()
+
+        with self._unit_of_work_factory() as unit_of_work:
+            user = unit_of_work.users.get_user_by_email(normalized_email)
+            if user is None or user.status is not AccountStatus.ACTIVE:
+                return
+
+            raw_token, token_digest = self._token_provider.issue()
+            reset_token = PasswordResetToken(
+                id=uuid4(),
+                user_id=user.id,
+                token_digest=token_digest,
+                created_at=now,
+                expires_at=now + self._token_lifetime,
+            )
+            # A URL fragment is intentionally used so web-server access logs never
+            # receive the credential. The browser passes it to the API in a POST body.
+            reset_query = urlencode({"token": raw_token})
+            reset_url = f"{self._public_web_url}/reset-password#{reset_query}"
+            unit_of_work.users.add_password_reset_token(reset_token)
+            self._email_sender.send_password_reset(normalized_email, reset_url)
+            unit_of_work.commit()
+
+    def reset_password(
+        self,
+        raw_token: str,
+        new_password: str,
+        new_password_confirmation: str,
+    ) -> None:
+        """Consume a valid reset token, set the new password, and end all sessions."""
+        errors = _validate_new_password(new_password, new_password_confirmation)
+        if errors:
+            raise PasswordResetValidationError(errors)
+
+        token_digest = self._token_provider.digest(raw_token)
+        now = self._clock()
+
+        with self._unit_of_work_factory() as unit_of_work:
+            token = unit_of_work.users.get_password_reset_token(token_digest)
+            if token is None:
+                raise PasswordResetError(PasswordResetFailure.INVALID)
+            if token.consumed_at is not None:
+                raise PasswordResetError(PasswordResetFailure.USED)
+            if token.expires_at <= now:
+                raise PasswordResetError(PasswordResetFailure.EXPIRED)
+            user = unit_of_work.users.get_user(token.user_id)
+            if user is None:
+                raise PasswordResetError(PasswordResetFailure.INVALID)
+
+            user.password_hash = self._password_hasher.hash(new_password)
+            token.consume(now)
+            unit_of_work.users.delete_sessions_for_user(user.id)
+            unit_of_work.commit()
+
+
+def _validate_new_password(password: str, password_confirmation: str) -> dict[str, str]:
+    errors: dict[str, str] = {}
+    if len(password) < MINIMUM_PASSWORD_LENGTH:
+        errors["password"] = (
+            f"Пароль має містити щонайменше {MINIMUM_PASSWORD_LENGTH} символів."
+        )
+    if password_confirmation != password:
+        errors["password_confirmation"] = "Паролі не збігаються."
+    return errors
+
+
 def _validate_registration(
     email: str,
     password: str,
@@ -256,10 +376,5 @@ def _validate_registration(
         or ".." in local_part
     ):
         errors["email"] = "Введіть коректну email-адресу."
-    if len(password) < MINIMUM_PASSWORD_LENGTH:
-        errors["password"] = (
-            f"Пароль має містити щонайменше {MINIMUM_PASSWORD_LENGTH} символів."
-        )
-    if password_confirmation != password:
-        errors["password_confirmation"] = "Паролі не збігаються."
+    errors.update(_validate_new_password(password, password_confirmation))
     return errors

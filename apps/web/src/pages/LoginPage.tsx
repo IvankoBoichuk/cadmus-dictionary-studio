@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 import { useLoginForm } from "../hooks/useLoginForm";
 import { useAuth } from "../authContext";
@@ -55,6 +55,9 @@ function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
                 {passwordError}
               </p>
             )}
+            <p className="field-hint">
+              <Link to="/forgot-password">Забули пароль?</Link>
+            </p>
           </div>
           {typeof form.status === "string" && (
             <p className="form-error" role="alert">

@@ -8,12 +8,17 @@ from cadmus.identity.application import (
     AuthenticationService,
     DuplicateEmailError,
     LoginResult,
+    PasswordResetError,
+    PasswordResetFailure,
+    PasswordResetService,
+    PasswordResetValidationError,
     RegistrationService,
     RegistrationValidationError,
 )
 from cadmus.identity.domain import (
     AccountStatus,
     AuthenticatedSession,
+    PasswordResetToken,
     User,
     VerificationToken,
 )
@@ -23,6 +28,7 @@ from cadmus.identity.ports import (
     IdentityUnitOfWork,
     IdentityUnitOfWorkFactory,
     PasswordHasher,
+    PasswordResetTokenProvider,
     SessionTokenProvider,
     VerificationTokenProvider,
 )
@@ -42,6 +48,12 @@ __all__ = [
     "IdentityUnitOfWorkFactory",
     "LoginResult",
     "PasswordHasher",
+    "PasswordResetError",
+    "PasswordResetFailure",
+    "PasswordResetService",
+    "PasswordResetToken",
+    "PasswordResetTokenProvider",
+    "PasswordResetValidationError",
     "RegistrationService",
     "RegistrationValidationError",
     "SessionTokenProvider",

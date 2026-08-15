@@ -74,3 +74,14 @@ class SecureSessionTokenProvider:
 
     def digest(self, token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+class SecurePasswordResetTokenProvider:
+    """Issue high-entropy reset tokens while persisting only deterministic digests."""
+
+    def issue(self) -> tuple[str, str]:
+        raw_token = secrets.token_urlsafe(32)
+        return raw_token, self.digest(raw_token)
+
+    def digest(self, token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()

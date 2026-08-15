@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a one-time password reset link */
+        post: operations["forgot_password_auth_forgot_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/login": {
         parameters: {
             query?: never;
@@ -49,6 +66,23 @@ export interface paths {
         put?: never;
         /** Register a pending user account */
         post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a new password with a one-time reset token */
+        post: operations["reset_password_auth_reset_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -203,6 +237,22 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * ForgotPasswordRequest
+         * @description Bounded password-reset request input carried only in a POST body.
+         */
+        ForgotPasswordRequest: {
+            /** Email */
+            email: string;
+        };
+        /**
+         * ForgotPasswordResponse
+         * @description Neutral outcome that never discloses whether the email is registered.
+         */
+        ForgotPasswordResponse: {
+            /** Message */
+            message: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -243,6 +293,21 @@ export interface components {
             message: string;
         };
         /**
+         * PasswordResetErrorResponse
+         * @description Safe reset-token error contract.
+         */
+        PasswordResetErrorResponse: {
+            code: components["schemas"]["PasswordResetFailure"];
+            /** Message */
+            message: string;
+        };
+        /**
+         * PasswordResetFailure
+         * @description Safe public reasons why a password reset failed.
+         * @enum {string}
+         */
+        PasswordResetFailure: "invalid" | "expired" | "used";
+        /**
          * QueueUnavailableResponse
          * @description Stable response when Redis cannot serve queue operations.
          */
@@ -270,6 +335,26 @@ export interface components {
             /** Message */
             message: string;
             status: components["schemas"]["AccountStatus"];
+        };
+        /**
+         * ResetPasswordRequest
+         * @description Password reset confirmation carried only in a POST body.
+         */
+        ResetPasswordRequest: {
+            /** New Password */
+            new_password: string;
+            /** New Password Confirmation */
+            new_password_confirmation: string;
+            /** Token */
+            token: string;
+        };
+        /**
+         * ResetPasswordResponse
+         * @description Public password reset outcome.
+         */
+        ResetPasswordResponse: {
+            /** Message */
+            message: string;
         };
         /**
          * TaskStatus
@@ -347,6 +432,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    forgot_password_auth_forgot_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForgotPasswordResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     login_auth_login_post: {
         parameters: {
             query?: never;
@@ -461,6 +579,48 @@ export interface operations {
                 };
             };
             /** @description Registration fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    reset_password_auth_reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetPasswordResponse"];
+                };
+            };
+            /** @description The reset token is invalid, expired, or used */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetErrorResponse"];
+                };
+            };
+            /** @description The new password is invalid */
             422: {
                 headers: {
                     [name: string]: unknown;

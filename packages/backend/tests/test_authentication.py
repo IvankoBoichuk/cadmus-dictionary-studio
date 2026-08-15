@@ -11,6 +11,7 @@ from cadmus.identity import (
     AuthenticationError,
     AuthenticationFailure,
     AuthenticationService,
+    PasswordResetToken,
     User,
     VerificationToken,
 )
@@ -33,6 +34,9 @@ class MemoryIdentityRepository:
     def get_verification_token(self, token_digest: str) -> VerificationToken | None:
         return None
 
+    def get_password_reset_token(self, token_digest: str) -> PasswordResetToken | None:
+        return None
+
     def get_session(self, token_digest: str) -> AuthenticatedSession | None:
         return self.sessions.get(token_digest)
 
@@ -42,11 +46,22 @@ class MemoryIdentityRepository:
     def add_verification_token(self, token: VerificationToken) -> None:
         raise AssertionError("not used by authentication")
 
+    def add_password_reset_token(self, token: PasswordResetToken) -> None:
+        raise AssertionError("not used by authentication")
+
     def add_session(self, session: AuthenticatedSession) -> None:
         self.sessions[session.token_digest] = session
 
     def delete_session(self, token_digest: str) -> None:
         self.sessions.pop(token_digest, None)
+
+    def delete_sessions_for_user(self, user_id: UUID) -> None:
+        for token_digest in [
+            digest
+            for digest, session in self.sessions.items()
+            if session.user_id == user_id
+        ]:
+            self.sessions.pop(token_digest, None)
 
 
 class MemoryUnitOfWork:

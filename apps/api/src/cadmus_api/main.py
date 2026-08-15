@@ -5,13 +5,18 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 
 from cadmus.config import Settings
-from cadmus.identity import AuthenticationService, RegistrationService
+from cadmus.identity import (
+    AuthenticationService,
+    PasswordResetService,
+    RegistrationService,
+)
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.email import SmtpEmailSender
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
+    SecurePasswordResetTokenProvider,
     SecureSessionTokenProvider,
     SecureVerificationTokenProvider,
 )
@@ -33,6 +38,7 @@ def create_app(
     object_storage: ObjectStorage | None = None,
     registration_service: RegistrationService | None = None,
     authentication_service: AuthenticationService | None = None,
+    password_reset_service: PasswordResetService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -90,11 +96,26 @@ def create_app(
             session_lifetime=timedelta(hours=app_settings.session_lifetime_hours),
         )
     )
+    app.state.password_reset_service = (
+        password_reset_service
+        if password_reset_service is not None
+        else PasswordResetService(
+            unit_of_work_factory=unit_of_work_factory,
+            password_hasher=password_hasher,
+            token_provider=SecurePasswordResetTokenProvider(),
+            email_sender=SmtpEmailSender(app_settings),
+            public_web_url=app_settings.public_web_url,
+            token_lifetime=timedelta(
+                hours=app_settings.password_reset_token_lifetime_hours
+            ),
+        )
+    )
     app.include_router(create_health_router(app_settings))
     app.include_router(
         create_auth_router(
             app.state.registration_service,
             app.state.authentication_service,
+            app.state.password_reset_service,
             session_lifetime=timedelta(hours=app_settings.session_lifetime_hours),
             secure_cookie=app_settings.environment.value in {"staging", "production"},
         )

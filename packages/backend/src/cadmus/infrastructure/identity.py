@@ -24,6 +24,7 @@ from cadmus.identity import (
     AuthenticatedSession,
     DuplicateEmailError,
     IdentityUnitOfWorkFactory,
+    PasswordResetToken,
     User,
     VerificationToken,
 )
@@ -72,6 +73,23 @@ verification_tokens = Table(
     Column("consumed_at", DateTime(timezone=True), nullable=True),
 )
 
+password_reset_tokens = Table(
+    "password_reset_tokens",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "user_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("token_digest", String(64), nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("consumed_at", DateTime(timezone=True), nullable=True),
+)
+
 authenticated_sessions = Table(
     "authenticated_sessions",
     metadata,
@@ -90,6 +108,7 @@ authenticated_sessions = Table(
 
 identity_registry.map_imperatively(User, users)
 identity_registry.map_imperatively(VerificationToken, verification_tokens)
+identity_registry.map_imperatively(PasswordResetToken, password_reset_tokens)
 identity_registry.map_imperatively(AuthenticatedSession, authenticated_sessions)
 
 
@@ -113,6 +132,14 @@ class SqlAlchemyIdentityRepository:
         )
         return self._session.scalar(statement)
 
+    def get_password_reset_token(self, token_digest: str) -> PasswordResetToken | None:
+        statement = (
+            select(PasswordResetToken)
+            .where(password_reset_tokens.c.token_digest == token_digest)
+            .with_for_update()
+        )
+        return self._session.scalar(statement)
+
     def get_session(self, token_digest: str) -> AuthenticatedSession | None:
         return self._session.scalar(
             select(AuthenticatedSession).where(
@@ -131,6 +158,9 @@ class SqlAlchemyIdentityRepository:
     def add_verification_token(self, token: VerificationToken) -> None:
         self._session.add(token)
 
+    def add_password_reset_token(self, token: PasswordResetToken) -> None:
+        self._session.add(token)
+
     def add_session(self, session: AuthenticatedSession) -> None:
         self._session.add(session)
 
@@ -138,6 +168,13 @@ class SqlAlchemyIdentityRepository:
         self._session.execute(
             delete(authenticated_sessions).where(
                 authenticated_sessions.c.token_digest == token_digest
+            )
+        )
+
+    def delete_sessions_for_user(self, user_id: UUID) -> None:
+        self._session.execute(
+            delete(authenticated_sessions).where(
+                authenticated_sessions.c.user_id == user_id
             )
         )
 
