@@ -1,6 +1,7 @@
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 
 import { ApiStatus } from "./components/ApiStatus";
+import { AuthActions } from "./components/AuthActions";
 import { AuthProvider } from "./components/AuthProvider";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -46,12 +47,7 @@ export function App() {
             <Link className="brand" to="/" aria-label="Cadmus — головна">
               Cadmus
             </Link>
-            <Link className="primary-link" to="/register">
-              Зареєструватися
-            </Link>
-            <Link className="secondary-link" to="/login">
-              Увійти
-            </Link>
+            <AuthActions />
           </header>
           <Routes>
             <Route path="/" element={<HomePage />} />

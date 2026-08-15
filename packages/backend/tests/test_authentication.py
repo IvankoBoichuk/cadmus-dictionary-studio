@@ -45,6 +45,9 @@ class MemoryIdentityRepository:
     def add_session(self, session: AuthenticatedSession) -> None:
         self.sessions[session.token_digest] = session
 
+    def delete_session(self, token_digest: str) -> None:
+        self.sessions.pop(token_digest, None)
+
 
 class MemoryUnitOfWork:
     def __init__(self, repository: MemoryIdentityRepository) -> None:
@@ -195,6 +198,40 @@ def test_authenticate_resolves_valid_session_and_rejects_expired_session() -> No
     with pytest.raises(AuthenticationError) as error:
         service.authenticate("expired")
     assert error.value.reason is AuthenticationFailure.INVALID_SESSION
+
+
+def test_logout_invalidates_only_the_current_session_and_is_idempotent() -> None:
+    user = active_user()
+    current_session = AuthenticatedSession(
+        id=uuid4(),
+        user_id=user.id,
+        token_digest=sha256(b"current").hexdigest(),
+        created_at=NOW - timedelta(hours=1),
+        expires_at=NOW + timedelta(hours=1),
+    )
+    other_session = AuthenticatedSession(
+        id=uuid4(),
+        user_id=user.id,
+        token_digest=sha256(b"other").hexdigest(),
+        created_at=NOW - timedelta(hours=1),
+        expires_at=NOW + timedelta(hours=1),
+    )
+    repository = MemoryIdentityRepository(
+        users={user.id: user},
+        sessions={
+            current_session.token_digest: current_session,
+            other_session.token_digest: other_session,
+        },
+    )
+    service = create_service(repository)
+
+    service.logout("current")
+    service.logout("current")
+
+    with pytest.raises(AuthenticationError) as error:
+        service.authenticate("current")
+    assert error.value.reason is AuthenticationFailure.INVALID_SESSION
+    assert service.authenticate("other") is user
 
 
 def test_scrypt_verifier_accepts_only_the_original_password() -> None:

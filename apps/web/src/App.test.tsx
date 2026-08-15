@@ -432,3 +432,61 @@ it("redirects an anonymous dashboard visitor to login", async () => {
     await screen.findByRole("heading", { name: "Увійти" }),
   ).toBeInTheDocument();
 });
+
+it("logs out from an authenticated page and redirects to login", async () => {
+  window.history.replaceState({}, "", "/dashboard");
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/auth/logout") {
+        return new Response(JSON.stringify({ message: "Ви вийшли із системи." }), {
+          status: 200,
+        });
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  await screen.findByRole("heading", { name: "Робочий простір" });
+  fireEvent.click(screen.getByRole("button", { name: "Вийти" }));
+
+  expect(await screen.findByRole("heading", { name: "Увійти" })).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/login");
+  const logoutCall = fetchMock.mock.calls.find(
+    ([url]) => String(url) === "/api/auth/logout",
+  );
+  expect(logoutCall?.[1]).toMatchObject({
+    credentials: "same-origin",
+    method: "POST",
+  });
+});
+
+it("keeps the authenticated state and reports an unconfirmed logout", async () => {
+  window.history.replaceState({}, "", "/dashboard");
+  let logoutAttempts = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/auth/logout") {
+        logoutAttempts += 1;
+        throw new TypeError("network unavailable");
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    }),
+  );
+
+  render(<App />);
+  await screen.findByRole("heading", { name: "Робочий простір" });
+  fireEvent.click(screen.getByRole("button", { name: "Вийти" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Не вдалося підтвердити вихід із системи",
+  );
+  expect(screen.getByRole("heading", { name: "Робочий простір" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Вийти" })).toBeEnabled();
+  expect(window.location.pathname).toBe("/dashboard");
+  expect(logoutAttempts).toBe(1);
+});

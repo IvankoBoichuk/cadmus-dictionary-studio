@@ -50,6 +50,9 @@ class MemoryIdentityRepository:
     def add_session(self, session: AuthenticatedSession) -> None:
         self.sessions[session.token_digest] = session
 
+    def delete_session(self, token_digest: str) -> None:
+        self.sessions.pop(token_digest, None)
+
 
 class MemoryUnitOfWork:
     def __init__(self, repository: MemoryIdentityRepository) -> None:

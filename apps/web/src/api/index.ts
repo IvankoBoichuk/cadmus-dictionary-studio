@@ -27,6 +27,9 @@ type AuthenticationErrorResponse =
 type SessionOperation = paths["/auth/session"]["get"];
 type SessionResponse =
   SessionOperation["responses"][200]["content"]["application/json"];
+type LogoutOperation = paths["/auth/logout"]["post"];
+type LogoutResponse =
+  LogoutOperation["responses"][200]["content"]["application/json"];
 
 export type ApiErrorKind = "http" | "network" | "invalid-response";
 
@@ -96,6 +99,16 @@ function get<Success, Failure>(
   });
 }
 
+function postWithoutBody<Success, Failure>(
+  path: keyof paths,
+  options: RequestOptions = {},
+): Promise<Success> {
+  return request<Success, Failure>(path, {
+    method: "POST",
+    signal: options.signal,
+  });
+}
+
 const verificationRequests = new Map<string, Promise<VerificationResponse>>();
 let currentSessionRequest: Promise<SessionResponse> | undefined;
 
@@ -127,6 +140,10 @@ export const API = {
         },
       );
       return currentSessionRequest;
+    },
+
+    logout(options?: RequestOptions): Promise<LogoutResponse> {
+      return postWithoutBody<LogoutResponse, never>("/auth/logout", options);
     },
 
     register(

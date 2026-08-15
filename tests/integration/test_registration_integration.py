@@ -10,6 +10,7 @@ from cadmus.config import Environment, Settings
 from cadmus.identity import (
     ActivationError,
     ActivationFailure,
+    AuthenticationError,
     AuthenticationService,
     RegistrationService,
 )
@@ -134,6 +135,19 @@ def test_registration_persists_only_protected_credentials_and_activates_once() -
         ).one()
     assert login.session_token not in stored_session.token_digest
     assert len(stored_session.token_digest) == 64
+
+    authentication.logout(login.session_token)
+    with pytest.raises(AuthenticationError):
+        authentication.authenticate(login.session_token)
+    with engine.connect() as connection:
+        remaining_sessions = connection.execute(
+            text(
+                "SELECT count(*) FROM cadmus.authenticated_sessions "
+                "WHERE user_id = :user_id"
+            ),
+            {"user_id": user.id},
+        ).scalar_one()
+    assert remaining_sessions == 0
 
     with pytest.raises(ActivationError) as reused:
         service.activate(raw_token)
