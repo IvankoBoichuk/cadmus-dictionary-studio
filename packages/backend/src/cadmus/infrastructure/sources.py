@@ -157,7 +157,7 @@ dictionary_events = Table(
     Column(
         "actor_user_id",
         Uuid(as_uuid=True),
-        ForeignKey("cadmus.users.id"),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
         nullable=False,
     ),
     Column("occurred_at", DateTime(timezone=True), nullable=False, index=True),

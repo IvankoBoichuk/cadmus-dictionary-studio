@@ -153,6 +153,7 @@ services:
       CADMUS_SMTP_PORT: 1025
       CADMUS_EMAIL_FROM: Cadmus <noreply@cadmus.local>
       CADMUS_SESSION_LIFETIME_HOURS: ${CADMUS_SESSION_LIFETIME_HOURS:-12}
+      CADMUS_MAX_UPLOAD_SIZE_BYTES: ${CADMUS_MAX_UPLOAD_SIZE_BYTES:-104857600}
       CADMUS_REDIS_HOST: redis
       CADMUS_REDIS_PORT: 6379
       CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
@@ -235,7 +236,14 @@ services:
       CADMUS_REDIS_PORT: 6379
       CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
       CADMUS_REDIS_RESULT_DATABASE: ${CADMUS_REDIS_RESULT_DATABASE:-1}
+      <<: [*database-environment, *object-storage-environment]
     depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     init: true

@@ -8,6 +8,7 @@ from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, cast
 from uuid import UUID
 
+import cadmus.infrastructure.identity  # noqa: F401 -- registers `users` for FKs
 from cadmus.config import Settings
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.object_storage import create_object_storage

@@ -201,6 +201,7 @@ def upgrade() -> None:
             ["actor_user_id"],
             ["cadmus.users.id"],
             name=op.f("fk_dictionary_events_actor_user_id_users"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["dictionary_id"],
