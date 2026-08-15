@@ -50,6 +50,8 @@ make web-build
 make web-test
 make web-lint
 make web-type-check
+make web-api-types
+make web-api-types-check
 make redis-up
 make minio-up
 make mailpit-up

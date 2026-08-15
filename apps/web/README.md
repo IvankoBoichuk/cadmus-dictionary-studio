@@ -23,6 +23,20 @@ development proxy when necessary:
 CADMUS_API_PROXY_TARGET=http://127.0.0.1:9000 make web
 ~~~
 
+Authentication components call the typed `API.auth` facade instead of using
+`fetch` directly. Its request and response types are generated from FastAPI's
+OpenAPI document. Regenerate and verify the checked-in contract from the
+repository root:
+
+~~~bash
+make web-api-types
+make web-api-types-check
+~~~
+
+`openapi-typescript` 7.x is an MIT-licensed development-only generator. It adds
+no runtime code to the browser bundle; the application transport remains the
+native Fetch API behind the facade.
+
 The browser-facing base path defaults to `/api`. A build for a different
 deployment can set `VITE_API_BASE_URL`; this value is public and must never
 contain credentials or secrets.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
-import { API_BASE_URL } from "../config";
+import { API } from "../api";
 
 type VerificationState =
   | { kind: "loading"; message: string }
@@ -25,25 +25,25 @@ export function VerifyEmailPage() {
       return;
     }
 
+    const verificationToken = token;
     let active = true;
     async function verify() {
       try {
-        const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        const payload = (await response.json()) as { message?: string };
+        const result = await API.auth.verifyEmail({ token: verificationToken });
         if (!active) return;
-        if (response.ok) {
+        if (result.ok) {
           setState({
             kind: "success",
-            message: payload.message ?? "Email підтверджено. Акаунт активовано.",
+            message:
+              result.data.message ?? "Email підтверджено. Акаунт активовано.",
           });
         } else {
           setState({
             kind: "error",
-            message: payload.message ?? "Не вдалося підтвердити email.",
+            message:
+              "message" in result.error
+                ? result.error.message
+                : "Не вдалося підтвердити email.",
           });
         }
       } catch {

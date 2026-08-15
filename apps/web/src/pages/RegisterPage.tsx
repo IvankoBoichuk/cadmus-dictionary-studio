@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { API_BASE_URL } from "../config";
+import { API, fieldErrorsFrom } from "../api";
 
 type RegistrationField = "email" | "password" | "password_confirmation";
 type FieldErrors = Partial<Record<RegistrationField, string>>;
@@ -45,26 +45,26 @@ export function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          password_confirmation: confirmation,
-        }),
+      const result = await API.auth.register({
+        email,
+        password,
+        password_confirmation: confirmation,
       });
-      const payload = (await response.json()) as {
-        errors?: FieldErrors;
-        message?: string;
-      };
-      if (!response.ok) {
-        if (payload.errors) setErrors(payload.errors);
-        else setSubmissionError("Не вдалося створити акаунт. Спробуйте ще раз.");
+      if (!result.ok) {
+        const apiErrors = fieldErrorsFrom(result.error);
+        if (apiErrors) {
+          setErrors({
+            email: apiErrors.email,
+            password: apiErrors.password,
+            password_confirmation: apiErrors.password_confirmation,
+          });
+        } else {
+          setSubmissionError("Не вдалося створити акаунт. Спробуйте ще раз.");
+        }
         return;
       }
       setMessage(
-        payload.message ??
+        result.data.message ??
           "Акаунт створено. Перевірте email, щоб активувати його.",
       );
     } catch {

@@ -322,9 +322,10 @@ not production credentials.
 
 `make verify` checks lock consistency, whitespace, repository structure, lint,
 formatting, Python and TypeScript types, backend and frontend unit tests, and the
-production frontend build. It does not require PostgreSQL, Redis, object storage,
-SMTP, or Docker; PostgreSQL, MinIO, and Mailpit contract tests run separately with
-`make test-integration`.
+production frontend build. It also rejects drift between FastAPI's OpenAPI
+contract and the generated frontend API types. It does not require PostgreSQL,
+Redis, object storage, SMTP, or Docker; PostgreSQL, MinIO, and Mailpit contract
+tests run separately with `make test-integration`.
 
 ## Development workflow
 
