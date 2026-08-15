@@ -235,7 +235,7 @@ def test_unknown_language_code_is_rejected() -> None:
 
     with pytest.raises(MetadataValidationError) as error:
         service.save(dictionary.id, owner_id, _minimal_input(language_codes=("zz",)))
-    assert "languages" in error.value.errors
+    assert "language_codes" in error.value.errors
 
 
 @pytest.mark.parametrize(

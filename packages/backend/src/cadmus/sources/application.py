@@ -406,7 +406,7 @@ class SaveDictionaryMetadataService:
 
         for code in data.language_codes:
             if code not in ISO_639_1_CODES:
-                errors["languages"] = f"Невідомий код мови: {code}."
+                errors["language_codes"] = f"Невідомий код мови: {code}."
                 break
 
         if data.publication_year is not None:

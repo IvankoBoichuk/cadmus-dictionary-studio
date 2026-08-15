@@ -123,6 +123,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a dictionary source PDF and create its draft */
+        post: operations["upload_dictionaries_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a dictionary draft and its readiness gaps */
+        get: operations["get_dictionary_dictionaries__dictionary_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Save bibliographic, language, and legal metadata for a draft */
+        patch: operations["save_metadata_dictionaries__dictionary_id__patch"];
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/source/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the immutable original source PDF */
+        get: operations["download_source_dictionaries__dictionary_id__source_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -218,6 +270,115 @@ export interface components {
          * @enum {string}
          */
         AuthenticationFailure: "invalid_credentials" | "unverified_account" | "invalid_session";
+        /** Body_upload_dictionaries_upload_post */
+        Body_upload_dictionaries_upload_post: {
+            /** File */
+            file: string;
+        };
+        /**
+         * ContributorRequest
+         * @description One ordered contributor entry as submitted by the client.
+         */
+        ContributorRequest: {
+            /** Name */
+            name: string;
+            role: components["schemas"]["ContributorRole"];
+        };
+        /**
+         * ContributorResponse
+         * @description One ordered contributor entry.
+         */
+        ContributorResponse: {
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            role: components["schemas"]["ContributorRole"];
+        };
+        /**
+         * ContributorRole
+         * @description Supported contributor roles.
+         * @enum {string}
+         */
+        ContributorRole: "author" | "compiler";
+        /**
+         * DictionaryResponse
+         * @description The dictionary draft, its structured metadata, and readiness gaps.
+         */
+        DictionaryResponse: {
+            /** Contributors */
+            contributors: components["schemas"]["ContributorResponse"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Dictionary Type */
+            dictionary_type: string | null;
+            /** Digital Source */
+            digital_source: string | null;
+            /** Edition */
+            edition: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isbn */
+            isbn: string | null;
+            /** Language Codes */
+            language_codes: string[];
+            legal_status: components["schemas"]["LegalStatus"] | null;
+            /** License Type */
+            license_type: string | null;
+            /** Missing Required Fields */
+            missing_required_fields: string[];
+            /** Permission Reference */
+            permission_reference: string | null;
+            /** Publication Year */
+            publication_year: number | null;
+            /** Publisher */
+            publisher: string | null;
+            /** Rights Note */
+            rights_note: string | null;
+            source?: components["schemas"]["SourceFileResponse"] | null;
+            status: components["schemas"]["DictionaryStatus"];
+            /** Title */
+            title: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * DictionaryStatus
+         * @description Configuration-readiness status owned by this Story (and BH-31).
+         * @enum {string}
+         */
+        DictionaryStatus: "draft" | "configured";
+        /**
+         * DuplicateSourceResponse
+         * @description Structured duplicate-checksum warning; never discloses other users.
+         */
+        DuplicateSourceResponse: {
+            /**
+             * Code
+             * @default duplicate_source
+             */
+            code: string;
+            /**
+             * Dictionary Id
+             * Format: uuid
+             */
+            dictionary_id: string;
+            /** Message */
+            message: string;
+            /** Title */
+            title: string | null;
+        };
         /**
          * EnqueuedTaskResponse
          * @description Stable response returned after a task is accepted.
@@ -226,6 +387,16 @@ export interface components {
             status: components["schemas"]["TaskStatus"];
             /** Task Id */
             task_id: string;
+        };
+        /**
+         * ErrorResponse
+         * @description Stable, non-sensitive error contract for a single failure reason.
+         */
+        ErrorResponse: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
         /**
          * FieldErrorsResponse
@@ -274,6 +445,18 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * InspectionStatus
+         * @description Lifecycle of the asynchronous, worker-side PDF structural inspection.
+         * @enum {string}
+         */
+        InspectionStatus: "pending" | "verified" | "failed";
+        /**
+         * LegalStatus
+         * @description Recorded legal status of the digitized source.
+         * @enum {string}
+         */
+        LegalStatus: "public_domain" | "licensed" | "permission_granted" | "restricted" | "unknown";
         /**
          * LoginRequest
          * @description Bounded login input carried only in a POST body.
@@ -355,6 +538,63 @@ export interface components {
         ResetPasswordResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * SaveMetadataRequest
+         * @description Full BH-27 metadata submission; missing required fields are allowed.
+         */
+        SaveMetadataRequest: {
+            /** Contributors */
+            contributors?: components["schemas"]["ContributorRequest"][];
+            /** Description */
+            description?: string | null;
+            /** Dictionary Type */
+            dictionary_type?: string | null;
+            /** Digital Source */
+            digital_source?: string | null;
+            /** Edition */
+            edition?: string | null;
+            /** Isbn */
+            isbn?: string | null;
+            /** Language Codes */
+            language_codes?: string[];
+            legal_status?: components["schemas"]["LegalStatus"] | null;
+            /** License Type */
+            license_type?: string | null;
+            /** Permission Reference */
+            permission_reference?: string | null;
+            /** Publication Year */
+            publication_year?: number | null;
+            /** Publisher */
+            publisher?: string | null;
+            /** Rights Note */
+            rights_note?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * SourceFileResponse
+         * @description Technical facts about the uploaded PDF and its inspection state.
+         */
+        SourceFileResponse: {
+            /** Byte Size */
+            byte_size: number;
+            /** Checksum Sha256 */
+            checksum_sha256: string;
+            /** Inspection Error */
+            inspection_error?: string | null;
+            inspection_status: components["schemas"]["InspectionStatus"];
+            /** Mime Type */
+            mime_type: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Page Count */
+            page_count: number | null;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
         };
         /**
          * TaskStatus
@@ -700,6 +940,225 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VerificationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_dictionaries_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_dictionaries_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A source with this checksum already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateSourceResponse"];
+                };
+            };
+            /** @description The upload exceeds the configured maximum size */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The file failed type or signature validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    get_dictionary_dictionaries__dictionary_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_metadata_dictionaries__dictionary_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Metadata fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    download_source_dictionaries__dictionary_id__source_download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Validation Error */

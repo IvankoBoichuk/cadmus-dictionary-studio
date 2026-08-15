@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 import { useAuth } from "../authContext";
 
@@ -20,6 +20,9 @@ export function DashboardPage() {
         <p className="eyebrow">Dashboard</p>
         <h1 id="page-title">Робочий простір</h1>
         <p className="lede">Ви увійшли як {session.user.email}.</p>
+        <Link className="primary-link" to="/dictionaries/new">
+          Додати словник
+        </Link>
       </section>
     </main>
   );
