@@ -1,4 +1,4 @@
-.PHONY: help install api worker web web-build web-test web-lint web-type-check postgres-up redis-up minio-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker web web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -12,9 +12,12 @@ help:
 	@echo "  make web-test      Run frontend tests"
 	@echo "  make web-lint      Run frontend lint checks"
 	@echo "  make web-type-check  Run the frontend TypeScript check"
+	@echo "  make web-api-types Generate frontend types from FastAPI OpenAPI"
+	@echo "  make web-api-types-check  Check generated OpenAPI types for drift"
 	@echo "  make postgres-up   Start PostgreSQL and wait for its health check"
 	@echo "  make redis-up      Start Redis and wait for its health check"
 	@echo "  make minio-up      Start MinIO and initialize its bucket"
+	@echo "  make mailpit-up    Start the local email inbox"
 	@echo "  make db-upgrade    Apply all migrations through Compose"
 	@echo "  make db-revision MESSAGE='...'  Create an Alembic revision"
 	@echo "  make db-current    Show the current database revision"
@@ -57,6 +60,20 @@ web-lint:
 web-type-check:
 	cd apps/web && bun run type-check
 
+web-api-types:
+	@spec=$$(mktemp /tmp/cadmus-openapi.XXXXXX.json); \
+	trap 'rm -f "$$spec"' EXIT; \
+	$(UV) run --locked --package cadmus-api python -m cadmus_api.export_openapi "$$spec"; \
+	cd apps/web && bun run generate-api-types "$$spec" -o src/api/schema.d.ts
+
+web-api-types-check:
+	@spec=$$(mktemp /tmp/cadmus-openapi.XXXXXX.json); \
+	generated=$$(mktemp /tmp/cadmus-openapi-types.XXXXXX.d.ts); \
+	trap 'rm -f "$$spec" "$$generated"' EXIT; \
+	$(UV) run --locked --package cadmus-api python -m cadmus_api.export_openapi "$$spec"; \
+	cd apps/web && bun run generate-api-types "$$spec" -o "$$generated"; \
+	diff -u src/api/schema.d.ts "$$generated"
+
 postgres-up:
 	docker compose up -d --wait postgres
 
@@ -65,6 +82,9 @@ redis-up:
 
 minio-up:
 	docker compose up -d --wait minio object-storage-init
+
+mailpit-up:
+	docker compose up -d --wait mailpit
 
 db-upgrade:
 	docker compose run --rm migrate
@@ -85,11 +105,11 @@ db-downgrade:
 test-integration:
 	@cleanup() { \
 		docker compose --profile test rm --stop --force \
-			postgres-test minio-test object-storage-test-init; \
+			postgres-test minio-test object-storage-test-init mailpit-test; \
 	}; \
 	status=0; \
 	trap cleanup EXIT HUP INT TERM; \
-	docker compose --profile test run --rm integration-test || status=$$?; \
+	docker compose --profile test run --build --rm integration-test || status=$$?; \
 	exit $$status
 
 compose-build:
@@ -152,4 +172,4 @@ structure-check:
 	test -d fixtures
 	test -d tests
 
-verify: lock-check diff-check structure-check lint format-check type-check test web-build
+verify: lock-check diff-check structure-check web-api-types-check lint format-check type-check test web-build

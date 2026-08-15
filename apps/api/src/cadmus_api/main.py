@@ -2,16 +2,25 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from cadmus.config import Settings
+from cadmus.identity import RegistrationService
 from cadmus.infrastructure.database import create_database_engine
+from cadmus.infrastructure.email import SmtpEmailSender
+from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
+from cadmus.infrastructure.security import (
+    ScryptPasswordHasher,
+    SecureVerificationTokenProvider,
+)
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.processing import TaskQueue
 from cadmus.sources import ObjectStorage
 from fastapi import FastAPI
 from sqlalchemy import Engine, text
 
+from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.health import create_health_router
 from cadmus_api.routes.tasks import create_tasks_router
 
@@ -21,13 +30,14 @@ def create_app(
     database_engine: Engine | None = None,
     task_queue: TaskQueue | None = None,
     object_storage: ObjectStorage | None = None,
+    registration_service: RegistrationService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
+    engine = database_engine or create_database_engine(app_settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        engine = database_engine or create_database_engine(app_settings)
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         app.state.database_engine = engine
@@ -52,6 +62,21 @@ def create_app(
         if object_storage is not None
         else create_object_storage(app_settings)
     )
+    app.state.registration_service = (
+        registration_service
+        if registration_service is not None
+        else RegistrationService(
+            unit_of_work_factory=create_identity_unit_of_work_factory(engine),
+            password_hasher=ScryptPasswordHasher(),
+            token_provider=SecureVerificationTokenProvider(),
+            email_sender=SmtpEmailSender(app_settings),
+            public_web_url=app_settings.public_web_url,
+            token_lifetime=timedelta(
+                hours=app_settings.verification_token_lifetime_hours
+            ),
+        )
+    )
     app.include_router(create_health_router(app_settings))
+    app.include_router(create_auth_router(app.state.registration_service))
     app.include_router(create_tasks_router(app.state.task_queue))
     return app

@@ -1,6 +1,8 @@
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 
 import { ApiStatus } from "./components/ApiStatus";
+import { RegisterPage } from "./pages/RegisterPage";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 
 function HomePage() {
   return (
@@ -12,6 +14,9 @@ function HomePage() {
           Основа інтерфейсу для перетворення сканів словників на перевірені
           структуровані дані.
         </p>
+        <Link className="primary-link" to="/register">
+          Зареєструватися
+        </Link>
       </section>
       <ApiStatus />
     </main>
@@ -43,6 +48,8 @@ export function App() {
         </header>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>

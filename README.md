@@ -7,7 +7,8 @@ source provenance.
 The repository contains a React / TypeScript / Vite web client, the FastAPI
 backend scaffold, its PostgreSQL 17 / SQLAlchemy 2 / Alembic persistence
 foundation, a Redis-backed Celery worker, and local S3-compatible object storage
-backed by MinIO. Domain models are introduced by separate Jira Stories.
+backed by MinIO. The identity module supports email/password registration and
+one-time email verification; local messages are captured by Mailpit.
 
 ## Repository structure
 
@@ -28,9 +29,9 @@ backend. They are not independent microservices. See docs/architecture.md.
 ## Local environment with Docker Compose
 
 Docker Compose is the standard way to run Cadmus locally. It starts PostgreSQL,
-Redis, and MinIO, initializes the configured object-storage bucket, applies all
-Alembic migrations, then starts the API, Celery worker, and production-built web
-client after their dependencies are ready.
+Redis, MinIO, and Mailpit, initializes the configured object-storage bucket,
+applies all Alembic migrations, then starts the API, Celery worker, and
+production-built web client after their dependencies are ready.
 
 Prerequisites:
 
@@ -44,6 +45,8 @@ Prerequisites:
   local tools such as DBeaver.
 - ports `9000` and `9001` (or `CADMUS_MINIO_API_PORT` and
   `CADMUS_MINIO_CONSOLE_PORT`) must be available for the MinIO API and console.
+- port `8025` (or `CADMUS_MAILPIT_UI_PORT`) must be available for the local
+  email inbox.
 
 The checked-in defaults are safe for local use and require no `.env` file. To
 customize them, copy the example and edit the untracked file:
@@ -70,8 +73,9 @@ curl --fail http://localhost:5173/
 curl --fail http://localhost:5173/api/health
 ~~~
 
-The `postgres`, `redis`, `minio`, `api`, `worker`, and `web` containers should
-report `healthy`; `migrate` and `object-storage-init` should exit with status 0.
+The `postgres`, `redis`, `minio`, `mailpit`, `api`, `worker`, and `web`
+containers should report `healthy`; `migrate` and `object-storage-init` should
+exit with status 0.
 The frontend is served from its published port and proxies `/api/health` over
 the internal Compose network. Both API health endpoints return JSON whose
 `status` is `ok`. If a published port is changed, use its configured value in
@@ -108,6 +112,18 @@ make compose-reset DESTRUCTIVE=1
 
 This runs `docker compose down --volumes`. The explicit flag is a guard against
 accidental data loss.
+
+## Registration and local email
+
+Open `http://localhost:5173/register` to create an account. New accounts use
+the `pending_verification` status. Compose routes verification messages to
+Mailpit; open `http://localhost:8025` and follow the one-time link in the latest
+message. The link expires after 24 hours by default. Passwords are stored as
+salted scrypt hashes and verification token plaintext is never persisted.
+
+Start only the local inbox with `make mailpit-up`. Production deployments must
+override the SMTP settings and public web URL; Mailpit is a development and test
+dependency, not a production mail delivery service.
 
 ## MinIO and S3-compatible object storage
 
@@ -177,10 +193,12 @@ Equivalent convenience targets are `make postgres-up`, `make db-upgrade`,
 `make db-revision MESSAGE="describe change"`, `make db-current`,
 `make db-history`, and `make db-downgrade`.
 
-The initial revision `bh179_0001` creates only the PostgreSQL schema `cadmus`.
-There are no domain tables yet. Alembic owns `public.alembic_version`; future
-SQLAlchemy persistence models register tables on
-`cadmus.infrastructure.database.metadata` and therefore live in `cadmus`.
+The initial revision `bh179_0001` creates the PostgreSQL schema `cadmus`.
+Revision `bh5_0002` adds `users` and `email_verification_tokens`; downgrading it
+deletes identity records and therefore requires a backup outside disposable
+environments. Alembic owns `public.alembic_version`; SQLAlchemy persistence
+models register tables on `cadmus.infrastructure.database.metadata` and
+therefore live in `cadmus`.
 
 To run the backend on the host while PostgreSQL remains in Compose:
 
@@ -215,8 +233,8 @@ If Redis becomes unavailable after startup, task submission and polling return
 HTTP 503 with a stable `Task queue is unavailable` detail instead of leaking a
 transport exception.
 
-Run real migration and object-storage contract tests against isolated PostgreSQL
-and MinIO services with ephemeral `tmpfs` data directories:
+Run real migration, object-storage, registration, and SMTP contract tests
+against isolated PostgreSQL, MinIO, and Mailpit services with ephemeral data:
 
 ~~~bash
 make test-integration
@@ -225,7 +243,7 @@ make test-integration
 These tests refuse to run unless the database name ends in `_test`. They check
 database connectivity and reversible migrations, then upload, read, and delete
 a redistributable fixture through the application-owned storage contract. The
-target always removes its isolated PostgreSQL and MinIO services, including on
+target always removes its isolated PostgreSQL, MinIO, and Mailpit services, including on
 failure or interruption.
 
 Every future Story that introduces a Cadmus component or infrastructure
@@ -269,6 +287,13 @@ have safe local defaults:
 | `CADMUS_NAME` | `cadmus-api` | service name and OpenAPI title |
 | `CADMUS_ENVIRONMENT` | `development` | deployment environment |
 | `CADMUS_VERSION` | `0.1.0` | service and OpenAPI version |
+| `CADMUS_PUBLIC_WEB_URL` | `http://localhost:5173` | origin used to build verification links |
+| `CADMUS_VERIFICATION_TOKEN_LIFETIME_HOURS` | `24` | verification link lifetime, from 1 to 168 hours |
+| `CADMUS_SMTP_HOST` | `localhost` | SMTP host; Compose injects `mailpit` |
+| `CADMUS_SMTP_PORT` | `1025` | SMTP port |
+| `CADMUS_SMTP_USE_TLS` | `false` | enable SMTP STARTTLS |
+| `CADMUS_EMAIL_FROM` | `Cadmus <noreply@cadmus.local>` | verification message sender |
+| `CADMUS_MAILPIT_UI_PORT` | `8025` | local Mailpit inbox port |
 | `CADMUS_DATABASE_NAME` | `cadmus` | PostgreSQL database name |
 | `CADMUS_DATABASE_USER` | `cadmus` | PostgreSQL user |
 | `CADMUS_DATABASE_PASSWORD` | `cadmus-local` | local-only password; override outside local development |
@@ -297,9 +322,10 @@ not production credentials.
 
 `make verify` checks lock consistency, whitespace, repository structure, lint,
 formatting, Python and TypeScript types, backend and frontend unit tests, and the
-production frontend build. It does not require PostgreSQL, Redis, object storage,
-or Docker; PostgreSQL and MinIO contract tests run separately with
-`make test-integration`.
+production frontend build. It also rejects drift between FastAPI's OpenAPI
+contract and the generated frontend API types. It does not require PostgreSQL,
+Redis, object storage, SMTP, or Docker; PostgreSQL, MinIO, and Mailpit contract
+tests run separately with `make test-integration`.
 
 ## Development workflow
 

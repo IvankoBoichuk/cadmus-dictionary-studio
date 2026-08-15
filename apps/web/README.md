@@ -1,9 +1,8 @@
 # Web application
 
-React 19, TypeScript, and Vite client for Cadmus Dictionary Studio. BH-178
-provides only the application shell, routing, environment configuration, and API
-availability state. Authentication, OCR overlays, review, and other business
-screens remain outside this Story.
+React 19, TypeScript, and Vite client for Cadmus Dictionary Studio. It contains
+the application shell and the BH-5 registration and email-verification screens.
+Login, OCR overlays, review, and other business screens remain outside BH-5.
 
 ## Local development
 
@@ -15,13 +14,32 @@ make api
 make web
 ~~~
 
-The frontend is available at `http://localhost:5173`. Vite sends same-origin
+The frontend is available at `http://localhost:5173`; registration is at
+`/register`. Vite sends same-origin
 requests under `/api` to `http://127.0.0.1:8000` by default. Override the host
 development proxy when necessary:
 
 ~~~bash
 CADMUS_API_PROXY_TARGET=http://127.0.0.1:9000 make web
 ~~~
+
+Authentication components call the typed `API.auth` facade instead of using
+`fetch` directly. Its request and response types are generated from FastAPI's
+OpenAPI document. Regenerate and verify the checked-in contract from the
+repository root:
+
+~~~bash
+make web-api-types
+make web-api-types-check
+~~~
+
+`openapi-typescript` 7.x is an MIT-licensed development-only generator. It adds
+no runtime code to the browser bundle; the application transport remains the
+native Fetch API behind the facade. The shared request function normalizes HTTP,
+network, and malformed-response failures; the email-verification hook owns its
+React lifecycle and deduplicates the one-time request in Strict Mode. Registration
+form state, validation, submission, and field-error mapping live in a focused
+hook so the page remains a presentation component.
 
 The browser-facing base path defaults to `/api`. A build for a different
 deployment can set `VITE_API_BASE_URL`; this value is public and must never
