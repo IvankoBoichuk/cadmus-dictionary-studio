@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     )
     object_storage_bucket: str = Field(default="cadmus", min_length=3)
     object_storage_secure: bool = False
+    max_upload_size_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
     public_web_url: str = Field(default="http://localhost:5173", min_length=1)
     verification_token_lifetime_hours: int = Field(default=24, ge=1, le=168)
     password_reset_token_lifetime_hours: int = Field(default=1, ge=1, le=168)
