@@ -1,10 +1,14 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useFormik } from "formik";
 
 import { API, fieldErrorsFrom } from "../api";
 
 export type RegistrationField = "email" | "password" | "password_confirmation";
 type RegistrationValues = Record<RegistrationField, string>;
 type FieldErrors = Partial<Record<RegistrationField, string>>;
+type RegistrationStatus = {
+  message?: string;
+  submissionError?: string;
+};
 
 const MINIMUM_PASSWORD_LENGTH = 12;
 const INITIAL_VALUES: RegistrationValues = {
@@ -28,59 +32,43 @@ function validate(values: RegistrationValues): FieldErrors {
 }
 
 export function useRegistrationForm() {
-  const [values, setValues] = useState<RegistrationValues>(INITIAL_VALUES);
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  function getFieldProps(field: RegistrationField) {
-    return {
-      name: field,
-      value: values[field],
-      onChange(event: ChangeEvent<HTMLInputElement>) {
-        setValues((current) => ({ ...current, [field]: event.target.value }));
-      },
-    };
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const clientErrors = validate(values);
-    setErrors(clientErrors);
-    setMessage(null);
-    setSubmissionError(null);
-    if (Object.keys(clientErrors).length > 0) return;
-
-    setSubmitting(true);
-    try {
-      const response = await API.auth.register(values);
-      setMessage(
-        response.message ??
-          "Акаунт створено. Перевірте email, щоб активувати його.",
-      );
-    } catch (error) {
-      const apiErrors = fieldErrorsFrom(error);
-      if (apiErrors) {
-        setErrors({
-          email: apiErrors.email,
-          password: apiErrors.password,
-          password_confirmation: apiErrors.password_confirmation,
+  const formik = useFormik<RegistrationValues>({
+    initialValues: INITIAL_VALUES,
+    validate,
+    validateOnBlur: true,
+    validateOnChange: true,
+    onSubmit: async (values, helpers) => {
+      helpers.setStatus(undefined);
+      try {
+        const response = await API.auth.register(values);
+        helpers.setStatus({
+          message:
+            response.message ??
+            "Акаунт створено. Перевірте email, щоб активувати його.",
         });
-      } else {
-        setSubmissionError("Сервіс реєстрації недоступний. Спробуйте пізніше.");
+      } catch (error) {
+        const apiErrors = fieldErrorsFrom(error);
+        if (apiErrors) {
+          helpers.setErrors({
+            email: apiErrors.email,
+            password: apiErrors.password,
+            password_confirmation: apiErrors.password_confirmation,
+          });
+          return;
+        }
+        helpers.setStatus({
+          submissionError: "Сервіс реєстрації недоступний. Спробуйте пізніше.",
+        });
       }
-    } finally {
-      setSubmitting(false);
-    }
-  }
+    },
+  });
 
+  const status = formik.status as RegistrationStatus | undefined;
   return {
-    errors,
-    getFieldProps,
-    message,
-    submissionError,
-    submit,
-    submitting,
+    ...formik,
+    message: status?.message ?? null,
+    submissionError: status?.submissionError ?? null,
+    submit: formik.handleSubmit,
+    submitting: formik.isSubmitting,
   } as const;
 }

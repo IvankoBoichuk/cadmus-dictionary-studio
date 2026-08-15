@@ -1,16 +1,21 @@
-"""Thin HTTP adapters for registration and account activation."""
+"""Thin HTTP adapters for identity use cases."""
 
+from datetime import timedelta
 from typing import Any
+from uuid import UUID
 
 from cadmus.identity import (
     AccountStatus,
     ActivationError,
     ActivationFailure,
+    AuthenticationError,
+    AuthenticationFailure,
+    AuthenticationService,
     DuplicateEmailError,
     RegistrationService,
     RegistrationValidationError,
 )
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Cookie, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -67,6 +72,36 @@ class VerificationErrorResponse(BaseModel):
     message: str
 
 
+class LoginRequest(BaseModel):
+    """Bounded login input carried only in a POST body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class AuthenticatedUserResponse(BaseModel):
+    """Non-sensitive identity details for an authenticated browser."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    email: str
+
+
+class AuthenticationErrorResponse(BaseModel):
+    """Safe authentication failure contract."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: AuthenticationFailure
+    message: str
+
+
+SESSION_COOKIE_NAME = "cadmus_session"
+
+
 FIELD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_409_CONFLICT: {
         "model": FieldErrorsResponse,
@@ -79,9 +114,102 @@ FIELD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-def create_auth_router(registration: RegistrationService) -> APIRouter:
+def create_auth_router(
+    registration: RegistrationService,
+    authentication: AuthenticationService,
+    session_lifetime: timedelta,
+    secure_cookie: bool,
+) -> APIRouter:
     """Create auth routes bound to application use cases."""
     router = APIRouter(prefix="/auth", tags=["identity"])
+
+    @router.post(
+        "/login",
+        response_model=AuthenticatedUserResponse,
+        responses={
+            status.HTTP_401_UNAUTHORIZED: {
+                "model": AuthenticationErrorResponse,
+                "description": "The email or password is incorrect",
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "model": AuthenticationErrorResponse,
+                "description": "The account has not been verified",
+            },
+        },
+        summary="Create an authenticated browser session",
+    )
+    def login(
+        request: LoginRequest,
+        response: Response,
+    ) -> AuthenticatedUserResponse | JSONResponse:
+        try:
+            result = authentication.login(request.email, request.password)
+        except AuthenticationError as error:
+            if error.reason is AuthenticationFailure.UNVERIFIED_ACCOUNT:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={
+                        "code": error.reason,
+                        "message": "Підтвердьте акаунт перед входом.",
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={
+                    "code": AuthenticationFailure.INVALID_CREDENTIALS,
+                    "message": "Неправильні облікові дані.",
+                },
+                headers={"Cache-Control": "no-store"},
+            )
+
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=result.session_token,
+            max_age=int(session_lifetime.total_seconds()),
+            httponly=True,
+            secure=secure_cookie,
+            samesite="lax",
+            path="/",
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return AuthenticatedUserResponse(id=result.user.id, email=result.user.email)
+
+    @router.get(
+        "/session",
+        response_model=AuthenticatedUserResponse,
+        responses={
+            status.HTTP_401_UNAUTHORIZED: {
+                "model": AuthenticationErrorResponse,
+                "description": "The browser has no valid session",
+            }
+        },
+        summary="Resolve the current authenticated browser session",
+    )
+    def current_session(
+        session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    ) -> AuthenticatedUserResponse | JSONResponse:
+        try:
+            if session_token is None:
+                raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
+            user = authentication.authenticate(session_token)
+        except AuthenticationError:
+            response = JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={
+                    "code": AuthenticationFailure.INVALID_SESSION,
+                    "message": "Потрібна авторизація.",
+                },
+                headers={"Cache-Control": "no-store"},
+            )
+            response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+            return response
+        return JSONResponse(
+            content=AuthenticatedUserResponse(id=user.id, email=user.email).model_dump(
+                mode="json"
+            ),
+            headers={"Cache-Control": "no-store"},
+        )
 
     @router.post(
         "/register",

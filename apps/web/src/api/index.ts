@@ -17,6 +17,16 @@ type VerificationErrorResponse =
   VerificationOperation["responses"][400]["content"]["application/json"];
 type ValidationErrorResponse =
   VerificationOperation["responses"][422]["content"]["application/json"];
+type LoginOperation = paths["/auth/login"]["post"];
+type LoginRequest =
+  LoginOperation["requestBody"]["content"]["application/json"];
+export type AuthenticatedUser =
+  LoginOperation["responses"][200]["content"]["application/json"];
+type AuthenticationErrorResponse =
+  LoginOperation["responses"][401]["content"]["application/json"];
+type SessionOperation = paths["/auth/session"]["get"];
+type SessionResponse =
+  SessionOperation["responses"][200]["content"]["application/json"];
 
 export type ApiErrorKind = "http" | "network" | "invalid-response";
 
@@ -36,18 +46,15 @@ type RequestOptions = {
   signal?: AbortSignal;
 };
 
-async function post<Body, Success, Failure>(
+async function request<Success, Failure>(
   path: keyof paths,
-  body: Body,
-  options: RequestOptions = {},
+  init: RequestInit,
 ): Promise<Success> {
   let response: Response | undefined;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: options.signal,
+      credentials: "same-origin",
+      ...init,
     });
     const payload = (await response.json()) as Success | Failure;
 
@@ -66,10 +73,62 @@ async function post<Body, Success, Failure>(
   }
 }
 
+function post<Body, Success, Failure>(
+  path: keyof paths,
+  body: Body,
+  options: RequestOptions = {},
+): Promise<Success> {
+  return request<Success, Failure>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+}
+
+function get<Success, Failure>(
+  path: keyof paths,
+  options: RequestOptions = {},
+): Promise<Success> {
+  return request<Success, Failure>(path, {
+    method: "GET",
+    signal: options.signal,
+  });
+}
+
 const verificationRequests = new Map<string, Promise<VerificationResponse>>();
+let currentSessionRequest: Promise<SessionResponse> | undefined;
 
 export const API = {
   auth: {
+    login(
+      request: LoginRequest,
+      options?: RequestOptions,
+    ): Promise<AuthenticatedUser> {
+      return post<
+        LoginRequest,
+        AuthenticatedUser,
+        AuthenticationErrorResponse | ValidationErrorResponse
+      >("/auth/login", request, options);
+    },
+
+    currentSession(options?: RequestOptions): Promise<SessionResponse> {
+      if (currentSessionRequest) return currentSessionRequest;
+      currentSessionRequest = get<SessionResponse, AuthenticationErrorResponse>(
+        "/auth/session",
+        options,
+      );
+      void currentSessionRequest.then(
+        () => {
+          currentSessionRequest = undefined;
+        },
+        () => {
+          currentSessionRequest = undefined;
+        },
+      );
+      return currentSessionRequest;
+    },
+
     register(
       request: RegistrationRequest,
       options?: RequestOptions,

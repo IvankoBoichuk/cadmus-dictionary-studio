@@ -5,7 +5,7 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
-from cadmus.identity.domain import User, VerificationToken
+from cadmus.identity.domain import AuthenticatedSession, User, VerificationToken
 
 
 class IdentityRepository(Protocol):
@@ -17,9 +17,13 @@ class IdentityRepository(Protocol):
 
     def get_verification_token(self, token_digest: str) -> VerificationToken | None: ...
 
+    def get_session(self, token_digest: str) -> AuthenticatedSession | None: ...
+
     def add_user(self, user: User) -> None: ...
 
     def add_verification_token(self, token: VerificationToken) -> None: ...
+
+    def add_session(self, session: AuthenticatedSession) -> None: ...
 
 
 class IdentityUnitOfWork(Protocol):
@@ -48,9 +52,19 @@ class PasswordHasher(Protocol):
 
     def hash(self, password: str) -> str: ...
 
+    def verify(self, password: str, password_hash: str | None) -> bool: ...
+
 
 class VerificationTokenProvider(Protocol):
     """Secure token generation and digesting boundary."""
+
+    def issue(self) -> tuple[str, str]: ...
+
+    def digest(self, token: str) -> str: ...
+
+
+class SessionTokenProvider(Protocol):
+    """Secure session-token generation and digesting boundary."""
 
     def issue(self) -> tuple[str, str]: ...
 

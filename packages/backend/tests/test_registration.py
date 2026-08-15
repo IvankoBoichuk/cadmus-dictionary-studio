@@ -8,6 +8,7 @@ from cadmus.identity import (
     AccountStatus,
     ActivationError,
     ActivationFailure,
+    AuthenticatedSession,
     DuplicateEmailError,
     RegistrationService,
     RegistrationValidationError,
@@ -26,6 +27,7 @@ NOW = datetime(2026, 8, 15, 10, 30, tzinfo=UTC)
 class MemoryIdentityRepository:
     users: dict[UUID, User] = field(default_factory=dict)
     tokens: dict[str, VerificationToken] = field(default_factory=dict)
+    sessions: dict[str, AuthenticatedSession] = field(default_factory=dict)
 
     def get_user_by_email(self, email: str) -> User | None:
         return next((user for user in self.users.values() if user.email == email), None)
@@ -36,11 +38,17 @@ class MemoryIdentityRepository:
     def get_verification_token(self, token_digest: str) -> VerificationToken | None:
         return self.tokens.get(token_digest)
 
+    def get_session(self, token_digest: str) -> AuthenticatedSession | None:
+        return self.sessions.get(token_digest)
+
     def add_user(self, user: User) -> None:
         self.users[user.id] = user
 
     def add_verification_token(self, token: VerificationToken) -> None:
         self.tokens[token.token_digest] = token
+
+    def add_session(self, session: AuthenticatedSession) -> None:
+        self.sessions[session.token_digest] = session
 
 
 class MemoryUnitOfWork:
@@ -66,6 +74,9 @@ class MemoryUnitOfWork:
 class StubPasswordHasher:
     def hash(self, password: str) -> str:
         return f"hashed:{password}"
+
+    def verify(self, password: str, password_hash: str | None) -> bool:
+        return password_hash == f"hashed:{password}"
 
 
 class StubTokenProvider:

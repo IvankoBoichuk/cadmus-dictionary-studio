@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an authenticated browser session */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -15,6 +32,23 @@ export interface paths {
         put?: never;
         /** Register a pending user account */
         post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve the current authenticated browser session */
+        get: operations["current_session_auth_session_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -106,6 +140,34 @@ export interface components {
          */
         ActivationFailure: "invalid" | "expired" | "used";
         /**
+         * AuthenticatedUserResponse
+         * @description Non-sensitive identity details for an authenticated browser.
+         */
+        AuthenticatedUserResponse: {
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * AuthenticationErrorResponse
+         * @description Safe authentication failure contract.
+         */
+        AuthenticationErrorResponse: {
+            code: components["schemas"]["AuthenticationFailure"];
+            /** Message */
+            message: string;
+        };
+        /**
+         * AuthenticationFailure
+         * @description Safe public reasons why login or session authentication failed.
+         * @enum {string}
+         */
+        AuthenticationFailure: "invalid_credentials" | "unverified_account" | "invalid_session";
+        /**
          * EnqueuedTaskResponse
          * @description Stable response returned after a task is accepted.
          */
@@ -144,6 +206,16 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /**
+         * LoginRequest
+         * @description Bounded login input carried only in a POST body.
+         */
+        LoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
         };
         /**
          * QueueUnavailableResponse
@@ -250,6 +322,57 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedUserResponse"];
+                };
+            };
+            /** @description The email or password is incorrect */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description The account has not been verified */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     register_auth_register_post: {
         parameters: {
             query?: never;
@@ -288,6 +411,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    current_session_auth_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedUserResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
