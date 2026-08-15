@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     object_storage_secure: bool = False
     public_web_url: str = Field(default="http://localhost:5173", min_length=1)
     verification_token_lifetime_hours: int = Field(default=24, ge=1, le=168)
+    session_lifetime_hours: int = Field(default=12, ge=1, le=168)
     smtp_host: str = Field(default="localhost", min_length=1)
     smtp_port: int = Field(default=1025, ge=1, le=65535)
     smtp_username: str | None = None

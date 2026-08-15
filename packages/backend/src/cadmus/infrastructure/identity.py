@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, registry
 
 from cadmus.identity import (
     AccountStatus,
+    AuthenticatedSession,
     DuplicateEmailError,
     IdentityUnitOfWorkFactory,
     User,
@@ -70,8 +71,25 @@ verification_tokens = Table(
     Column("consumed_at", DateTime(timezone=True), nullable=True),
 )
 
+authenticated_sessions = Table(
+    "authenticated_sessions",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "user_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("token_digest", String(64), nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 identity_registry.map_imperatively(User, users)
 identity_registry.map_imperatively(VerificationToken, verification_tokens)
+identity_registry.map_imperatively(AuthenticatedSession, authenticated_sessions)
 
 
 class SqlAlchemyIdentityRepository:
@@ -94,6 +112,13 @@ class SqlAlchemyIdentityRepository:
         )
         return self._session.scalar(statement)
 
+    def get_session(self, token_digest: str) -> AuthenticatedSession | None:
+        return self._session.scalar(
+            select(AuthenticatedSession).where(
+                authenticated_sessions.c.token_digest == token_digest
+            )
+        )
+
     def add_user(self, user: User) -> None:
         self._session.add(user)
         try:
@@ -104,6 +129,9 @@ class SqlAlchemyIdentityRepository:
 
     def add_verification_token(self, token: VerificationToken) -> None:
         self._session.add(token)
+
+    def add_session(self, session: AuthenticatedSession) -> None:
+        self._session.add(session)
 
 
 class SqlAlchemyIdentityUnitOfWork:

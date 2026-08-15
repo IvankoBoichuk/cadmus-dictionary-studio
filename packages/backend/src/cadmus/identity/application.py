@@ -1,17 +1,24 @@
-"""Registration and email verification application use cases."""
+"""Identity application use cases."""
 
 import re
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from cadmus.identity.domain import AccountStatus, User, VerificationToken
+from cadmus.identity.domain import (
+    AccountStatus,
+    AuthenticatedSession,
+    User,
+    VerificationToken,
+)
 from cadmus.identity.ports import (
     EmailSender,
     IdentityUnitOfWorkFactory,
     PasswordHasher,
+    SessionTokenProvider,
     VerificationTokenProvider,
 )
 
@@ -49,6 +56,90 @@ class ActivationError(ValueError):
     def __init__(self, reason: ActivationFailure) -> None:
         super().__init__(reason.value)
         self.reason = reason
+
+
+class AuthenticationFailure(StrEnum):
+    """Safe public reasons why login or session authentication failed."""
+
+    INVALID_CREDENTIALS = "invalid_credentials"
+    UNVERIFIED_ACCOUNT = "unverified_account"
+    INVALID_SESSION = "invalid_session"
+
+
+class AuthenticationError(ValueError):
+    """A controlled login or session failure."""
+
+    def __init__(self, reason: AuthenticationFailure) -> None:
+        super().__init__(reason.value)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class LoginResult:
+    """Authenticated user plus the raw token delivered only to HTTP transport."""
+
+    user: User
+    session_token: str
+
+
+class AuthenticationService:
+    """Authenticate credentials and resolve server-side sessions."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: IdentityUnitOfWorkFactory,
+        password_hasher: PasswordHasher,
+        session_token_provider: SessionTokenProvider,
+        session_lifetime: timedelta = timedelta(hours=12),
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._password_hasher = password_hasher
+        self._session_token_provider = session_token_provider
+        self._session_lifetime = session_lifetime
+        self._clock = clock
+
+    def login(self, email: str, password: str) -> LoginResult:
+        """Create a session only for valid credentials on an active account."""
+        normalized_email = email.strip().casefold()
+        now = self._clock()
+
+        with self._unit_of_work_factory() as unit_of_work:
+            user = unit_of_work.users.get_user_by_email(normalized_email)
+            password_matches = self._password_hasher.verify(
+                password,
+                user.password_hash if user is not None else None,
+            )
+            if user is None or not password_matches:
+                raise AuthenticationError(AuthenticationFailure.INVALID_CREDENTIALS)
+            if user.status is not AccountStatus.ACTIVE:
+                raise AuthenticationError(AuthenticationFailure.UNVERIFIED_ACCOUNT)
+
+            raw_token, token_digest = self._session_token_provider.issue()
+            session = AuthenticatedSession(
+                id=uuid4(),
+                user_id=user.id,
+                token_digest=token_digest,
+                created_at=now,
+                expires_at=now + self._session_lifetime,
+            )
+            unit_of_work.users.add_session(session)
+            unit_of_work.commit()
+
+        return LoginResult(user=user, session_token=raw_token)
+
+    def authenticate(self, raw_token: str) -> User:
+        """Resolve an unexpired session token to its active account."""
+        token_digest = self._session_token_provider.digest(raw_token)
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            session = unit_of_work.users.get_session(token_digest)
+            if session is None or session.expires_at <= now:
+                raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
+            user = unit_of_work.users.get_user(session.user_id)
+            if user is None or user.status is not AccountStatus.ACTIVE:
+                raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
+        return user
 
 
 class RegistrationService:

@@ -1,13 +1,19 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+import pytest
+from cadmus.config import Environment, Settings
 from cadmus.identity import (
     AccountStatus,
     ActivationError,
     ActivationFailure,
+    AuthenticationError,
+    AuthenticationFailure,
+    AuthenticationService,
     DuplicateEmailError,
+    LoginResult,
     RegistrationService,
     RegistrationValidationError,
     User,
@@ -49,12 +55,52 @@ class StubRegistrationService:
         )
 
 
-def client_for(service: StubRegistrationService) -> TestClient:
+@dataclass
+class StubAuthenticationService:
+    login_error: AuthenticationError | None = None
+    session_error: AuthenticationError | None = None
+    login_input: tuple[str, str] | None = None
+    authenticated_token: str | None = None
+
+    def login(self, email: str, password: str) -> LoginResult:
+        self.login_input = (email, password)
+        if self.login_error is not None:
+            raise self.login_error
+        return LoginResult(user=self._user(), session_token="raw-session-token")
+
+    def authenticate(self, token: str) -> User:
+        self.authenticated_token = token
+        if self.session_error is not None:
+            raise self.session_error
+        return self._user()
+
+    @staticmethod
+    def _user() -> User:
+        return User(
+            id=UUID("8158fd82-2d50-4f4f-af31-e969bab77163"),
+            email="user@example.com",
+            password_hash="not-returned",
+            status=AccountStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            activated_at=datetime.now(UTC),
+        )
+
+
+def client_for(
+    service: StubRegistrationService,
+    authentication: StubAuthenticationService | None = None,
+    settings: Settings | None = None,
+) -> TestClient:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     return TestClient(
         create_app(
+            settings=settings,
             database_engine=engine,
             registration_service=cast(RegistrationService, service),
+            authentication_service=cast(
+                AuthenticationService,
+                authentication or StubAuthenticationService(),
+            ),
         )
     )
 
@@ -154,3 +200,109 @@ def test_openapi_documents_registration_and_verification_contracts() -> None:
         "400",
         "422",
     }
+    assert set(schema["paths"]["/auth/login"]["post"]["responses"]) >= {
+        "200",
+        "401",
+        "403",
+        "422",
+    }
+    assert set(schema["paths"]["/auth/session"]["get"]["responses"]) >= {
+        "200",
+        "401",
+    }
+
+
+def test_login_sets_protected_session_cookie_without_returning_credentials() -> None:
+    authentication = StubAuthenticationService()
+    with client_for(StubRegistrationService(), authentication) as client:
+        response = client.post(
+            "/auth/login",
+            json={"email": "user@example.com", "password": "secret-password"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": "8158fd82-2d50-4f4f-af31-e969bab77163",
+        "email": "user@example.com",
+    }
+    assert authentication.login_input == ("user@example.com", "secret-password")
+    assert "secret-password" not in str(response.request.url)
+    assert "raw-session-token" not in response.text
+    cookie = response.headers["set-cookie"]
+    assert "cadmus_session=raw-session-token" in cookie
+    assert "HttpOnly" in cookie
+    assert "SameSite=lax" in cookie
+    assert "Path=/" in cookie
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_login_uses_secure_cookie_in_production() -> None:
+    with client_for(
+        StubRegistrationService(),
+        StubAuthenticationService(),
+        Settings(environment=Environment.PRODUCTION),
+    ) as client:
+        response = client.post(
+            "/auth/login",
+            json={"email": "user@example.com", "password": "secret-password"},
+        )
+
+    assert "Secure" in response.headers["set-cookie"]
+
+
+def test_login_rejects_missing_fields_before_calling_use_case() -> None:
+    authentication = StubAuthenticationService()
+    with client_for(StubRegistrationService(), authentication) as client:
+        response = client.post("/auth/login", json={"email": "", "password": ""})
+
+    assert response.status_code == 422
+    assert authentication.login_input is None
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected_status", "expected_message"),
+    [
+        (
+            AuthenticationFailure.INVALID_CREDENTIALS,
+            401,
+            "Неправильні облікові дані.",
+        ),
+        (
+            AuthenticationFailure.UNVERIFIED_ACCOUNT,
+            403,
+            "Підтвердьте акаунт перед входом.",
+        ),
+    ],
+)
+def test_login_returns_controlled_authentication_failures(
+    reason: AuthenticationFailure,
+    expected_status: int,
+    expected_message: str,
+) -> None:
+    authentication = StubAuthenticationService(login_error=AuthenticationError(reason))
+    with client_for(StubRegistrationService(), authentication) as client:
+        response = client.post(
+            "/auth/login",
+            json={"email": "user@example.com", "password": "not-logged"},
+        )
+
+    assert response.status_code == expected_status
+    assert response.json() == {"code": reason, "message": expected_message}
+    assert "not-logged" not in response.text
+
+
+def test_session_endpoint_requires_and_resolves_cookie() -> None:
+    authentication = StubAuthenticationService()
+    with client_for(StubRegistrationService(), authentication) as client:
+        unauthorized = client.get("/auth/session")
+        client.cookies.set("cadmus_session", "browser-session-token")
+        authorized = client.get("/auth/session")
+
+    assert unauthorized.status_code == 401
+    assert unauthorized.json() == {
+        "code": "invalid_session",
+        "message": "Потрібна авторизація.",
+    }
+    assert authorized.status_code == 200
+    assert authorized.json()["email"] == "user@example.com"
+    assert authentication.authenticated_token == "browser-session-token"

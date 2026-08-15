@@ -7,11 +7,17 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from cadmus.config import Environment, Settings
-from cadmus.identity import ActivationError, ActivationFailure, RegistrationService
+from cadmus.identity import (
+    ActivationError,
+    ActivationFailure,
+    AuthenticationService,
+    RegistrationService,
+)
 from cadmus.infrastructure.email import SmtpEmailSender
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
+    SecureSessionTokenProvider,
     SecureVerificationTokenProvider,
 )
 from pydantic import SecretStr
@@ -109,6 +115,25 @@ def test_registration_persists_only_protected_credentials_and_activates_once() -
 
     activated = service.activate(raw_token)
     assert activated.status.value == "active"
+
+    authentication = AuthenticationService(
+        unit_of_work_factory=create_identity_unit_of_work_factory(engine),
+        password_hasher=ScryptPasswordHasher(),
+        session_token_provider=SecureSessionTokenProvider(),
+        session_lifetime=timedelta(hours=12),
+    )
+    login = authentication.login("INTEGRATION@example.com", "long-enough-password")
+    assert authentication.authenticate(login.session_token).id == user.id
+    with engine.connect() as connection:
+        stored_session = connection.execute(
+            text(
+                "SELECT token_digest, expires_at FROM cadmus.authenticated_sessions "
+                "WHERE user_id = :user_id"
+            ),
+            {"user_id": user.id},
+        ).one()
+    assert login.session_token not in stored_session.token_digest
+    assert len(stored_session.token_digest) == 64
 
     with pytest.raises(ActivationError) as reused:
         service.activate(raw_token)
