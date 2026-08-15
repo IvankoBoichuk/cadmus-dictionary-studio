@@ -11,6 +11,7 @@ export type SessionState =
 export type AuthContextValue = {
   session: SessionState;
   setAuthenticated(user: AuthenticatedUser): void;
+  setAnonymous(): void;
 };
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

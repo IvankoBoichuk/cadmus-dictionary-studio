@@ -99,6 +99,14 @@ class AuthenticationErrorResponse(BaseModel):
     message: str
 
 
+class LogoutResponse(BaseModel):
+    """Non-sensitive idempotent logout outcome."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    message: str
+
+
 SESSION_COOKIE_NAME = "cadmus_session"
 
 
@@ -210,6 +218,27 @@ def create_auth_router(
             ),
             headers={"Cache-Control": "no-store"},
         )
+
+    @router.post(
+        "/logout",
+        response_model=LogoutResponse,
+        summary="Invalidate the current authenticated browser session",
+    )
+    def logout(
+        response: Response,
+        session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    ) -> LogoutResponse:
+        if session_token is not None:
+            authentication.logout(session_token)
+        response.delete_cookie(
+            SESSION_COOKIE_NAME,
+            path="/",
+            secure=secure_cookie,
+            httponly=True,
+            samesite="lax",
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return LogoutResponse(message="Ви вийшли із системи.")
 
     @router.post(
         "/register",

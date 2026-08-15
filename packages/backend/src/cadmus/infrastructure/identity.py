@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Table,
     Uuid,
+    delete,
     select,
 )
 from sqlalchemy.engine import Engine
@@ -132,6 +133,13 @@ class SqlAlchemyIdentityRepository:
 
     def add_session(self, session: AuthenticatedSession) -> None:
         self._session.add(session)
+
+    def delete_session(self, token_digest: str) -> None:
+        self._session.execute(
+            delete(authenticated_sessions).where(
+                authenticated_sessions.c.token_digest == token_digest
+            )
+        )
 
 
 class SqlAlchemyIdentityUnitOfWork:

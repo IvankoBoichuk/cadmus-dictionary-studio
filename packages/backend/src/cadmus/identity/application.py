@@ -141,6 +141,13 @@ class AuthenticationService:
                 raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
         return user
 
+    def logout(self, raw_token: str) -> None:
+        """Invalidate the current session without revealing whether it existed."""
+        token_digest = self._session_token_provider.digest(raw_token)
+        with self._unit_of_work_factory() as unit_of_work:
+            unit_of_work.users.delete_session(token_digest)
+            unit_of_work.commit()
+
 
 class RegistrationService:
     """Coordinates registration and activation through explicit ports."""

@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invalidate the current authenticated browser session */
+        post: operations["logout_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/register": {
         parameters: {
             query?: never;
@@ -218,6 +235,14 @@ export interface components {
             password: string;
         };
         /**
+         * LogoutResponse
+         * @description Non-sensitive idempotent logout outcome.
+         */
+        LogoutResponse: {
+            /** Message */
+            message: string;
+        };
+        /**
          * QueueUnavailableResponse
          * @description Stable response when Redis cannot serve queue operations.
          */
@@ -360,6 +385,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutResponse"];
                 };
             };
             /** @description Validation Error */

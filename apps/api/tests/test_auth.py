@@ -61,6 +61,7 @@ class StubAuthenticationService:
     session_error: AuthenticationError | None = None
     login_input: tuple[str, str] | None = None
     authenticated_token: str | None = None
+    logout_tokens: list[str] | None = None
 
     def login(self, email: str, password: str) -> LoginResult:
         self.login_input = (email, password)
@@ -73,6 +74,11 @@ class StubAuthenticationService:
         if self.session_error is not None:
             raise self.session_error
         return self._user()
+
+    def logout(self, token: str) -> None:
+        if self.logout_tokens is None:
+            self.logout_tokens = []
+        self.logout_tokens.append(token)
 
     @staticmethod
     def _user() -> User:
@@ -210,6 +216,9 @@ def test_openapi_documents_registration_and_verification_contracts() -> None:
         "200",
         "401",
     }
+    assert set(schema["paths"]["/auth/logout"]["post"]["responses"]) >= {
+        "200",
+    }
 
 
 def test_login_sets_protected_session_cookie_without_returning_credentials() -> None:
@@ -306,3 +315,31 @@ def test_session_endpoint_requires_and_resolves_cookie() -> None:
     assert authorized.status_code == 200
     assert authorized.json()["email"] == "user@example.com"
     assert authentication.authenticated_token == "browser-session-token"
+
+
+def test_logout_invalidates_session_and_expires_cookie() -> None:
+    authentication = StubAuthenticationService()
+    with client_for(StubRegistrationService(), authentication) as client:
+        client.cookies.set("cadmus_session", "browser-session-token")
+        response = client.post("/auth/logout")
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Ви вийшли із системи."}
+    assert authentication.logout_tokens == ["browser-session-token"]
+    cookie = response.headers["set-cookie"]
+    assert "cadmus_session=" in cookie
+    assert "Max-Age=0" in cookie
+    assert "HttpOnly" in cookie
+    assert "SameSite=lax" in cookie
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_logout_without_session_is_idempotent_and_does_not_call_use_case() -> None:
+    authentication = StubAuthenticationService()
+    with client_for(StubRegistrationService(), authentication) as client:
+        first = client.post("/auth/logout")
+        second = client.post("/auth/logout")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert authentication.logout_tokens is None

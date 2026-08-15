@@ -25,6 +25,8 @@ class IdentityRepository(Protocol):
 
     def add_session(self, session: AuthenticatedSession) -> None: ...
 
+    def delete_session(self, token_digest: str) -> None: ...
+
 
 class IdentityUnitOfWork(Protocol):
     """Transaction boundary controlled by an identity use case."""
