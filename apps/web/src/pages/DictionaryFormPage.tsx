@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../authContext";
 import { DictionaryMetadataForm } from "../components/DictionaryMetadataForm";
@@ -35,10 +35,17 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
     );
   }
   return (
-    <DictionaryMetadataForm
-      initialDictionary={state.dictionary}
-      source={state.dictionary.source}
-    />
+    <>
+      <div className="form-actions">
+        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/abbreviations`}>
+          Налаштувати скорочення словника
+        </Link>
+      </div>
+      <DictionaryMetadataForm
+        initialDictionary={state.dictionary}
+        source={state.dictionary.source}
+      />
+    </>
   );
 }
 

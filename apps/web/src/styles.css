@@ -522,3 +522,63 @@ h1 {
   color: #9a3024;
   background: #fbe9e6;
 }
+
+.checkbox-field {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-weight: 600;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.abbreviation-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.abbreviation-table th,
+.abbreviation-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #d6dbd2;
+  text-align: left;
+  vertical-align: top;
+}
+
+.abbreviation-table th {
+  color: #33443d;
+  font-size: 0.85rem;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.badge--unresolved,
+.badge--warning {
+  color: #7a5b12;
+  background: #fbf1da;
+}
+
+.badge--ok {
+  color: #245847;
+  background: #eaf1ec;
+}
+
+.badge--error {
+  color: #9a3024;
+  background: #fbe9e6;
+}

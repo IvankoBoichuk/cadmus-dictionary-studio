@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { ApiStatus } from "./components/ApiStatus";
 import { AuthActions } from "./components/AuthActions";
 import { AuthProvider } from "./components/AuthProvider";
+import { AbbreviationsPage } from "./pages/AbbreviationsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DictionariesList } from "./pages/DictionariesList";
 import { DictionaryFormPage } from "./pages/DictionaryFormPage";
@@ -63,6 +64,10 @@ export function App() {
             <Route
               path="/dictionaries/:dictionaryId/edit"
               element={<DictionaryFormPage />}
+            />
+            <Route
+              path="/dictionaries/:dictionaryId/abbreviations"
+              element={<AbbreviationsPage />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />

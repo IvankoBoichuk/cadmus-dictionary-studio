@@ -7,6 +7,9 @@ from typing import BinaryIO, Protocol, Self
 from uuid import UUID
 
 from cadmus.sources.domain import (
+    Abbreviation,
+    AbbreviationCategory,
+    AbbreviationVariant,
     Contributor,
     Dictionary,
     DictionaryEvent,
@@ -60,6 +63,35 @@ class SourcesRepository(Protocol):
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]: ...
 
     def delete_dictionary(self, dictionary_id: UUID) -> None: ...
+
+    def list_abbreviations(self, dictionary_id: UUID) -> list[Abbreviation]:
+        """List every abbreviation of one dictionary (also the AC8 pipeline seam)."""
+        ...
+
+    def get_abbreviation(
+        self, dictionary_id: UUID, abbreviation_id: UUID
+    ) -> Abbreviation | None: ...
+
+    def find_abbreviation_duplicate(
+        self,
+        dictionary_id: UUID,
+        category: AbbreviationCategory,
+        language_code: str | None,
+        abbreviation: str,
+        exclude_id: UUID | None = None,
+    ) -> Abbreviation | None: ...
+
+    def add_abbreviation(self, abbreviation: Abbreviation) -> None: ...
+
+    def update_abbreviation(self, abbreviation: Abbreviation) -> None: ...
+
+    def replace_abbreviation_variants(
+        self, abbreviation_id: UUID, variants: Sequence[AbbreviationVariant]
+    ) -> None: ...
+
+    def delete_abbreviation(
+        self, dictionary_id: UUID, abbreviation_id: UUID
+    ) -> None: ...
 
 
 class SourcesUnitOfWork(Protocol):

@@ -95,7 +95,7 @@ Web-клієнт не звертається напряму до БД, Redis а�
 |---|---|---|
 | `identity` | користувачі, credentials, sessions, ролі | словники та OCR |
 | `projects` | проєкти словників, членство й доступ | файли та pipeline |
-| `sources` | джерела, метадані, правовий статус, файли, сторінки | OCR-семантику |
+| `sources` | джерела, метадані, правовий статус, файли, сторінки, скорочення | OCR-семантику |
 | `processing` | processing run, етапи, статуси, конфігурації, retries | реалізацію конкретного OCR engine |
 | `document` | normalized page geometry, blocks, lines, tokens, reading order | лексикографічні значення |
 | `lexicography` | entries, fields, senses, source/normalized text | запуск pipeline |

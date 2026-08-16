@@ -11,6 +11,7 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -30,6 +31,9 @@ from sqlalchemy.orm import Session, registry
 
 from cadmus.infrastructure.database import metadata
 from cadmus.sources.domain import (
+    Abbreviation,
+    AbbreviationCategory,
+    AbbreviationVariant,
     Contributor,
     Dictionary,
     DictionaryEvent,
@@ -120,6 +124,59 @@ dictionary_languages = Table(
         index=True,
     ),
     Column("language_code", String(2), nullable=False),
+    Column("position", Integer, nullable=False),
+)
+
+dictionary_abbreviations = Table(
+    "dictionary_abbreviations",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "dictionary_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("abbreviation", String(64), nullable=False),
+    Column("full_form", String(512), nullable=True),
+    Column("category", String(32), nullable=False),
+    Column("language_code", String(2), nullable=True),
+    Column("note", Text, nullable=True),
+    Column("unresolved", Boolean, nullable=False, default=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "created_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "updated_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    CheckConstraint(
+        "category IN ('part_of_speech', 'grammar', 'usage', 'geography', "
+        "'source', 'other')",
+        name="dictionary_abbreviation_category",
+    ),
+)
+
+dictionary_abbreviation_variants = Table(
+    "dictionary_abbreviation_variants",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "abbreviation_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionary_abbreviations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("variant_text", String(255), nullable=False),
     Column("position", Integer, nullable=False),
 )
 
@@ -229,6 +286,8 @@ dictionary_events = Table(
 sources_registry.map_imperatively(Dictionary, dictionaries)
 sources_registry.map_imperatively(Contributor, dictionary_contributors)
 sources_registry.map_imperatively(DictionaryLanguage, dictionary_languages)
+sources_registry.map_imperatively(Abbreviation, dictionary_abbreviations)
+sources_registry.map_imperatively(AbbreviationVariant, dictionary_abbreviation_variants)
 sources_registry.map_imperatively(SourceFile, dictionary_source_files)
 sources_registry.map_imperatively(DictionaryPage, dictionary_pages)
 sources_registry.map_imperatively(DictionaryEvent, dictionary_events)
@@ -368,6 +427,80 @@ class SqlAlchemySourcesRepository:
     def delete_dictionary(self, dictionary_id: UUID) -> None:
         self._session.execute(
             delete(dictionaries).where(dictionaries.c.id == dictionary_id)
+        )
+
+    def list_abbreviations(self, dictionary_id: UUID) -> list[Abbreviation]:
+        abbreviation_ids = self._session.scalars(
+            select(dictionary_abbreviations.c.id)
+            .where(dictionary_abbreviations.c.dictionary_id == dictionary_id)
+            .order_by(dictionary_abbreviations.c.abbreviation)
+        )
+        return [
+            abbreviation
+            for abbreviation_id in abbreviation_ids
+            if (abbreviation := self.get_abbreviation(dictionary_id, abbreviation_id))
+            is not None
+        ]
+
+    def get_abbreviation(
+        self, dictionary_id: UUID, abbreviation_id: UUID
+    ) -> Abbreviation | None:
+        abbreviation = self._session.get(Abbreviation, abbreviation_id)
+        if abbreviation is None or abbreviation.dictionary_id != dictionary_id:
+            return None
+        abbreviation.variants = list(
+            self._session.scalars(
+                select(AbbreviationVariant)
+                .where(
+                    dictionary_abbreviation_variants.c.abbreviation_id
+                    == abbreviation_id
+                )
+                .order_by(dictionary_abbreviation_variants.c.position)
+            )
+        )
+        return abbreviation
+
+    def find_abbreviation_duplicate(
+        self,
+        dictionary_id: UUID,
+        category: AbbreviationCategory,
+        language_code: str | None,
+        abbreviation: str,
+        exclude_id: UUID | None = None,
+    ) -> Abbreviation | None:
+        conditions = [
+            dictionary_abbreviations.c.dictionary_id == dictionary_id,
+            dictionary_abbreviations.c.category == category,
+            dictionary_abbreviations.c.language_code == language_code,
+            dictionary_abbreviations.c.abbreviation == abbreviation.strip(),
+        ]
+        if exclude_id is not None:
+            conditions.append(dictionary_abbreviations.c.id != exclude_id)
+        return self._session.scalar(select(Abbreviation).where(*conditions))
+
+    def add_abbreviation(self, abbreviation: Abbreviation) -> None:
+        self._session.add(abbreviation)
+
+    def update_abbreviation(self, abbreviation: Abbreviation) -> None:
+        self._session.add(abbreviation)
+
+    def replace_abbreviation_variants(
+        self, abbreviation_id: UUID, variants: Sequence[AbbreviationVariant]
+    ) -> None:
+        self._session.execute(
+            delete(dictionary_abbreviation_variants).where(
+                dictionary_abbreviation_variants.c.abbreviation_id == abbreviation_id
+            )
+        )
+        for variant in variants:
+            self._session.add(variant)
+
+    def delete_abbreviation(self, dictionary_id: UUID, abbreviation_id: UUID) -> None:
+        self._session.execute(
+            delete(dictionary_abbreviations).where(
+                dictionary_abbreviations.c.id == abbreviation_id,
+                dictionary_abbreviations.c.dictionary_id == dictionary_id,
+            )
         )
 
 

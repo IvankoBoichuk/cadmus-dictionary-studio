@@ -13,6 +13,11 @@ from cadmus.sources.domain import (
     ALLOWED_EXTENSION,
     ISO_639_1_CODES,
     PDF_SIGNATURE,
+    Abbreviation,
+    AbbreviationAccessError,
+    AbbreviationCategory,
+    AbbreviationValidationError,
+    AbbreviationVariant,
     Contributor,
     ContributorRole,
     Dictionary,
@@ -22,6 +27,7 @@ from cadmus.sources.domain import (
     DictionaryLanguage,
     DictionaryPage,
     DictionaryStatus,
+    DuplicateAbbreviationError,
     DuplicateSourceError,
     InspectionStatus,
     InvalidUploadError,
@@ -30,6 +36,7 @@ from cadmus.sources.domain import (
     SourceFile,
     UploadTooLargeError,
     missing_required_fields,
+    validate_abbreviation_fields,
     validate_isbn,
     validate_legal_status,
     validate_publication_year,
@@ -553,3 +560,175 @@ class DeleteDictionaryService:
                 "failed to clean up object storage after dictionary delete",
                 exc_info=True,
             )
+
+
+@dataclass(frozen=True)
+class AbbreviationInput:
+    """One BH-29 abbreviation submission, already type-checked at the boundary."""
+
+    abbreviation: str
+    category: AbbreviationCategory
+    full_form: str | None
+    language_code: str | None
+    note: str | None
+    unresolved: bool
+    variants: tuple[str, ...]
+
+
+def _build_abbreviation_variants(
+    abbreviation_id: UUID, variant_texts: Sequence[str]
+) -> list[AbbreviationVariant]:
+    return [
+        AbbreviationVariant(
+            id=uuid4(),
+            abbreviation_id=abbreviation_id,
+            variant_text=text.strip(),
+            position=position,
+        )
+        for position, text in enumerate(variant_texts)
+    ]
+
+
+class AbbreviationCrudService:
+    """Create, read, update, and delete BH-29 dictionary abbreviations.
+
+    Covers AC1-AC4 and AC7.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock
+
+    def list_for_dictionary(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> list[Abbreviation]:
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            return unit_of_work.sources.list_abbreviations(dictionary_id)
+
+    def create(
+        self, dictionary_id: UUID, actor_id: UUID, data: AbbreviationInput
+    ) -> Abbreviation:
+        errors = self._validate(data)
+        if errors:
+            raise AbbreviationValidationError(errors)
+
+        now = self._clock()
+        abbreviation_id = uuid4()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+
+            duplicate = unit_of_work.sources.find_abbreviation_duplicate(
+                dictionary_id, data.category, data.language_code, data.abbreviation
+            )
+            if duplicate is not None:
+                raise DuplicateAbbreviationError(duplicate.id, duplicate.abbreviation)
+
+            abbreviation = Abbreviation(
+                id=abbreviation_id,
+                dictionary_id=dictionary_id,
+                abbreviation=data.abbreviation.strip(),
+                category=data.category,
+                unresolved=data.unresolved,
+                created_at=now,
+                updated_at=now,
+                created_by=actor_id,
+                updated_by=actor_id,
+                full_form=(data.full_form or "").strip() or None,
+                language_code=data.language_code,
+                note=(data.note or "").strip() or None,
+            )
+            variants = _build_abbreviation_variants(abbreviation_id, data.variants)
+            unit_of_work.sources.add_abbreviation(abbreviation)
+            unit_of_work.sources.replace_abbreviation_variants(
+                abbreviation_id, variants
+            )
+            unit_of_work.commit()
+
+        abbreviation.variants = variants
+        return abbreviation
+
+    def update(
+        self,
+        dictionary_id: UUID,
+        abbreviation_id: UUID,
+        actor_id: UUID,
+        data: AbbreviationInput,
+    ) -> Abbreviation:
+        errors = self._validate(data)
+        if errors:
+            raise AbbreviationValidationError(errors)
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            existing = unit_of_work.sources.get_abbreviation(
+                dictionary_id, abbreviation_id
+            )
+            if existing is None:
+                raise AbbreviationAccessError(abbreviation_id)
+
+            duplicate = unit_of_work.sources.find_abbreviation_duplicate(
+                dictionary_id,
+                data.category,
+                data.language_code,
+                data.abbreviation,
+                exclude_id=abbreviation_id,
+            )
+            if duplicate is not None:
+                raise DuplicateAbbreviationError(duplicate.id, duplicate.abbreviation)
+
+            existing.abbreviation = data.abbreviation.strip()
+            existing.category = data.category
+            existing.unresolved = data.unresolved
+            existing.full_form = (data.full_form or "").strip() or None
+            existing.language_code = data.language_code
+            existing.note = (data.note or "").strip() or None
+            existing.updated_at = now
+            existing.updated_by = actor_id
+
+            variants = _build_abbreviation_variants(abbreviation_id, data.variants)
+            unit_of_work.sources.update_abbreviation(existing)
+            unit_of_work.sources.replace_abbreviation_variants(
+                abbreviation_id, variants
+            )
+            unit_of_work.commit()
+
+        existing.variants = variants
+        return existing
+
+    def delete(
+        self, dictionary_id: UUID, abbreviation_id: UUID, actor_id: UUID
+    ) -> None:
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            existing = unit_of_work.sources.get_abbreviation(
+                dictionary_id, abbreviation_id
+            )
+            if existing is None:
+                raise AbbreviationAccessError(abbreviation_id)
+            unit_of_work.sources.delete_abbreviation(dictionary_id, abbreviation_id)
+            unit_of_work.commit()
+
+    @staticmethod
+    def _validate(data: AbbreviationInput) -> dict[str, str]:
+        return validate_abbreviation_fields(
+            abbreviation=data.abbreviation,
+            full_form=data.full_form,
+            language_code=data.language_code,
+            note=data.note,
+            unresolved=data.unresolved,
+            variants=data.variants,
+        )

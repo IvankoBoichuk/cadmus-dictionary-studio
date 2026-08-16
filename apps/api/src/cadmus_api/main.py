@@ -25,6 +25,8 @@ from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.processing import TaskQueue
 from cadmus.sources import (
+    AbbreviationCrudService,
+    AbbreviationImportService,
     DeleteDictionaryService,
     GetDictionaryService,
     ObjectStorage,
@@ -34,6 +36,7 @@ from cadmus.sources import (
 from fastapi import FastAPI
 from sqlalchemy import Engine, text
 
+from cadmus_api.routes.abbreviations import create_abbreviations_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
 from cadmus_api.routes.health import create_health_router
@@ -52,6 +55,8 @@ def create_app(
     save_dictionary_metadata_service: SaveDictionaryMetadataService | None = None,
     get_dictionary_service: GetDictionaryService | None = None,
     delete_dictionary_service: DeleteDictionaryService | None = None,
+    abbreviation_crud_service: AbbreviationCrudService | None = None,
+    abbreviation_import_service: AbbreviationImportService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -154,6 +159,20 @@ def create_app(
             object_storage=app.state.object_storage,
         )
     )
+    app.state.abbreviation_crud_service = (
+        abbreviation_crud_service
+        if abbreviation_crud_service is not None
+        else AbbreviationCrudService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
+    app.state.abbreviation_import_service = (
+        abbreviation_import_service
+        if abbreviation_import_service is not None
+        else AbbreviationImportService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
     app.include_router(create_health_router(app_settings))
     app.include_router(
         create_auth_router(
@@ -173,6 +192,13 @@ def create_app(
             app.state.get_dictionary_service,
             app.state.object_storage,
             app.state.delete_dictionary_service,
+        )
+    )
+    app.include_router(
+        create_abbreviations_router(
+            app.state.authentication_service,
+            app.state.abbreviation_crud_service,
+            app.state.abbreviation_import_service,
         )
     )
     return app
