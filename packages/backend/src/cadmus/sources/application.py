@@ -2,7 +2,7 @@
 
 import hashlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import BinaryIO
@@ -20,6 +20,7 @@ from cadmus.sources.domain import (
     DictionaryEvent,
     DictionaryEventType,
     DictionaryLanguage,
+    DictionaryPage,
     DictionaryStatus,
     DuplicateSourceError,
     InspectionStatus,
@@ -228,6 +229,36 @@ class CompleteSourceInspectionService:
                 source_file.mark_verified(page_count)
             else:
                 raise ValueError("either page_count or error must be provided")
+            unit_of_work.sources.update_source_file(source_file)
+            unit_of_work.commit()
+
+
+class RecordPageSplitService:
+    """Record the worker's asynchronous PDF page-splitting result."""
+
+    def __init__(self, unit_of_work_factory: SourcesUnitOfWorkFactory) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+
+    def record_success(
+        self, source_file_id: UUID, pages: Sequence[DictionaryPage]
+    ) -> None:
+        """Persist the rendered pages and mark the split completed, atomically."""
+        with self._unit_of_work_factory() as unit_of_work:
+            source_file = unit_of_work.sources.get_source_file_by_id(source_file_id)
+            if source_file is None:
+                return
+            unit_of_work.sources.replace_pages(source_file_id, pages)
+            source_file.mark_pages_completed()
+            unit_of_work.sources.update_source_file(source_file)
+            unit_of_work.commit()
+
+    def record_failure(self, source_file_id: UUID, error: str) -> None:
+        """Record a failed page split without discarding a prior success."""
+        with self._unit_of_work_factory() as unit_of_work:
+            source_file = unit_of_work.sources.get_source_file_by_id(source_file_id)
+            if source_file is None:
+                return
+            source_file.mark_pages_failed(error)
             unit_of_work.sources.update_source_file(source_file)
             unit_of_work.commit()
 

@@ -60,6 +60,27 @@ class InspectionStatus(StrEnum):
     FAILED = "failed"
 
 
+class PagesStatus(StrEnum):
+    """Lifecycle of the asynchronous, worker-side page-splitting stage."""
+
+    PENDING = "pending"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class PageProcessingStatus(StrEnum):
+    """Per-page downstream processing status (OCR, layout, validation).
+
+    Nothing transitions these yet; the columns exist now, per ADR-0006, so
+    later OCR/layout Stories don't need another migration.
+    """
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class DictionaryEventType(StrEnum):
     """Append-only audit event kinds."""
 
@@ -154,6 +175,8 @@ class SourceFile:
     inspection_status: InspectionStatus
     page_count: int | None = None
     inspection_error: str | None = None
+    pages_status: PagesStatus = PagesStatus.PENDING
+    pages_error: str | None = None
 
     def mark_verified(self, page_count: int) -> None:
         """Record a successful worker-side structural inspection, idempotently."""
@@ -169,6 +192,42 @@ class SourceFile:
             return
         self.inspection_status = InspectionStatus.FAILED
         self.inspection_error = reason
+
+    def mark_pages_completed(self) -> None:
+        """Record a successful worker-side page split, idempotently."""
+        self.pages_status = PagesStatus.COMPLETED
+        self.pages_error = None
+
+    def mark_pages_failed(self, reason: str) -> None:
+        """Record a failed page split without downgrading a completed result."""
+        if self.pages_status is PagesStatus.COMPLETED:
+            return
+        self.pages_status = PagesStatus.FAILED
+        self.pages_error = reason
+
+
+@dataclass
+class DictionaryPage:
+    """One rendered page of an uploaded PDF (ADR-0006).
+
+    Deliberately omits ADR-0006's ``original_asset_key``: for a single-PDF
+    upload it would always duplicate ``SourceFile.storage_key``; add it if
+    an archive-of-scans upload path is introduced later.
+    """
+
+    id: UUID
+    source_file_id: UUID
+    page_index: int
+    processed_asset_key: str
+    width: int
+    height: int
+    checksum_sha256: str
+    created_at: datetime
+    rotation: int = 0
+    printed_page_number: int | None = None
+    ocr_status: PageProcessingStatus = PageProcessingStatus.PENDING
+    layout_status: PageProcessingStatus = PageProcessingStatus.PENDING
+    validation_status: PageProcessingStatus = PageProcessingStatus.PENDING
 
 
 @dataclass

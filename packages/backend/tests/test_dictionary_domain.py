@@ -7,7 +7,10 @@ from cadmus.sources import (
     Dictionary,
     DictionaryLanguage,
     DictionaryStatus,
+    InspectionStatus,
     LegalStatus,
+    PagesStatus,
+    SourceFile,
     missing_required_fields,
 )
 from cadmus.sources.domain import (
@@ -19,6 +22,24 @@ from cadmus.sources.domain import (
 )
 
 NOW = datetime(2026, 8, 15, tzinfo=UTC)
+
+
+def _source_file(**overrides: object) -> SourceFile:
+    defaults: dict[str, object] = {
+        "id": uuid4(),
+        "dictionary_id": uuid4(),
+        "original_filename": "dictionary.pdf",
+        "mime_type": "application/pdf",
+        "byte_size": 1024,
+        "checksum_sha256": "a" * 64,
+        "storage_key": "sources/owner/file.pdf",
+        "uploaded_at": NOW,
+        "uploaded_by": uuid4(),
+        "inspection_status": InspectionStatus.VERIFIED,
+        "page_count": 3,
+    }
+    defaults.update(overrides)
+    return SourceFile(**defaults)  # type: ignore[arg-type]
 
 
 def _dictionary(**overrides: object) -> Dictionary:
@@ -128,6 +149,33 @@ def test_validate_legal_status_has_no_conditional_fields_for_other_statuses(
     legal_status: LegalStatus,
 ) -> None:
     assert validate_legal_status(legal_status, None, None) == {}
+
+
+def test_mark_pages_completed_clears_a_prior_error() -> None:
+    source_file = _source_file(pages_status=PagesStatus.FAILED, pages_error="boom")
+
+    source_file.mark_pages_completed()
+
+    assert source_file.pages_status is PagesStatus.COMPLETED
+    assert source_file.pages_error is None
+
+
+def test_mark_pages_failed_records_the_reason() -> None:
+    source_file = _source_file()
+
+    source_file.mark_pages_failed("Stored PDF object is missing.")
+
+    assert source_file.pages_status is PagesStatus.FAILED
+    assert source_file.pages_error == "Stored PDF object is missing."
+
+
+def test_mark_pages_failed_does_not_downgrade_a_completed_split() -> None:
+    source_file = _source_file(pages_status=PagesStatus.COMPLETED)
+
+    source_file.mark_pages_failed("retry raced a completed split")
+
+    assert source_file.pages_status is PagesStatus.COMPLETED
+    assert source_file.pages_error is None
 
 
 def test_contributor_role_enum_supports_author_and_compiler() -> None:

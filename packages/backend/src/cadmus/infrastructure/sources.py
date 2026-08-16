@@ -1,10 +1,12 @@
 """SQLAlchemy persistence adapters for the sources module."""
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from io import BytesIO
 from types import TracebackType
 from typing import BinaryIO
 from uuid import UUID
 
+import pypdfium2 as pdfium
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sqlalchemy import (
@@ -17,6 +19,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     Uuid,
     delete,
     select,
@@ -31,9 +34,19 @@ from cadmus.sources.domain import (
     Dictionary,
     DictionaryEvent,
     DictionaryLanguage,
+    DictionaryPage,
+    InspectionStatus,
+    PagesStatus,
     SourceFile,
 )
-from cadmus.sources.ports import InvalidPdfError, SourcesUnitOfWorkFactory
+from cadmus.sources.ports import (
+    InvalidPdfError,
+    RenderedPage,
+    SourcesUnitOfWorkFactory,
+)
+
+_RENDER_DPI = 200
+_RENDER_SCALE = _RENDER_DPI / 72
 
 sources_registry = registry(metadata=metadata)
 
@@ -136,9 +149,54 @@ dictionary_source_files = Table(
     ),
     Column("inspection_status", String(16), nullable=False),
     Column("inspection_error", Text, nullable=True),
+    Column("pages_status", String(16), nullable=False, server_default="pending"),
+    Column("pages_error", Text, nullable=True),
     CheckConstraint(
         "inspection_status IN ('pending', 'verified', 'failed')",
         name="source_file_inspection_status",
+    ),
+    CheckConstraint(
+        "pages_status IN ('pending', 'completed', 'failed')",
+        name="source_file_pages_status",
+    ),
+)
+
+dictionary_pages = Table(
+    "dictionary_pages",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "source_file_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionary_source_files.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("page_index", Integer, nullable=False),
+    Column("printed_page_number", Integer, nullable=True),
+    Column("processed_asset_key", String(500), nullable=False, unique=True),
+    Column("width", Integer, nullable=False),
+    Column("height", Integer, nullable=False),
+    Column("rotation", Integer, nullable=False, default=0),
+    Column("checksum_sha256", String(64), nullable=False),
+    Column("ocr_status", String(16), nullable=False),
+    Column("layout_status", String(16), nullable=False),
+    Column("validation_status", String(16), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(
+        "ocr_status IN ('pending', 'processing', 'completed', 'failed')",
+        name="dictionary_page_ocr_status",
+    ),
+    CheckConstraint(
+        "layout_status IN ('pending', 'processing', 'completed', 'failed')",
+        name="dictionary_page_layout_status",
+    ),
+    CheckConstraint(
+        "validation_status IN ('pending', 'processing', 'completed', 'failed')",
+        name="dictionary_page_validation_status",
+    ),
+    UniqueConstraint(
+        "source_file_id", "page_index", name="uq_dictionary_pages_source_file_page"
     ),
 )
 
@@ -172,6 +230,7 @@ sources_registry.map_imperatively(Dictionary, dictionaries)
 sources_registry.map_imperatively(Contributor, dictionary_contributors)
 sources_registry.map_imperatively(DictionaryLanguage, dictionary_languages)
 sources_registry.map_imperatively(SourceFile, dictionary_source_files)
+sources_registry.map_imperatively(DictionaryPage, dictionary_pages)
 sources_registry.map_imperatively(DictionaryEvent, dictionary_events)
 
 
@@ -264,6 +323,28 @@ class SqlAlchemySourcesRepository:
     def add_event(self, event: DictionaryEvent) -> None:
         self._session.add(event)
 
+    def replace_pages(
+        self, source_file_id: UUID, pages: Sequence[DictionaryPage]
+    ) -> None:
+        self._session.execute(
+            delete(dictionary_pages).where(
+                dictionary_pages.c.source_file_id == source_file_id
+            )
+        )
+        for page in pages:
+            self._session.add(page)
+
+    def list_source_files_pending_page_split(self) -> list[SourceFile]:
+        return list(
+            self._session.scalars(
+                select(SourceFile).where(
+                    dictionary_source_files.c.inspection_status
+                    == InspectionStatus.VERIFIED,
+                    dictionary_source_files.c.pages_status != PagesStatus.COMPLETED,
+                )
+            )
+        )
+
 
 class SqlAlchemySourcesUnitOfWork:
     """Session-backed sources transaction."""
@@ -317,3 +398,39 @@ class PyPdfInspector:
             return len(reader.pages)
         except (PdfReadError, ValueError, KeyError, IndexError) as error:
             raise InvalidPdfError(f"not a well-formed PDF: {error}") from error
+
+
+class PypdfiumPageRenderer:
+    """Bounded PDF page rasterizer used only by the worker.
+
+    Renders each page at ``_RENDER_DPI`` and encodes it as PNG; never
+    executes embedded scripts or extracts other content. Any parse failure
+    is surfaced as :class:`InvalidPdfError`.
+    """
+
+    def render_pages(self, stream: BinaryIO) -> Iterator[RenderedPage]:
+        try:
+            document = pdfium.PdfDocument(stream.read())
+        except pdfium.PdfiumError as error:
+            raise InvalidPdfError(f"not a well-formed PDF: {error}") from error
+
+        try:
+            for page_index in range(len(document)):
+                page = document[page_index]
+                try:
+                    bitmap = page.render(scale=_RENDER_SCALE)
+                    image = bitmap.to_pil()
+                    buffer = BytesIO()
+                    image.save(buffer, format="PNG")
+                    yield RenderedPage(
+                        page_index=page_index,
+                        width=image.width,
+                        height=image.height,
+                        content=buffer.getvalue(),
+                    )
+                finally:
+                    page.close()
+        except pdfium.PdfiumError as error:
+            raise InvalidPdfError(f"not a well-formed PDF: {error}") from error
+        finally:
+            document.close()

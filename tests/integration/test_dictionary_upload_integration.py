@@ -17,13 +17,16 @@ from cadmus.config import Settings
 from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.sources import (
+    CompleteSourceInspectionService,
     ContributorInput,
     ContributorRole,
     DictionaryAccessError,
+    DictionaryPage,
     DuplicateSourceError,
     GetDictionaryService,
     LegalStatus,
     MetadataInput,
+    RecordPageSplitService,
     SaveDictionaryMetadataService,
     SourceInspectionQueueUnavailableError,
     UploadDictionaryService,
@@ -49,6 +52,7 @@ def _prepare_database() -> str:
     engine = create_engine(database_url)
     with engine.begin() as connection:
         connection.execute(text("DELETE FROM cadmus.dictionary_events"))
+        connection.execute(text("DELETE FROM cadmus.dictionary_pages"))
         connection.execute(text("DELETE FROM cadmus.dictionary_source_files"))
         connection.execute(text("DELETE FROM cadmus.dictionary_contributors"))
         connection.execute(text("DELETE FROM cadmus.dictionary_languages"))
@@ -269,6 +273,98 @@ def test_metadata_can_be_saved_and_edited_without_reuploading_the_source() -> No
             ).scalar_one()
         assert contributor_names == ["Борис Грінченко", "Марія Загірня"]
         assert metadata_events == 2
+    finally:
+        object_storage.delete(outcome.source_file.storage_key)
+        engine.dispose()
+
+
+def test_page_split_persists_pages_and_tracks_the_backfill_queue() -> None:
+    database_url = _prepare_database()
+    engine = create_engine(database_url)
+    owner_id = _create_user(engine, f"owner-{uuid4()}@example.com")
+    settings = Settings()
+    unit_of_work_factory = create_sources_unit_of_work_factory(engine)
+    object_storage = create_object_storage(settings)
+    upload_service = UploadDictionaryService(
+        unit_of_work_factory=unit_of_work_factory,
+        object_storage=object_storage,
+        inspection_queue=NoOpInspectionQueue(),
+        max_upload_size_bytes=10 * 1024 * 1024,
+    )
+    inspection_service = CompleteSourceInspectionService(unit_of_work_factory)
+    split_service = RecordPageSplitService(unit_of_work_factory)
+
+    outcome = upload_service.upload(
+        owner_id, "Словник.pdf", "application/pdf", BytesIO(VALID_PDF)
+    )
+    source_file_id = outcome.source_file.id
+
+    try:
+        # Not yet inspected: not a page-split candidate.
+        with unit_of_work_factory() as unit_of_work:
+            pending = unit_of_work.sources.list_source_files_pending_page_split()
+        assert source_file_id not in {source_file.id for source_file in pending}
+
+        inspection_service.complete(source_file_id, page_count=2)
+
+        with unit_of_work_factory() as unit_of_work:
+            pending = unit_of_work.sources.list_source_files_pending_page_split()
+        assert source_file_id in {source_file.id for source_file in pending}
+
+        pages = [
+            DictionaryPage(
+                id=uuid4(),
+                source_file_id=source_file_id,
+                page_index=index,
+                processed_asset_key=f"sources/{source_file_id}/pages/{index:05d}.png",
+                width=200,
+                height=400,
+                checksum_sha256="b" * 64,
+                created_at=outcome.dictionary.created_at,
+            )
+            for index in range(2)
+        ]
+        split_service.record_success(source_file_id, pages)
+
+        with engine.connect() as connection:
+            stored_pages = connection.execute(
+                text(
+                    "SELECT page_index, width, height FROM cadmus.dictionary_pages "
+                    "WHERE source_file_id = :id ORDER BY page_index"
+                ),
+                {"id": source_file_id},
+            ).all()
+            pages_status = connection.execute(
+                text(
+                    "SELECT pages_status FROM cadmus.dictionary_source_files "
+                    "WHERE id = :id"
+                ),
+                {"id": source_file_id},
+            ).scalar_one()
+        assert [row.page_index for row in stored_pages] == [0, 1]
+        assert pages_status == "completed"
+
+        with unit_of_work_factory() as unit_of_work:
+            pending = unit_of_work.sources.list_source_files_pending_page_split()
+        assert source_file_id not in {source_file.id for source_file in pending}
+
+        # A later failed re-split makes it a backfill candidate again, and
+        # replaces the previously stored pages.
+        split_service.record_failure(source_file_id, "boom")
+
+        with engine.connect() as connection:
+            remaining_page_count = connection.execute(
+                text(
+                    "SELECT count(*) FROM cadmus.dictionary_pages "
+                    "WHERE source_file_id = :id"
+                ),
+                {"id": source_file_id},
+            ).scalar_one()
+        assert remaining_page_count == 2
+
+        with unit_of_work_factory() as unit_of_work:
+            pending = unit_of_work.sources.list_source_files_pending_page_split()
+        assert source_file_id in {source_file.id for source_file in pending}
     finally:
         object_storage.delete(outcome.source_file.storage_key)
         engine.dispose()

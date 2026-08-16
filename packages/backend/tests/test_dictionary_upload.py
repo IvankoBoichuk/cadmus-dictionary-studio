@@ -12,6 +12,7 @@ from cadmus.sources import (
     Dictionary,
     DictionaryEvent,
     DictionaryLanguage,
+    DictionaryPage,
     DictionaryStatus,
     DuplicateSourceError,
     InspectionStatus,
@@ -79,6 +80,14 @@ class MemorySourcesRepository:
 
     def add_event(self, event: DictionaryEvent) -> None:
         self.events.append(event)
+
+    def replace_pages(
+        self, source_file_id: UUID, pages: Sequence[DictionaryPage]
+    ) -> None:
+        raise AssertionError("not used by upload")
+
+    def list_source_files_pending_page_split(self) -> list[SourceFile]:
+        raise AssertionError("not used by upload")
 
 
 class MemorySourcesUnitOfWork:

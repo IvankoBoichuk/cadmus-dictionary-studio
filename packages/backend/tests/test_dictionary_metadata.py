@@ -14,11 +14,13 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryEventType,
     DictionaryLanguage,
+    DictionaryPage,
     DictionaryStatus,
     LegalStatus,
     MetadataInput,
     MetadataValidationError,
     SaveDictionaryMetadataService,
+    SourceFile,
 )
 
 FIRST_SAVE = datetime(2026, 8, 15, 12, 0, tzinfo=UTC)
@@ -73,6 +75,14 @@ class MemorySourcesRepository:
 
     def add_event(self, event: DictionaryEvent) -> None:
         self.events.append(event)
+
+    def replace_pages(
+        self, source_file_id: UUID, pages: Sequence[DictionaryPage]
+    ) -> None:
+        raise AssertionError("not used by metadata save")
+
+    def list_source_files_pending_page_split(self) -> list[SourceFile]:
+        raise AssertionError("not used by metadata save")
 
 
 class MemorySourcesUnitOfWork:
