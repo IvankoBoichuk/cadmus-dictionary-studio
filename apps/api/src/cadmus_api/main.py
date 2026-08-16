@@ -20,13 +20,22 @@ from cadmus.infrastructure.security import (
     SecureSessionTokenProvider,
     SecureVerificationTokenProvider,
 )
+from cadmus.infrastructure.source_inspection_queue import CeleryInspectionQueue
+from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.processing import TaskQueue
-from cadmus.sources import ObjectStorage
+from cadmus.sources import (
+    DeleteDictionaryService,
+    GetDictionaryService,
+    ObjectStorage,
+    SaveDictionaryMetadataService,
+    UploadDictionaryService,
+)
 from fastapi import FastAPI
 from sqlalchemy import Engine, text
 
 from cadmus_api.routes.auth import create_auth_router
+from cadmus_api.routes.dictionaries import create_dictionaries_router
 from cadmus_api.routes.health import create_health_router
 from cadmus_api.routes.tasks import create_tasks_router
 
@@ -39,6 +48,10 @@ def create_app(
     registration_service: RegistrationService | None = None,
     authentication_service: AuthenticationService | None = None,
     password_reset_service: PasswordResetService | None = None,
+    upload_dictionary_service: UploadDictionaryService | None = None,
+    save_dictionary_metadata_service: SaveDictionaryMetadataService | None = None,
+    get_dictionary_service: GetDictionaryService | None = None,
+    delete_dictionary_service: DeleteDictionaryService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -110,6 +123,37 @@ def create_app(
             ),
         )
     )
+    sources_unit_of_work_factory = create_sources_unit_of_work_factory(engine)
+    app.state.upload_dictionary_service = (
+        upload_dictionary_service
+        if upload_dictionary_service is not None
+        else UploadDictionaryService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            object_storage=app.state.object_storage,
+            inspection_queue=CeleryInspectionQueue(create_celery_client(app_settings)),
+            max_upload_size_bytes=app_settings.max_upload_size_bytes,
+        )
+    )
+    app.state.save_dictionary_metadata_service = (
+        save_dictionary_metadata_service
+        if save_dictionary_metadata_service is not None
+        else SaveDictionaryMetadataService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
+    app.state.get_dictionary_service = (
+        get_dictionary_service
+        if get_dictionary_service is not None
+        else GetDictionaryService(unit_of_work_factory=sources_unit_of_work_factory)
+    )
+    app.state.delete_dictionary_service = (
+        delete_dictionary_service
+        if delete_dictionary_service is not None
+        else DeleteDictionaryService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            object_storage=app.state.object_storage,
+        )
+    )
     app.include_router(create_health_router(app_settings))
     app.include_router(
         create_auth_router(
@@ -121,4 +165,14 @@ def create_app(
         )
     )
     app.include_router(create_tasks_router(app.state.task_queue))
+    app.include_router(
+        create_dictionaries_router(
+            app.state.authentication_service,
+            app.state.upload_dictionary_service,
+            app.state.save_dictionary_metadata_service,
+            app.state.get_dictionary_service,
+            app.state.object_storage,
+            app.state.delete_dictionary_service,
+        )
+    )
     return app

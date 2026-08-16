@@ -20,6 +20,9 @@ class StubObjectStorage:
     def delete(self, key: str) -> None:
         pass
 
+    def delete_prefix(self, prefix: str) -> None:
+        pass
+
 
 def test_application_factory_uses_typed_settings() -> None:
     settings = Settings(

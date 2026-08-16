@@ -4,6 +4,8 @@ import { ApiStatus } from "./components/ApiStatus";
 import { AuthActions } from "./components/AuthActions";
 import { AuthProvider } from "./components/AuthProvider";
 import { DashboardPage } from "./pages/DashboardPage";
+import { DictionariesList } from "./pages/DictionariesList";
+import { DictionaryFormPage } from "./pages/DictionaryFormPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -56,6 +58,12 @@ export function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dictionaries/new" element={<DictionaryFormPage />} />
+            <Route path="/dictionaries" element={<DictionariesList />} />
+            <Route
+              path="/dictionaries/:dictionaryId/edit"
+              element={<DictionaryFormPage />}
+            />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />

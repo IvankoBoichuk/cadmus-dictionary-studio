@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config";
-import type { paths } from "./schema";
+import type { components, paths } from "./schema";
 
 type RegistrationOperation = paths["/auth/register"]["post"];
 type RegistrationRequest =
@@ -42,6 +42,40 @@ type ResetPasswordResponse =
   ResetPasswordOperation["responses"][200]["content"]["application/json"];
 type PasswordResetErrorResponse =
   ResetPasswordOperation["responses"][400]["content"]["application/json"];
+
+export type LegalStatus = components["schemas"]["LegalStatus"];
+export type ContributorRole = components["schemas"]["ContributorRole"];
+export type InspectionStatus = components["schemas"]["InspectionStatus"];
+export type DictionaryStatus = components["schemas"]["DictionaryStatus"];
+export type ContributorRequest = components["schemas"]["ContributorRequest"];
+
+type UploadDictionaryOperation = paths["/dictionaries/upload"]["post"];
+export type DictionaryResponse =
+  UploadDictionaryOperation["responses"][202]["content"]["application/json"];
+export type DuplicateSourceResponse =
+  UploadDictionaryOperation["responses"][409]["content"]["application/json"];
+type UploadTooLargeResponse =
+  UploadDictionaryOperation["responses"][413]["content"]["application/json"];
+type UploadFieldErrorsResponse =
+  UploadDictionaryOperation["responses"][422]["content"]["application/json"];
+
+type GetDictionaryOperation = paths["/dictionaries/{dictionary_id}"]["get"];
+type DictionaryNotFoundResponse =
+  GetDictionaryOperation["responses"][404]["content"]["application/json"];
+
+type ListDictionariesOperation = paths["/dictionaries"]["get"];
+export type DictionaryListResponse =
+  ListDictionariesOperation["responses"][200]["content"]["application/json"];
+
+type DeleteDictionaryOperation = paths["/dictionaries/{dictionary_id}"]["delete"];
+type DeleteDictionaryNotFoundResponse =
+  DeleteDictionaryOperation["responses"][404]["content"]["application/json"];
+
+type SaveMetadataOperation = paths["/dictionaries/{dictionary_id}"]["patch"];
+export type SaveMetadataRequest =
+  SaveMetadataOperation["requestBody"]["content"]["application/json"];
+type SaveMetadataFieldErrorsResponse =
+  SaveMetadataOperation["responses"][422]["content"]["application/json"];
 
 export type ApiErrorKind = "http" | "network" | "invalid-response";
 
@@ -118,6 +152,110 @@ function postWithoutBody<Success, Failure>(
   return request<Success, Failure>(path, {
     method: "POST",
     signal: options.signal,
+  });
+}
+
+function patch<Body, Success, Failure>(
+  path: keyof paths,
+  body: Body,
+  options: RequestOptions = {},
+): Promise<Success> {
+  return request<Success, Failure>(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+}
+
+/** A 204 No Content response has no body, so this never calls `response.json()`. */
+async function del<Failure>(
+  path: keyof paths,
+  options: RequestOptions = {},
+): Promise<void> {
+  let response: Response | undefined;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      let payload: Failure | undefined;
+      try {
+        payload = (await response.json()) as Failure;
+      } catch {
+        payload = undefined;
+      }
+      throw new ApiError<Failure>("http", response.status, payload);
+    }
+  } catch (error) {
+    if (error instanceof ApiError || isAbortError(error)) throw error;
+    throw new ApiError(
+      response ? "invalid-response" : "network",
+      response?.status,
+      undefined,
+      { cause: error },
+    );
+  }
+}
+
+/** A dynamic resource path is still a real endpoint template; only the ID varies. */
+function dictionaryPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}` as keyof paths;
+}
+
+type UploadOptions = RequestOptions & {
+  onProgress?: (fraction: number) => void;
+};
+
+function uploadFile<Success, Failure>(
+  path: keyof paths,
+  file: File,
+  options: UploadOptions = {},
+): Promise<Success> {
+  return new Promise<Success>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE_URL}${path}`, true);
+    xhr.responseType = "text";
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      options.signal.addEventListener("abort", () => xhr.abort());
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (options.onProgress && event.lengthComputable) {
+        options.onProgress(event.loaded / event.total);
+      }
+    };
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+    xhr.onerror = () => reject(new ApiError<Failure>("network"));
+    xhr.onload = () => {
+      let payload: unknown;
+      try {
+        payload = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+      } catch (error) {
+        reject(
+          new ApiError<Failure>("invalid-response", xhr.status, undefined, {
+            cause: error,
+          }),
+        );
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload as Success);
+      } else {
+        reject(new ApiError<Failure>("http", xhr.status, payload as Failure));
+      }
+    };
+
+    const formData = new FormData();
+    formData.append("file", file);
+    xhr.send(formData);
   });
 }
 
@@ -210,7 +348,59 @@ export const API = {
       >("/auth/reset-password", request, options);
     },
   },
+
+  dictionaries: {
+    upload(
+      file: File,
+      options?: UploadOptions,
+    ): Promise<DictionaryResponse> {
+      return uploadFile<
+        DictionaryResponse,
+        | UploadFieldErrorsResponse
+        | DuplicateSourceResponse
+        | UploadTooLargeResponse
+        | ValidationErrorResponse
+      >("/dictionaries/upload", file, options);
+    },
+
+    get(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<DictionaryResponse> {
+      return get<DictionaryResponse, DictionaryNotFoundResponse>(
+        dictionaryPath(dictionaryId),
+        options,
+      );
+    },
+
+    list(options?: RequestOptions): Promise<DictionaryListResponse> {
+      return get<DictionaryListResponse, never>("/dictionaries", options);
+    },
+
+    delete(dictionaryId: string, options?: RequestOptions): Promise<void> {
+      return del<DeleteDictionaryNotFoundResponse>(
+        dictionaryPath(dictionaryId),
+        options,
+      );
+    },
+
+    saveMetadata(
+      dictionaryId: string,
+      body: SaveMetadataRequest,
+      options?: RequestOptions,
+    ): Promise<DictionaryResponse> {
+      return patch<
+        SaveMetadataRequest,
+        DictionaryResponse,
+        SaveMetadataFieldErrorsResponse | DictionaryNotFoundResponse
+      >(dictionaryPath(dictionaryId), body, options);
+    },
+  },
 } as const;
+
+export function dictionaryThumbnailUrl(dictionaryId: string): string {
+  return `${API_BASE_URL}/dictionaries/${dictionaryId}/thumbnail`;
+}
 
 export function fieldErrorsFrom(error: unknown): FieldErrorsResponse["errors"] | undefined {
   if (!(error instanceof ApiError) || error.kind !== "http") return undefined;
@@ -231,4 +421,16 @@ export function apiMessageFrom(error: unknown): string | undefined {
 
 export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+export function duplicateSourceFrom(
+  error: unknown,
+): DuplicateSourceResponse | undefined {
+  if (!(error instanceof ApiError) || error.kind !== "http" || error.status !== 409) {
+    return undefined;
+  }
+  const payload = error.payload as DuplicateSourceResponse | undefined;
+  return payload && typeof payload === "object" && "dictionary_id" in payload
+    ? payload
+    : undefined;
 }

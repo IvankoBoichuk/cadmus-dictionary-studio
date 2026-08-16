@@ -1,4 +1,4 @@
-.PHONY: help install api worker web web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker backfill-pages web dev web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -7,7 +7,9 @@ help:
 	@echo "  make install       Install locked workspace dependencies"
 	@echo "  make api           Run the FastAPI development server"
 	@echo "  make worker        Run the Celery worker"
+	@echo "  make backfill-pages  Enqueue page splitting for dictionaries verified before this feature existed"
 	@echo "  make web           Run the Vite frontend development server"
+	@echo "  make dev           Run the API and frontend dev servers together"
 	@echo "  make web-build     Build the production frontend"
 	@echo "  make web-test      Run frontend tests"
 	@echo "  make web-lint      Run frontend lint checks"
@@ -40,13 +42,21 @@ install:
 	cd apps/web && bun install --frozen-lockfile
 
 api:
-	$(UV) run --locked --package cadmus-api uvicorn cadmus_api.main:create_app --factory
+	$(UV) run --locked --package cadmus-api uvicorn cadmus_api.main:create_app --factory \
+		--reload --reload-dir apps/api/src --reload-dir packages/backend/src
 
 worker:
 	$(UV) run --locked --package cadmus-worker celery --app cadmus_worker.celery_app:celery_app worker --loglevel INFO
 
+backfill-pages:
+	$(UV) run --locked --package cadmus-worker python -m cadmus_worker.backfill_pages
+
 web:
 	cd apps/web && bun run dev
+
+dev:
+	docker compose stop api web
+	$(MAKE) -j2 api web
 
 web-build:
 	cd apps/web && bun run build

@@ -253,6 +253,42 @@ added by `BH-178` (React frontend), `BH-179` (PostgreSQL and Alembic), `BH-180`
 (Redis and worker), and `BH-181` (MinIO). See `infrastructure/README.md` for the
 extension rules.
 
+## Dictionary drafts: PDF upload and metadata (BH-26 / BH-27)
+
+`POST /dictionaries/upload` accepts one PDF, validates it, stores the
+original unchanged in object storage, and creates a `draft` dictionary. Only
+cheap checks (extension, declared content-type, the `%PDF-` signature bytes,
+a streamed size cap, and a streamed SHA-256 checksum) run inside the API
+process; structural PDF parsing (page count) is never done there and instead
+happens asynchronously in the worker, so the response's
+`source.inspection_status` starts as `pending` and later becomes `verified`
+(with `page_count`) or `failed`. Poll `GET /dictionaries/{id}` to observe
+that transition.
+
+The maximum upload size is `CADMUS_MAX_UPLOAD_SIZE_BYTES` (bytes, default
+100 MiB). In Compose, the `web` container's nginx also enforces
+`client_max_body_size`, configured separately via `CADMUS_MAX_UPLOAD_SIZE_MB`
+(MiB, default `100`) since it fronts `/api` and would otherwise reject large
+uploads with `413` before the API ever sees them — keep the two in sync when
+changing the limit. A second upload with the same SHA-256 checksum among the
+caller's own dictionaries is rejected as a duplicate (`409`) rather than
+silently creating a copy; a different owner uploading identical content is
+not considered a duplicate.
+
+`PATCH /dictionaries/{id}` saves bibliographic, language, and legal
+metadata for an existing draft without touching its stored PDF — required
+fields (title, at least one language, legal status) may be left empty; the
+response's `missing_required_fields` lists what is still absent. Legal
+status is one of `public_domain`, `licensed`, `permission_granted`,
+`restricted`, or `unknown`; `licensed` requires `license_type` and
+`permission_granted` requires `permission_reference`. Publication year must
+be between 1450 and next year; ISBN-10/13 checksums are validated after
+stripping hyphens/spaces.
+
+`draft` is the only status this pair of Stories ever sets. The transition to
+`configured` (readiness for pipeline processing) belongs to BH-31 and is not
+implemented here.
+
 ## Root commands
 
 ~~~bash
@@ -314,6 +350,8 @@ have safe local defaults:
 | `CADMUS_OBJECT_STORAGE_SECURE` | `false` | enable TLS for the S3 connection |
 | `CADMUS_MINIO_API_PORT` | `9000` | MinIO S3 API port published to the host |
 | `CADMUS_MINIO_CONSOLE_PORT` | `9001` | MinIO console port published to the host |
+| `CADMUS_MAX_UPLOAD_SIZE_BYTES` | `104857600` (100 MiB) | maximum accepted dictionary PDF upload size, in bytes |
+| `CADMUS_MAX_UPLOAD_SIZE_MB` | `100` | nginx `client_max_body_size` for the `web` container; keep in sync with `CADMUS_MAX_UPLOAD_SIZE_BYTES` |
 
 The application constructs the effective SQLAlchemy URL in one typed settings
 method. Password fields and the full URL are secret-valued and must not be

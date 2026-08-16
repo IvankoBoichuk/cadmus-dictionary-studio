@@ -15,7 +15,8 @@ RUN bun run build
 FROM nginx:1.29.4-alpine AS runtime
 
 ENV CADMUS_API_UPSTREAM=api:8000 \
-    NGINX_ENVSUBST_FILTER=CADMUS_API_UPSTREAM
+    CADMUS_MAX_UPLOAD_SIZE_MB=100 \
+    NGINX_ENVSUBST_FILTER=CADMUS_
 
 COPY apps/web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
