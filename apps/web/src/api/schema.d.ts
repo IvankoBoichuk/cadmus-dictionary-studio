@@ -176,6 +176,93 @@ export interface paths {
         patch: operations["save_metadata_dictionaries__dictionary_id__patch"];
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/abbreviations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every abbreviation configured for a dictionary */
+        get: operations["list_abbreviations_dictionaries__dictionary_id__abbreviations_get"];
+        put?: never;
+        /** Add an abbreviation to a dictionary */
+        post: operations["create_abbreviation_dictionaries__dictionary_id__abbreviations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/abbreviations/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export a dictionary's abbreviations as JSON or CSV (AC9) */
+        get: operations["export_abbreviations_dictionaries__dictionary_id__abbreviations_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/abbreviations/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Persist the rows kept from a preview (AC5, AC6) */
+        post: operations["commit_import_dictionaries__dictionary_id__abbreviations_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/abbreviations/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parse and validate a bulk import file without saving it (AC5) */
+        post: operations["preview_import_dictionaries__dictionary_id__abbreviations_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/abbreviations/{abbreviation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an abbreviation (AC3) */
+        delete: operations["delete_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edit an existing abbreviation (AC3) */
+        patch: operations["update_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__patch"];
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/source/download": {
         parameters: {
             query?: never;
@@ -266,6 +353,68 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AbbreviationCategory
+         * @description BH-29 abbreviation classification used by rules and extraction.
+         * @enum {string}
+         */
+        AbbreviationCategory: "part_of_speech" | "grammar" | "usage" | "geography" | "source" | "other";
+        /**
+         * AbbreviationRequest
+         * @description One BH-29 abbreviation submission (AC1, AC2).
+         */
+        AbbreviationRequest: {
+            /** Abbreviation */
+            abbreviation: string;
+            category: components["schemas"]["AbbreviationCategory"];
+            /** Full Form */
+            full_form?: string | null;
+            /** Language Code */
+            language_code?: string | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Unresolved
+             * @default false
+             */
+            unresolved: boolean;
+            /** Variants */
+            variants?: string[];
+        };
+        /**
+         * AbbreviationResponse
+         * @description One persisted BH-29 abbreviation entry.
+         */
+        AbbreviationResponse: {
+            /** Abbreviation */
+            abbreviation: string;
+            category: components["schemas"]["AbbreviationCategory"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Full Form */
+            full_form: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Language Code */
+            language_code: string | null;
+            /** Note */
+            note: string | null;
+            /** Unresolved */
+            unresolved: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Variants */
+            variants: string[];
+        };
+        /**
          * AccountStatus
          * @description Lifecycle states currently owned by the identity module.
          * @enum {string}
@@ -305,6 +454,11 @@ export interface components {
          * @enum {string}
          */
         AuthenticationFailure: "invalid_credentials" | "unverified_account" | "invalid_session";
+        /** Body_preview_import_dictionaries__dictionary_id__abbreviations_import_preview_post */
+        Body_preview_import_dictionaries__dictionary_id__abbreviations_import_preview_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_dictionaries_upload_post */
         Body_upload_dictionaries_upload_post: {
             /** File */
@@ -395,6 +549,24 @@ export interface components {
          */
         DictionaryStatus: "draft" | "configured";
         /**
+         * DuplicateAbbreviationResponse
+         * @description Structured duplicate warning for AC4.
+         */
+        DuplicateAbbreviationResponse: {
+            /**
+             * Abbreviation Id
+             * Format: uuid
+             */
+            abbreviation_id: string;
+            /**
+             * Code
+             * @default duplicate_abbreviation
+             */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
          * DuplicateSourceResponse
          * @description Structured duplicate-checksum warning; never discloses other users.
          */
@@ -479,6 +651,65 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /**
+         * ImportCommitRequest
+         * @description The rows the client kept from a preview, to actually persist (AC6).
+         */
+        ImportCommitRequest: {
+            /** Rows */
+            rows: components["schemas"]["AbbreviationRequest"][];
+        };
+        /**
+         * ImportCommitResponse
+         * @description What a commit actually persisted vs. skipped (AC6).
+         */
+        ImportCommitResponse: {
+            /** Imported */
+            imported: components["schemas"]["AbbreviationResponse"][];
+            /** Skipped */
+            skipped: components["schemas"]["ImportSkippedRowResponse"][];
+        };
+        /**
+         * ImportPreviewResponse
+         * @description A parsed-and-validated import file, not yet persisted (AC5).
+         */
+        ImportPreviewResponse: {
+            /** Error Count */
+            error_count: number;
+            /** Rows */
+            rows: components["schemas"]["ImportRowResponse"][];
+            /** Valid Count */
+            valid_count: number;
+        };
+        /**
+         * ImportRowResponse
+         * @description One previewed or committed import row (AC5).
+         */
+        ImportRowResponse: {
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            input: components["schemas"]["AbbreviationRequest"] | null;
+            /** Row Number */
+            row_number: number;
+            /** Valid */
+            valid: boolean;
+        };
+        /**
+         * ImportSkippedRowResponse
+         * @description One row that a commit could not persist, with the reason (AC6).
+         */
+        ImportSkippedRowResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Row Number */
+            row_number: number;
         };
         /**
          * InspectionStatus
@@ -1244,6 +1475,399 @@ export interface operations {
                 };
             };
             /** @description Metadata fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    list_abbreviations_dictionaries__dictionary_id__abbreviations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbbreviationResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_abbreviation_dictionaries__dictionary_id__abbreviations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbbreviationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbbreviationResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An abbreviation with this key already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateAbbreviationResponse"];
+                };
+            };
+            /** @description Abbreviation fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    export_abbreviations_dictionaries__dictionary_id__abbreviations_export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_import_dictionaries__dictionary_id__abbreviations_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportCommitResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_import_dictionaries__dictionary_id__abbreviations_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_import_dictionaries__dictionary_id__abbreviations_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The file is not well-formed CSV or JSON */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                abbreviation_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                abbreviation_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbbreviationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbbreviationResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or abbreviation does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description An abbreviation with this key already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateAbbreviationResponse"];
+                };
+            };
+            /** @description Abbreviation fields are invalid */
             422: {
                 headers: {
                     [name: string]: unknown;

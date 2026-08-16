@@ -8,6 +8,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from cadmus.sources import (
+    Abbreviation,
+    AbbreviationCategory,
+    AbbreviationVariant,
     Contributor,
     Dictionary,
     DictionaryEvent,
@@ -96,6 +99,38 @@ class MemorySourcesRepository:
         raise AssertionError("not used by upload")
 
     def delete_dictionary(self, dictionary_id: UUID) -> None:
+        raise AssertionError("not used by upload")
+
+    def list_abbreviations(self, dictionary_id: UUID) -> list[Abbreviation]:
+        raise AssertionError("not used by upload")
+
+    def get_abbreviation(
+        self, dictionary_id: UUID, abbreviation_id: UUID
+    ) -> Abbreviation | None:
+        raise AssertionError("not used by upload")
+
+    def find_abbreviation_duplicate(
+        self,
+        dictionary_id: UUID,
+        category: AbbreviationCategory,
+        language_code: str | None,
+        abbreviation: str,
+        exclude_id: UUID | None = None,
+    ) -> Abbreviation | None:
+        raise AssertionError("not used by upload")
+
+    def add_abbreviation(self, abbreviation: Abbreviation) -> None:
+        raise AssertionError("not used by upload")
+
+    def update_abbreviation(self, abbreviation: Abbreviation) -> None:
+        raise AssertionError("not used by upload")
+
+    def replace_abbreviation_variants(
+        self, abbreviation_id: UUID, variants: Sequence[AbbreviationVariant]
+    ) -> None:
+        raise AssertionError("not used by upload")
+
+    def delete_abbreviation(self, dictionary_id: UUID, abbreviation_id: UUID) -> None:
         raise AssertionError("not used by upload")
 
 

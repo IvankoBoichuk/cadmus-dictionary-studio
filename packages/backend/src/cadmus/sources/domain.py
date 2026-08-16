@@ -1,6 +1,7 @@
 """Sources domain objects and invariants for the dictionary draft aggregate."""
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -50,6 +51,17 @@ class ContributorRole(StrEnum):
 
     AUTHOR = "author"
     COMPILER = "compiler"
+
+
+class AbbreviationCategory(StrEnum):
+    """BH-29 abbreviation classification used by rules and extraction."""
+
+    PART_OF_SPEECH = "part_of_speech"
+    GRAMMAR = "grammar"
+    USAGE = "usage"
+    GEOGRAPHY = "geography"
+    SOURCE = "source"
+    OTHER = "other"
 
 
 class InspectionStatus(StrEnum):
@@ -138,6 +150,31 @@ class MetadataValidationError(ValueError):
         self.errors = dict(errors)
 
 
+class AbbreviationValidationError(ValueError):
+    """Field-addressable abbreviation validation errors."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("abbreviation is invalid")
+        self.errors = dict(errors)
+
+
+class AbbreviationAccessError(LookupError):
+    """Raised for a missing abbreviation or one outside the given dictionary."""
+
+    def __init__(self, abbreviation_id: UUID) -> None:
+        super().__init__(f"abbreviation {abbreviation_id} is not accessible")
+        self.abbreviation_id = abbreviation_id
+
+
+class DuplicateAbbreviationError(ValueError):
+    """Raised when the same abbreviation/category/language already exists."""
+
+    def __init__(self, existing_id: UUID, abbreviation: str) -> None:
+        super().__init__("an abbreviation with this key already exists")
+        self.existing_id = existing_id
+        self.abbreviation = abbreviation
+
+
 @dataclass
 class Contributor:
     """An ordered author or compiler entry belonging to one dictionary."""
@@ -157,6 +194,35 @@ class DictionaryLanguage:
     dictionary_id: UUID
     language_code: str
     position: int
+
+
+@dataclass
+class AbbreviationVariant:
+    """One alternate spelling of an abbreviation, ordered within its parent."""
+
+    id: UUID
+    abbreviation_id: UUID
+    variant_text: str
+    position: int
+
+
+@dataclass
+class Abbreviation:
+    """One BH-29 dictionary-scoped abbreviation configuration entry."""
+
+    id: UUID
+    dictionary_id: UUID
+    abbreviation: str
+    category: AbbreviationCategory
+    unresolved: bool
+    created_at: datetime
+    updated_at: datetime
+    created_by: UUID
+    updated_by: UUID
+    full_form: str | None = None
+    language_code: str | None = None
+    note: str | None = None
+    variants: list[AbbreviationVariant] = field(default_factory=list)
 
 
 @dataclass
@@ -348,3 +414,52 @@ def validate_legal_status(
     ):
         errors["permission_reference"] = "Вкажіть ідентифікатор чи опис дозволу."
     return errors
+
+
+def validate_abbreviation_fields(
+    *,
+    abbreviation: str,
+    full_form: str | None,
+    language_code: str | None,
+    note: str | None,
+    unresolved: bool,
+    variants: Sequence[str],
+) -> dict[str, str]:
+    """Validate one BH-29 abbreviation entry's fields (AC1, AC2)."""
+    errors: dict[str, str] = {}
+
+    if not abbreviation or not abbreviation.strip():
+        errors["abbreviation"] = "Вкажіть скорочення."
+    elif len(abbreviation) > 64:
+        errors["abbreviation"] = "Скорочення занадто довге (максимум 64 символи)."
+
+    if not unresolved and not (full_form and full_form.strip()):
+        errors["full_form"] = (
+            "Вкажіть повну форму. Якщо вона невідома, позначте запис як "
+            "нерозшифрований."
+        )
+    elif full_form is not None and len(full_form) > 512:
+        errors["full_form"] = "Повна форма занадто довга (максимум 512 символів)."
+
+    if language_code is not None and language_code not in ISO_639_1_CODES:
+        errors["language_code"] = f"Невідомий код мови: {language_code}."
+
+    if note is not None and len(note) > 2000:
+        errors["note"] = "Примітка занадто довга (максимум 2000 символів)."
+
+    for variant in variants:
+        if not variant.strip():
+            errors["variants"] = "Варіант написання не може бути порожнім."
+            break
+        if len(variant) > 255:
+            errors["variants"] = "Варіант написання занадто довгий (максимум 255)."
+            break
+
+    return errors
+
+
+def abbreviation_duplicate_key(
+    category: AbbreviationCategory, language_code: str | None, abbreviation: str
+) -> tuple[AbbreviationCategory, str | None, str]:
+    """Normalize the fields AC4 compares to detect a duplicate entry."""
+    return category, language_code, abbreviation.strip()

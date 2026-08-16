@@ -77,6 +77,35 @@ export type SaveMetadataRequest =
 type SaveMetadataFieldErrorsResponse =
   SaveMetadataOperation["responses"][422]["content"]["application/json"];
 
+export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
+export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
+export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
+export type ImportRowResponse = components["schemas"]["ImportRowResponse"];
+export type ImportPreviewResponse = components["schemas"]["ImportPreviewResponse"];
+export type ImportCommitResponse = components["schemas"]["ImportCommitResponse"];
+export type DuplicateAbbreviationResponse =
+  components["schemas"]["DuplicateAbbreviationResponse"];
+
+type ListAbbreviationsOperation =
+  paths["/dictionaries/{dictionary_id}/abbreviations"]["get"];
+type AbbreviationsNotFoundResponse =
+  ListAbbreviationsOperation["responses"][404]["content"]["application/json"];
+
+type CreateAbbreviationOperation =
+  paths["/dictionaries/{dictionary_id}/abbreviations"]["post"];
+type AbbreviationFieldErrorsResponse =
+  CreateAbbreviationOperation["responses"][422]["content"]["application/json"];
+
+type ImportPreviewOperation =
+  paths["/dictionaries/{dictionary_id}/abbreviations/import/preview"]["post"];
+type UnparsableImportResponse =
+  ImportPreviewOperation["responses"][422]["content"]["application/json"];
+
+type ImportCommitOperation =
+  paths["/dictionaries/{dictionary_id}/abbreviations/import/commit"]["post"];
+export type ImportCommitRequest =
+  ImportCommitOperation["requestBody"]["content"]["application/json"];
+
 export type ApiErrorKind = "http" | "network" | "invalid-response";
 
 export class ApiError<Failure = unknown> extends Error {
@@ -203,6 +232,22 @@ async function del<Failure>(
 /** A dynamic resource path is still a real endpoint template; only the ID varies. */
 function dictionaryPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}` as keyof paths;
+}
+
+function abbreviationsPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/abbreviations` as keyof paths;
+}
+
+function abbreviationPath(dictionaryId: string, abbreviationId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/abbreviations/${abbreviationId}` as keyof paths;
+}
+
+function abbreviationsImportPreviewPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/abbreviations/import/preview` as keyof paths;
+}
+
+function abbreviationsImportCommitPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/abbreviations/import/commit` as keyof paths;
 }
 
 type UploadOptions = RequestOptions & {
@@ -396,7 +441,90 @@ export const API = {
       >(dictionaryPath(dictionaryId), body, options);
     },
   },
+
+  abbreviations: {
+    list(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<AbbreviationResponse[]> {
+      return get<AbbreviationResponse[], AbbreviationsNotFoundResponse>(
+        abbreviationsPath(dictionaryId),
+        options,
+      );
+    },
+
+    create(
+      dictionaryId: string,
+      body: AbbreviationRequest,
+      options?: RequestOptions,
+    ): Promise<AbbreviationResponse> {
+      return post<
+        AbbreviationRequest,
+        AbbreviationResponse,
+        | AbbreviationFieldErrorsResponse
+        | DuplicateAbbreviationResponse
+        | AbbreviationsNotFoundResponse
+      >(abbreviationsPath(dictionaryId), body, options);
+    },
+
+    update(
+      dictionaryId: string,
+      abbreviationId: string,
+      body: AbbreviationRequest,
+      options?: RequestOptions,
+    ): Promise<AbbreviationResponse> {
+      return patch<
+        AbbreviationRequest,
+        AbbreviationResponse,
+        | AbbreviationFieldErrorsResponse
+        | DuplicateAbbreviationResponse
+        | AbbreviationsNotFoundResponse
+      >(abbreviationPath(dictionaryId, abbreviationId), body, options);
+    },
+
+    delete(
+      dictionaryId: string,
+      abbreviationId: string,
+      options?: RequestOptions,
+    ): Promise<void> {
+      return del<AbbreviationsNotFoundResponse>(
+        abbreviationPath(dictionaryId, abbreviationId),
+        options,
+      );
+    },
+
+    importPreview(
+      dictionaryId: string,
+      file: File,
+      options?: UploadOptions,
+    ): Promise<ImportPreviewResponse> {
+      return uploadFile<ImportPreviewResponse, UnparsableImportResponse>(
+        abbreviationsImportPreviewPath(dictionaryId),
+        file,
+        options,
+      );
+    },
+
+    importCommit(
+      dictionaryId: string,
+      body: ImportCommitRequest,
+      options?: RequestOptions,
+    ): Promise<ImportCommitResponse> {
+      return post<ImportCommitRequest, ImportCommitResponse, AbbreviationsNotFoundResponse>(
+        abbreviationsImportCommitPath(dictionaryId),
+        body,
+        options,
+      );
+    },
+  },
 } as const;
+
+export function abbreviationsExportUrl(
+  dictionaryId: string,
+  format: "json" | "csv",
+): string {
+  return `${API_BASE_URL}/dictionaries/${dictionaryId}/abbreviations/export?format=${format}`;
+}
 
 export function dictionaryThumbnailUrl(dictionaryId: string): string {
   return `${API_BASE_URL}/dictionaries/${dictionaryId}/thumbnail`;
@@ -431,6 +559,18 @@ export function duplicateSourceFrom(
   }
   const payload = error.payload as DuplicateSourceResponse | undefined;
   return payload && typeof payload === "object" && "dictionary_id" in payload
+    ? payload
+    : undefined;
+}
+
+export function duplicateAbbreviationFrom(
+  error: unknown,
+): DuplicateAbbreviationResponse | undefined {
+  if (!(error instanceof ApiError) || error.kind !== "http" || error.status !== 409) {
+    return undefined;
+  }
+  const payload = error.payload as DuplicateAbbreviationResponse | undefined;
+  return payload && typeof payload === "object" && "abbreviation_id" in payload
     ? payload
     : undefined;
 }
