@@ -266,10 +266,14 @@ happens asynchronously in the worker, so the response's
 that transition.
 
 The maximum upload size is `CADMUS_MAX_UPLOAD_SIZE_BYTES` (bytes, default
-100 MiB). A second upload with the same SHA-256 checksum among the caller's
-own dictionaries is rejected as a duplicate (`409`) rather than silently
-creating a copy; a different owner uploading identical content is not
-considered a duplicate.
+100 MiB). In Compose, the `web` container's nginx also enforces
+`client_max_body_size`, configured separately via `CADMUS_MAX_UPLOAD_SIZE_MB`
+(MiB, default `100`) since it fronts `/api` and would otherwise reject large
+uploads with `413` before the API ever sees them — keep the two in sync when
+changing the limit. A second upload with the same SHA-256 checksum among the
+caller's own dictionaries is rejected as a duplicate (`409`) rather than
+silently creating a copy; a different owner uploading identical content is
+not considered a duplicate.
 
 `PATCH /dictionaries/{id}` saves bibliographic, language, and legal
 metadata for an existing draft without touching its stored PDF — required
@@ -347,6 +351,7 @@ have safe local defaults:
 | `CADMUS_MINIO_API_PORT` | `9000` | MinIO S3 API port published to the host |
 | `CADMUS_MINIO_CONSOLE_PORT` | `9001` | MinIO console port published to the host |
 | `CADMUS_MAX_UPLOAD_SIZE_BYTES` | `104857600` (100 MiB) | maximum accepted dictionary PDF upload size, in bytes |
+| `CADMUS_MAX_UPLOAD_SIZE_MB` | `100` | nginx `client_max_body_size` for the `web` container; keep in sync with `CADMUS_MAX_UPLOAD_SIZE_BYTES` |
 
 The application constructs the effective SQLAlchemy URL in one typed settings
 method. Password fields and the full URL are secret-valued and must not be

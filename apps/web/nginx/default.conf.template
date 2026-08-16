@@ -6,6 +6,10 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Must stay >= CADMUS_MAX_UPLOAD_SIZE_BYTES (apps/api), or nginx rejects
+    # large dictionary PDF uploads with 413 before they ever reach the API.
+    client_max_body_size ${CADMUS_MAX_UPLOAD_SIZE_MB}m;
+
     location = /healthz {
         access_log off;
         default_type text/plain;
