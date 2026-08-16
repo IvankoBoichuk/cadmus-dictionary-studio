@@ -123,9 +123,7 @@ class MemorySourcesRepository:
     def list_source_files_pending_page_split(self) -> list[SourceFile]:
         raise AssertionError("not used by list/delete tests")
 
-    def get_page(
-        self, source_file_id: UUID, page_index: int
-    ) -> DictionaryPage | None:
+    def get_page(self, source_file_id: UUID, page_index: int) -> DictionaryPage | None:
         return next(
             (
                 page
@@ -145,9 +143,7 @@ class MemorySourcesRepository:
     def delete_dictionary(self, dictionary_id: UUID) -> None:
         self.dictionaries.pop(dictionary_id, None)
         for source_file_id in [
-            f.id
-            for f in self.source_files.values()
-            if f.dictionary_id == dictionary_id
+            f.id for f in self.source_files.values() if f.dictionary_id == dictionary_id
         ]:
             self.source_files.pop(source_file_id, None)
             self.pages.pop(source_file_id, None)

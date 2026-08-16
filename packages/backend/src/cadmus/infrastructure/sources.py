@@ -345,9 +345,7 @@ class SqlAlchemySourcesRepository:
             )
         )
 
-    def get_page(
-        self, source_file_id: UUID, page_index: int
-    ) -> DictionaryPage | None:
+    def get_page(self, source_file_id: UUID, page_index: int) -> DictionaryPage | None:
         return self._session.scalar(
             select(DictionaryPage).where(
                 dictionary_pages.c.source_file_id == source_file_id,

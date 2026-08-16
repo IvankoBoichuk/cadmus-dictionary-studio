@@ -769,12 +769,12 @@ it("keeps the dictionary when the delete confirmation is dismissed", async () =>
   window.history.replaceState({}, "", "/dictionaries");
   const entry = dictionaryListEntry();
   const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     if (String(input) === "/api/auth/session") return sessionResponse(true);
     if (String(input) === "/api/dictionaries") {
       return new Response(JSON.stringify([entry]), { status: 200 });
     }
-    throw new Error(`Unexpected request: ${String(input)}`);
+    throw new Error(`Unexpected request: ${String(input)} ${init?.method}`);
   });
   vi.stubGlobal("fetch", fetchMock);
 

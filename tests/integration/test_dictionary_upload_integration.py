@@ -397,11 +397,11 @@ def test_list_and_delete_remove_the_dictionary_and_all_its_stored_objects() -> N
     source_file_id = outcome.source_file.id
     inspection_service.complete(source_file_id, page_count=2)
 
-    page_keys = [
-        f"sources/{dictionary_id}/pages/{index:05d}.png" for index in range(2)
-    ]
+    page_keys = [f"sources/{dictionary_id}/pages/{index:05d}.png" for index in range(2)]
     for key in page_keys:
-        object_storage.upload(key, BytesIO(b"\x89PNG\r\n\x1a\nfixture"), 15, "image/png")
+        object_storage.upload(
+            key, BytesIO(b"\x89PNG\r\n\x1a\nfixture"), 15, "image/png"
+        )
     pages = [
         DictionaryPage(
             id=uuid4(),
@@ -436,9 +436,7 @@ def test_list_and_delete_remove_the_dictionary_and_all_its_stored_objects() -> N
             {"id": source_file_id},
         ).scalar_one()
         remaining_source_files = connection.execute(
-            text(
-                "SELECT count(*) FROM cadmus.dictionary_source_files WHERE id = :id"
-            ),
+            text("SELECT count(*) FROM cadmus.dictionary_source_files WHERE id = :id"),
             {"id": source_file_id},
         ).scalar_one()
     assert remaining_pages == 0
