@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every dictionary draft owned by the caller */
+        get: operations["list_dictionaries_dictionaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/upload": {
         parameters: {
             query?: never;
@@ -151,7 +168,8 @@ export interface paths {
         get: operations["get_dictionary_dictionaries__dictionary_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a dictionary draft and its stored files */
+        delete: operations["delete_dictionary_dictionaries__dictionary_id__delete"];
         options?: never;
         head?: never;
         /** Save bibliographic, language, and legal metadata for a draft */
@@ -167,6 +185,23 @@ export interface paths {
         };
         /** Download the immutable original source PDF */
         get: operations["download_source_dictionaries__dictionary_id__source_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream the first rendered page as a thumbnail image */
+        get: operations["get_thumbnail_dictionaries__dictionary_id__thumbnail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -476,6 +511,12 @@ export interface components {
             message: string;
         };
         /**
+         * PagesStatus
+         * @description Lifecycle of the asynchronous, worker-side page-splitting stage.
+         * @enum {string}
+         */
+        PagesStatus: "pending" | "completed" | "failed";
+        /**
          * PasswordResetErrorResponse
          * @description Safe reset-token error contract.
          */
@@ -590,6 +631,9 @@ export interface components {
             original_filename: string;
             /** Page Count */
             page_count: number | null;
+            /** Pages Error */
+            pages_error?: string | null;
+            pages_status: components["schemas"]["PagesStatus"];
             /**
              * Uploaded At
              * Format: date-time
@@ -953,6 +997,46 @@ export interface operations {
             };
         };
     };
+    list_dictionaries_dictionaries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_dictionaries_upload_post: {
         parameters: {
             query?: never;
@@ -1066,6 +1150,55 @@ export interface operations {
             };
         };
     };
+    delete_dictionary_dictionaries__dictionary_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     save_metadata_dictionaries__dictionary_id__patch: {
         parameters: {
             query?: never;
@@ -1122,6 +1255,57 @@ export interface operations {
         };
     };
     download_source_dictionaries__dictionary_id__source_download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thumbnail_dictionaries__dictionary_id__thumbnail_get: {
         parameters: {
             query?: never;
             header?: never;

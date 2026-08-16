@@ -27,3 +27,7 @@ class ObjectStorage(Protocol):
     def delete(self, key: str) -> None:
         """Delete the object at ``key``; deleting a missing key is idempotent."""
         ...
+
+    def delete_prefix(self, prefix: str) -> None:
+        """Delete every object whose key starts with ``prefix``, idempotently."""
+        ...

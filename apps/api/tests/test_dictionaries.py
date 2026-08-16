@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
@@ -7,9 +7,12 @@ from cadmus.identity import AccountStatus, AuthenticationService, User
 from cadmus.sources import (
     Contributor,
     ContributorRole,
+    DeleteDictionaryService,
     Dictionary,
     DictionaryAccessError,
     DictionaryLanguage,
+    DictionaryListEntry,
+    DictionaryPage,
     DictionaryStatus,
     DuplicateSourceError,
     GetDictionaryService,
@@ -111,11 +114,26 @@ class StubSaveDictionaryMetadataService:
         return self.outcome
 
 
+def _page(source_file_id: UUID, page_index: int = 0) -> DictionaryPage:
+    return DictionaryPage(
+        id=uuid4(),
+        source_file_id=source_file_id,
+        page_index=page_index,
+        processed_asset_key=f"sources/{source_file_id}/pages/{page_index:05d}.png",
+        width=200,
+        height=400,
+        checksum_sha256="b" * 64,
+        created_at=NOW,
+    )
+
+
 @dataclass
 class StubGetDictionaryService:
     dictionary: Dictionary | None = None
     source_file: SourceFile | None = None
     access_error: DictionaryAccessError | None = None
+    entries: list[DictionaryListEntry] | None = None
+    first_page: DictionaryPage | None = None
 
     def get(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
         if self.access_error is not None:
@@ -128,6 +146,27 @@ class StubGetDictionaryService:
             raise self.access_error
         assert self.source_file is not None
         return self.source_file
+
+    def list_for_owner(self, owner_id: UUID) -> list[DictionaryListEntry]:
+        return self.entries or []
+
+    def get_first_page(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> DictionaryPage | None:
+        if self.access_error is not None:
+            raise self.access_error
+        return self.first_page
+
+
+@dataclass
+class StubDeleteDictionaryService:
+    error: DictionaryAccessError | None = None
+    deleted: list[UUID] = field(default_factory=list)
+
+    def delete(self, dictionary_id: UUID, actor_id: UUID) -> None:
+        if self.error is not None:
+            raise self.error
+        self.deleted.append(dictionary_id)
 
 
 class StubObjectStorage:
@@ -143,6 +182,9 @@ class StubObjectStorage:
     def delete(self, key: str) -> None:
         raise AssertionError("not used")
 
+    def delete_prefix(self, prefix: str) -> None:
+        raise AssertionError("not used")
+
 
 def client_for(
     upload_service: StubUploadDictionaryService | None = None,
@@ -150,6 +192,7 @@ def client_for(
     get_service: StubGetDictionaryService | None = None,
     object_storage: StubObjectStorage | None = None,
     authentication: StubAuthenticationService | None = None,
+    delete_service: StubDeleteDictionaryService | None = None,
 ) -> TestClient:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     return TestClient(
@@ -170,6 +213,10 @@ def client_for(
                 GetDictionaryService, get_service or StubGetDictionaryService()
             ),
             object_storage=cast(ObjectStorage, object_storage or StubObjectStorage()),
+            delete_dictionary_service=cast(
+                DeleteDictionaryService,
+                delete_service or StubDeleteDictionaryService(),
+            ),
         )
     )
 
@@ -395,5 +442,96 @@ def test_download_source_missing_object_returns_404() -> None:
     ) as client:
         client.cookies.set("cadmus_session", "token")
         response = client.get(f"/dictionaries/{uuid4()}/source/download")
+
+    assert response.status_code == 404
+
+
+def test_list_dictionaries_requires_authentication() -> None:
+    with client_for() as client:
+        response = client.get("/dictionaries")
+    assert response.status_code == 401
+
+
+def test_list_dictionaries_returns_the_callers_drafts() -> None:
+    dictionary = _dictionary(title="Словник")
+    service = StubGetDictionaryService(
+        entries=[
+            DictionaryListEntry(
+                dictionary=dictionary, source_file=_source_file(dictionary.id)
+            )
+        ]
+    )
+
+    with client_for(get_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.get("/dictionaries")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == str(dictionary.id)
+    assert body[0]["source"]["pages_status"] == "pending"
+
+
+def test_delete_dictionary_returns_no_content() -> None:
+    dictionary_id = uuid4()
+    service = StubDeleteDictionaryService()
+
+    with client_for(delete_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.delete(f"/dictionaries/{dictionary_id}")
+
+    assert response.status_code == 204
+    assert service.deleted == [dictionary_id]
+
+
+def test_delete_dictionary_not_owned_returns_404() -> None:
+    service = StubDeleteDictionaryService(error=DictionaryAccessError(uuid4()))
+
+    with client_for(delete_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.delete(f"/dictionaries/{uuid4()}")
+
+    assert response.status_code == 404
+
+
+def test_delete_dictionary_requires_authentication() -> None:
+    with client_for() as client:
+        response = client.delete(f"/dictionaries/{uuid4()}")
+    assert response.status_code == 401
+
+
+def test_thumbnail_streams_the_first_page_image() -> None:
+    dictionary_id = uuid4()
+    page = _page(uuid4())
+    service = StubGetDictionaryService(first_page=page)
+
+    with client_for(
+        get_service=service, object_storage=StubObjectStorage(b"\x89PNG\r\n\x1a\nrest")
+    ) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.get(f"/dictionaries/{dictionary_id}/thumbnail")
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\nrest"
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_thumbnail_missing_page_returns_404() -> None:
+    service = StubGetDictionaryService(first_page=None)
+
+    with client_for(get_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.get(f"/dictionaries/{uuid4()}/thumbnail")
+
+    assert response.status_code == 404
+
+
+def test_thumbnail_not_owned_returns_404() -> None:
+    service = StubGetDictionaryService(access_error=DictionaryAccessError(uuid4()))
+
+    with client_for(get_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.get(f"/dictionaries/{uuid4()}/thumbnail")
 
     assert response.status_code == 404

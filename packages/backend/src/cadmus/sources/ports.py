@@ -53,6 +53,14 @@ class SourcesRepository(Protocol):
 
     def list_source_files_pending_page_split(self) -> list[SourceFile]: ...
 
+    def get_page(
+        self, source_file_id: UUID, page_index: int
+    ) -> DictionaryPage | None: ...
+
+    def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]: ...
+
+    def delete_dictionary(self, dictionary_id: UUID) -> None: ...
+
 
 class SourcesUnitOfWork(Protocol):
     """Transaction boundary controlled by a sources use case."""

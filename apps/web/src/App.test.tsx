@@ -640,6 +640,158 @@ it("offers a new reset request for an expired or used token", async () => {
   ).toHaveAttribute("href", "/forgot-password");
 });
 
+function dictionaryListEntry(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "33333333-3333-3333-3333-333333333333",
+    status: "draft",
+    title: "Словник української мови",
+    description: null,
+    dictionary_type: null,
+    publisher: null,
+    publication_year: null,
+    edition: null,
+    isbn: null,
+    digital_source: null,
+    legal_status: null,
+    license_type: null,
+    permission_reference: null,
+    rights_note: null,
+    contributors: [],
+    language_codes: [],
+    created_at: "2026-08-16T12:00:00Z",
+    updated_at: "2026-08-16T12:00:00Z",
+    missing_required_fields: [],
+    source: {
+      original_filename: "dictionary.pdf",
+      mime_type: "application/pdf",
+      byte_size: 2048,
+      page_count: 2,
+      checksum_sha256: "a".repeat(64),
+      uploaded_at: "2026-08-16T12:00:00Z",
+      inspection_status: "verified",
+      pages_status: "completed",
+    },
+    ...overrides,
+  };
+}
+
+it("shows a thumbnail image once page splitting has completed", async () => {
+  window.history.replaceState({}, "", "/dictionaries");
+  const entry = dictionaryListEntry();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/dictionaries") {
+        return new Response(JSON.stringify([entry]), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    }),
+  );
+
+  render(<App />);
+
+  expect(
+    await screen.findByRole("heading", { name: "Словник української мови" }),
+  ).toBeInTheDocument();
+  const image = screen.getByRole("presentation") as HTMLImageElement;
+  expect(image.src).toContain(`/api/dictionaries/${entry.id}/thumbnail`);
+});
+
+it("shows a placeholder instead of a thumbnail while pages are still splitting", async () => {
+  window.history.replaceState({}, "", "/dictionaries");
+  const entry = dictionaryListEntry({
+    source: {
+      original_filename: "dictionary.pdf",
+      mime_type: "application/pdf",
+      byte_size: 2048,
+      page_count: null,
+      checksum_sha256: "a".repeat(64),
+      uploaded_at: "2026-08-16T12:00:00Z",
+      inspection_status: "verified",
+      pages_status: "pending",
+    },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/dictionaries") {
+        return new Response(JSON.stringify([entry]), { status: 200 });
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    }),
+  );
+
+  render(<App />);
+
+  await screen.findByRole("heading", { name: "Словник української мови" });
+  expect(screen.getByText("Розбивається на сторінки…")).toBeInTheDocument();
+  expect(screen.queryByRole("img")).not.toBeInTheDocument();
+});
+
+it("deletes a dictionary after confirmation and removes it from the list", async () => {
+  window.history.replaceState({}, "", "/dictionaries");
+  const entry = dictionaryListEntry();
+  const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+  let deleteCalled = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/dictionaries") {
+        return new Response(JSON.stringify(deleteCalled ? [] : [entry]), {
+          status: 200,
+        });
+      }
+      if (String(input) === `/api/dictionaries/${entry.id}` && init?.method === "DELETE") {
+        deleteCalled = true;
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method}`);
+    }),
+  );
+
+  render(<App />);
+  await screen.findByRole("heading", { name: "Словник української мови" });
+  fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
+
+  await waitFor(() => expect(deleteCalled).toBe(true));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("heading", { name: "Словник української мови" }),
+    ).not.toBeInTheDocument(),
+  );
+  confirmSpy.mockRestore();
+});
+
+it("keeps the dictionary when the delete confirmation is dismissed", async () => {
+  window.history.replaceState({}, "", "/dictionaries");
+  const entry = dictionaryListEntry();
+  const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    if (String(input) === "/api/auth/session") return sessionResponse(true);
+    if (String(input) === "/api/dictionaries") {
+      return new Response(JSON.stringify([entry]), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${String(input)}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App />);
+  await screen.findByRole("heading", { name: "Словник української мови" });
+  fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
+
+  expect(confirmSpy).toHaveBeenCalled();
+  expect(
+    fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
+  ).toBe(false);
+  expect(
+    screen.getByRole("heading", { name: "Словник української мови" }),
+  ).toBeInTheDocument();
+  confirmSpy.mockRestore();
+});
+
 it("keeps the authenticated state and reports an unconfirmed logout", async () => {
   window.history.replaceState({}, "", "/dashboard");
   let logoutAttempts = 0;

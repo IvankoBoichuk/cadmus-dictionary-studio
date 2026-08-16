@@ -463,6 +463,14 @@ class SaveDictionaryMetadataService:
         return normalized_isbn, errors
 
 
+@dataclass(frozen=True)
+class DictionaryListEntry:
+    """One dictionary paired with its (possibly absent) source file."""
+
+    dictionary: Dictionary
+    source_file: SourceFile | None
+
+
 class GetDictionaryService:
     """Read a dictionary draft, enforcing owner-only visibility."""
 
@@ -483,3 +491,65 @@ class GetDictionaryService:
             if source_file is None:
                 raise DictionaryAccessError(dictionary_id)
             return source_file
+
+    def list_for_owner(self, owner_id: UUID) -> list[DictionaryListEntry]:
+        """List every dictionary owned by ``owner_id``, newest-updated first."""
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionaries = unit_of_work.sources.list_dictionaries_for_owner(owner_id)
+            return [
+                DictionaryListEntry(
+                    dictionary=dictionary,
+                    source_file=unit_of_work.sources.get_source_file(dictionary.id),
+                )
+                for dictionary in dictionaries
+            ]
+
+    def get_first_page(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> DictionaryPage | None:
+        """Return the first rendered page of a dictionary's source, if any."""
+        dictionary = self.get(dictionary_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            source_file = unit_of_work.sources.get_source_file(dictionary.id)
+            if source_file is None:
+                return None
+            return unit_of_work.sources.get_page(source_file.id, page_index=0)
+
+
+class DeleteDictionaryService:
+    """Delete a dictionary draft and its underlying stored objects."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        object_storage: ObjectStorage,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._object_storage = object_storage
+
+    def delete(self, dictionary_id: UUID, actor_id: UUID) -> None:
+        """Remove the dictionary row (cascading to its children), then storage.
+
+        The database delete is the authoritative "is it gone" answer for the
+        caller and commits first; object storage cleanup afterward is
+        best-effort, matching this codebase's existing posture toward
+        coordinating (not two-phase-committing) Postgres and MinIO.
+        """
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            source_file = unit_of_work.sources.get_source_file(dictionary_id)
+            unit_of_work.sources.delete_dictionary(dictionary_id)
+            unit_of_work.commit()
+
+        if source_file is None:
+            return
+        try:
+            self._object_storage.delete(source_file.storage_key)
+            self._object_storage.delete_prefix(f"sources/{dictionary_id}/pages/")
+        except Exception:
+            logger.warning(
+                "failed to clean up object storage after dictionary delete",
+                exc_info=True,
+            )

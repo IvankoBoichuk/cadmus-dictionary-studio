@@ -23,6 +23,9 @@ export function DashboardPage() {
         <Link className="primary-link" to="/dictionaries/new">
           Додати словник
         </Link>
+        <Link className="secondary-link" to="/dictionaries">
+          Мої словники
+        </Link>
       </section>
     </main>
   );

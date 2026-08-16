@@ -11,6 +11,7 @@ from cadmus.identity import AuthenticationError, AuthenticationService, User
 from cadmus.sources import (
     ContributorInput,
     ContributorRole,
+    DeleteDictionaryService,
     Dictionary,
     DictionaryAccessError,
     DictionaryStatus,
@@ -23,6 +24,7 @@ from cadmus.sources import (
     MetadataValidationError,
     ObjectNotFoundError,
     ObjectStorage,
+    PagesStatus,
     SaveDictionaryMetadataService,
     SourceFile,
     UploadDictionaryService,
@@ -36,6 +38,7 @@ from fastapi import (
     File,
     HTTPException,
     Path,
+    Response,
     UploadFile,
     status,
 )
@@ -44,6 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SESSION_COOKIE_NAME = "cadmus_session"
 _DOWNLOAD_SPOOL_MAX_BYTES = 64 * 1024 * 1024
+_THUMBNAIL_SPOOL_MAX_BYTES = 8 * 1024 * 1024
 _UNSAFE_FILENAME_CHARS = re.compile(r'[\r\n"]')
 
 
@@ -100,6 +104,8 @@ class SourceFileResponse(BaseModel):
     uploaded_at: datetime
     inspection_status: InspectionStatus
     inspection_error: str | None = None
+    pages_status: PagesStatus
+    pages_error: str | None = None
 
 
 class DictionaryResponse(BaseModel):
@@ -183,6 +189,8 @@ def _source_file_response(source_file: SourceFile | None) -> SourceFileResponse 
         uploaded_at=source_file.uploaded_at,
         inspection_status=source_file.inspection_status,
         inspection_error=source_file.inspection_error,
+        pages_status=source_file.pages_status,
+        pages_error=source_file.pages_error,
     )
 
 
@@ -245,6 +253,7 @@ def create_dictionaries_router(
     metadata_service: SaveDictionaryMetadataService,
     get_service: GetDictionaryService,
     object_storage: ObjectStorage,
+    delete_service: DeleteDictionaryService,
 ) -> APIRouter:
     """Create dictionary draft routes bound to application use cases."""
     router = APIRouter(prefix="/dictionaries", tags=["dictionaries"])
@@ -333,6 +342,39 @@ def create_dictionaries_router(
             outcome.missing_required_fields,
             outcome.source_file,
         )
+
+    @router.get(
+        "",
+        response_model=list[DictionaryResponse],
+        responses={**UNAUTHORIZED_RESPONSE},
+        summary="List every dictionary draft owned by the caller",
+    )
+    def list_dictionaries(user: AuthenticatedUser) -> list[DictionaryResponse]:
+        return [
+            _dictionary_response(
+                entry.dictionary,
+                missing_required_fields(entry.dictionary),
+                entry.source_file,
+            )
+            for entry in get_service.list_for_owner(user.id)
+        ]
+
+    @router.delete(
+        "/{dictionary_id}",
+        response_model=None,
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
+        summary="Delete a dictionary draft and its stored files",
+    )
+    def delete_dictionary(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+    ) -> Response | JSONResponse:
+        try:
+            delete_service.delete(dictionary_id, user.id)
+        except DictionaryAccessError:
+            return _not_found()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.get(
         "/{dictionary_id}",
@@ -435,6 +477,39 @@ def create_dictionaries_router(
             _iter_and_close(buffer),
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @router.get(
+        "/{dictionary_id}/thumbnail",
+        response_model=None,
+        responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
+        summary="Stream the first rendered page as a thumbnail image",
+    )
+    def get_thumbnail(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+    ) -> StreamingResponse | JSONResponse:
+        try:
+            page = get_service.get_first_page(dictionary_id, user.id)
+        except DictionaryAccessError:
+            return _not_found()
+        if page is None:
+            return _not_found()
+
+        buffer: SpooledTemporaryFile[bytes] = SpooledTemporaryFile(
+            max_size=_THUMBNAIL_SPOOL_MAX_BYTES
+        )
+        try:
+            object_storage.download(page.processed_asset_key, cast(BinaryIO, buffer))
+        except ObjectNotFoundError:
+            buffer.close()
+            return _not_found()
+        buffer.seek(0)
+
+        return StreamingResponse(
+            _iter_and_close(buffer),
+            media_type="image/png",
+            headers={"Cache-Control": "private, max-age=86400"},
         )
 
     def _not_found() -> JSONResponse:

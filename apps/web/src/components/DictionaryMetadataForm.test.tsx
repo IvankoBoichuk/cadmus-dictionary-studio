@@ -193,6 +193,7 @@ describe("DictionaryMetadataForm", () => {
         checksum_sha256: "a".repeat(64),
         uploaded_at: "2026-08-15T12:00:00Z",
         inspection_status: "verified",
+        pages_status: "completed",
       },
     });
 

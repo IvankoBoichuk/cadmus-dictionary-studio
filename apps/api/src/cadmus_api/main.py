@@ -25,6 +25,7 @@ from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.processing import TaskQueue
 from cadmus.sources import (
+    DeleteDictionaryService,
     GetDictionaryService,
     ObjectStorage,
     SaveDictionaryMetadataService,
@@ -50,6 +51,7 @@ def create_app(
     upload_dictionary_service: UploadDictionaryService | None = None,
     save_dictionary_metadata_service: SaveDictionaryMetadataService | None = None,
     get_dictionary_service: GetDictionaryService | None = None,
+    delete_dictionary_service: DeleteDictionaryService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -144,6 +146,14 @@ def create_app(
         if get_dictionary_service is not None
         else GetDictionaryService(unit_of_work_factory=sources_unit_of_work_factory)
     )
+    app.state.delete_dictionary_service = (
+        delete_dictionary_service
+        if delete_dictionary_service is not None
+        else DeleteDictionaryService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            object_storage=app.state.object_storage,
+        )
+    )
     app.include_router(create_health_router(app_settings))
     app.include_router(
         create_auth_router(
@@ -162,6 +172,7 @@ def create_app(
             app.state.save_dictionary_metadata_service,
             app.state.get_dictionary_service,
             app.state.object_storage,
+            app.state.delete_dictionary_service,
         )
     )
     return app

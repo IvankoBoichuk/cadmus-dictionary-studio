@@ -345,6 +345,33 @@ class SqlAlchemySourcesRepository:
             )
         )
 
+    def get_page(
+        self, source_file_id: UUID, page_index: int
+    ) -> DictionaryPage | None:
+        return self._session.scalar(
+            select(DictionaryPage).where(
+                dictionary_pages.c.source_file_id == source_file_id,
+                dictionary_pages.c.page_index == page_index,
+            )
+        )
+
+    def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
+        dictionary_ids = self._session.scalars(
+            select(dictionaries.c.id)
+            .where(dictionaries.c.owner_id == owner_id)
+            .order_by(dictionaries.c.updated_at.desc())
+        )
+        return [
+            dictionary
+            for dictionary_id in dictionary_ids
+            if (dictionary := self.get_dictionary(dictionary_id)) is not None
+        ]
+
+    def delete_dictionary(self, dictionary_id: UUID) -> None:
+        self._session.execute(
+            delete(dictionaries).where(dictionaries.c.id == dictionary_id)
+        )
+
 
 class SqlAlchemySourcesUnitOfWork:
     """Session-backed sources transaction."""

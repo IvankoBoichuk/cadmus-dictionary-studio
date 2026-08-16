@@ -93,6 +93,17 @@ class MemorySourcesRepository:
             and source_file.pages_status is not PagesStatus.COMPLETED
         ]
 
+    def get_page(
+        self, source_file_id: UUID, page_index: int
+    ) -> DictionaryPage | None:
+        raise AssertionError("not used by backfill tests")
+
+    def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
+        raise AssertionError("not used by backfill tests")
+
+    def delete_dictionary(self, dictionary_id: UUID) -> None:
+        raise AssertionError("not used by backfill tests")
+
 
 class MemorySourcesUnitOfWork:
     def __init__(self, shared: MemorySourcesRepository) -> None:

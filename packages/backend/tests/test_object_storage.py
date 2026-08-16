@@ -62,6 +62,51 @@ def test_delete_is_delegated_to_configured_bucket() -> None:
     )
 
 
+def test_delete_prefix_bulk_removes_every_listed_object() -> None:
+    client = Mock(spec=Minio)
+    client.list_objects.return_value = [
+        Mock(object_name="sources/dict-1/pages/00000.png"),
+        Mock(object_name="sources/dict-1/pages/00001.png"),
+    ]
+    client.remove_objects.return_value = iter([])
+    storage = MinioObjectStorage(client, "source-artifacts")
+
+    storage.delete_prefix("sources/dict-1/pages/")
+
+    client.list_objects.assert_called_once_with(
+        "source-artifacts", prefix="sources/dict-1/pages/", recursive=True
+    )
+    bucket, delete_requests = client.remove_objects.call_args.args
+    assert bucket == "source-artifacts"
+    assert [request.name for request in delete_requests] == [
+        "sources/dict-1/pages/00000.png",
+        "sources/dict-1/pages/00001.png",
+    ]
+
+
+def test_delete_prefix_is_a_no_op_for_an_empty_prefix() -> None:
+    client = Mock(spec=Minio)
+    client.list_objects.return_value = []
+    client.remove_objects.return_value = iter([])
+    storage = MinioObjectStorage(client, "source-artifacts")
+
+    storage.delete_prefix("sources/missing/pages/")
+
+    bucket, delete_requests = client.remove_objects.call_args.args
+    assert bucket == "source-artifacts"
+    assert list(delete_requests) == []
+
+
+def test_delete_prefix_raises_when_the_bulk_delete_reports_errors() -> None:
+    client = Mock(spec=Minio)
+    client.list_objects.return_value = [Mock(object_name="sources/dict-1/pages/x.png")]
+    client.remove_objects.return_value = iter([Mock()])
+    storage = MinioObjectStorage(client, "source-artifacts")
+
+    with pytest.raises(RuntimeError):
+        storage.delete_prefix("sources/dict-1/pages/")
+
+
 def test_missing_object_is_translated_to_application_error() -> None:
     client = Mock(spec=Minio)
     client.get_object.side_effect = S3Error(

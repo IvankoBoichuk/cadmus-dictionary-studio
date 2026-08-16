@@ -4,6 +4,7 @@ from shutil import copyfileobj
 from typing import BinaryIO
 
 from minio import Minio
+from minio.deleteobjects import DeleteObject
 from minio.error import S3Error
 
 from cadmus.config import Settings
@@ -51,6 +52,19 @@ class MinioObjectStorage:
     def delete(self, key: str) -> None:
         """Delete a key using S3's idempotent delete behavior."""
         self._client.remove_object(self._bucket, key)
+
+    def delete_prefix(self, prefix: str) -> None:
+        """List and bulk-delete every object under ``prefix``."""
+        objects = self._client.list_objects(self._bucket, prefix=prefix, recursive=True)
+        delete_requests = (
+            DeleteObject(obj.object_name) for obj in objects if obj.object_name
+        )
+        errors = list(self._client.remove_objects(self._bucket, delete_requests))
+        if errors:
+            raise RuntimeError(
+                f"failed to delete {len(errors)} object(s) under prefix {prefix!r}: "
+                f"{errors[0]}"
+            )
 
 
 def create_object_storage(settings: Settings) -> MinioObjectStorage:

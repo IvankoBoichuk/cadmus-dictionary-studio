@@ -84,6 +84,17 @@ class MemorySourcesRepository:
     def list_source_files_pending_page_split(self) -> list[SourceFile]:
         raise AssertionError("not used by metadata save")
 
+    def get_page(
+        self, source_file_id: UUID, page_index: int
+    ) -> DictionaryPage | None:
+        raise AssertionError("not used by metadata save")
+
+    def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
+        raise AssertionError("not used by metadata save")
+
+    def delete_dictionary(self, dictionary_id: UUID) -> None:
+        raise AssertionError("not used by metadata save")
+
 
 class MemorySourcesUnitOfWork:
     def __init__(self, repository: MemorySourcesRepository) -> None:

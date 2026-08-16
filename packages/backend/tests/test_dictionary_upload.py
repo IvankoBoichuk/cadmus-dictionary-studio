@@ -89,6 +89,17 @@ class MemorySourcesRepository:
     def list_source_files_pending_page_split(self) -> list[SourceFile]:
         raise AssertionError("not used by upload")
 
+    def get_page(
+        self, source_file_id: UUID, page_index: int
+    ) -> DictionaryPage | None:
+        raise AssertionError("not used by upload")
+
+    def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
+        raise AssertionError("not used by upload")
+
+    def delete_dictionary(self, dictionary_id: UUID) -> None:
+        raise AssertionError("not used by upload")
+
 
 class MemorySourcesUnitOfWork:
     """Copy-on-write fake: writes only reach ``shared`` on a successful commit.
@@ -150,6 +161,10 @@ class FakeObjectStorage:
     def delete(self, key: str) -> None:
         self.deleted.append(key)
         self.uploaded.pop(key, None)
+
+    def delete_prefix(self, prefix: str) -> None:
+        for key in [key for key in self.uploaded if key.startswith(prefix)]:
+            self.delete(key)
 
 
 @dataclass

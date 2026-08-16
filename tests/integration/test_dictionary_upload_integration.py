@@ -20,12 +20,14 @@ from cadmus.sources import (
     CompleteSourceInspectionService,
     ContributorInput,
     ContributorRole,
+    DeleteDictionaryService,
     DictionaryAccessError,
     DictionaryPage,
     DuplicateSourceError,
     GetDictionaryService,
     LegalStatus,
     MetadataInput,
+    ObjectNotFoundError,
     RecordPageSplitService,
     SaveDictionaryMetadataService,
     SourceInspectionQueueUnavailableError,
@@ -368,3 +370,84 @@ def test_page_split_persists_pages_and_tracks_the_backfill_queue() -> None:
     finally:
         object_storage.delete(outcome.source_file.storage_key)
         engine.dispose()
+
+
+def test_list_and_delete_remove_the_dictionary_and_all_its_stored_objects() -> None:
+    database_url = _prepare_database()
+    engine = create_engine(database_url)
+    owner_id = _create_user(engine, f"owner-{uuid4()}@example.com")
+    settings = Settings()
+    unit_of_work_factory = create_sources_unit_of_work_factory(engine)
+    object_storage = create_object_storage(settings)
+    upload_service = UploadDictionaryService(
+        unit_of_work_factory=unit_of_work_factory,
+        object_storage=object_storage,
+        inspection_queue=NoOpInspectionQueue(),
+        max_upload_size_bytes=10 * 1024 * 1024,
+    )
+    inspection_service = CompleteSourceInspectionService(unit_of_work_factory)
+    split_service = RecordPageSplitService(unit_of_work_factory)
+    get_service = GetDictionaryService(unit_of_work_factory)
+    delete_service = DeleteDictionaryService(unit_of_work_factory, object_storage)
+
+    outcome = upload_service.upload(
+        owner_id, "Словник.pdf", "application/pdf", BytesIO(VALID_PDF)
+    )
+    dictionary_id = outcome.dictionary.id
+    source_file_id = outcome.source_file.id
+    inspection_service.complete(source_file_id, page_count=2)
+
+    page_keys = [
+        f"sources/{dictionary_id}/pages/{index:05d}.png" for index in range(2)
+    ]
+    for key in page_keys:
+        object_storage.upload(key, BytesIO(b"\x89PNG\r\n\x1a\nfixture"), 15, "image/png")
+    pages = [
+        DictionaryPage(
+            id=uuid4(),
+            source_file_id=source_file_id,
+            page_index=index,
+            processed_asset_key=key,
+            width=200,
+            height=400,
+            checksum_sha256="b" * 64,
+            created_at=outcome.dictionary.created_at,
+        )
+        for index, key in enumerate(page_keys)
+    ]
+    split_service.record_success(source_file_id, pages)
+
+    entries = get_service.list_for_owner(owner_id)
+    assert dictionary_id in {entry.dictionary.id for entry in entries}
+
+    delete_service.delete(dictionary_id, owner_id)
+
+    with pytest.raises(DictionaryAccessError):
+        get_service.get(dictionary_id, owner_id)
+    entries_after_delete = get_service.list_for_owner(owner_id)
+    assert dictionary_id not in {entry.dictionary.id for entry in entries_after_delete}
+
+    with engine.connect() as connection:
+        remaining_pages = connection.execute(
+            text(
+                "SELECT count(*) FROM cadmus.dictionary_pages "
+                "WHERE source_file_id = :id"
+            ),
+            {"id": source_file_id},
+        ).scalar_one()
+        remaining_source_files = connection.execute(
+            text(
+                "SELECT count(*) FROM cadmus.dictionary_source_files WHERE id = :id"
+            ),
+            {"id": source_file_id},
+        ).scalar_one()
+    assert remaining_pages == 0
+    assert remaining_source_files == 0
+
+    with pytest.raises(ObjectNotFoundError):
+        object_storage.download(outcome.source_file.storage_key, BytesIO())
+    for key in page_keys:
+        with pytest.raises(ObjectNotFoundError):
+            object_storage.download(key, BytesIO())
+
+    engine.dispose()

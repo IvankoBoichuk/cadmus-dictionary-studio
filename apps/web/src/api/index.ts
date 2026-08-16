@@ -63,6 +63,14 @@ type GetDictionaryOperation = paths["/dictionaries/{dictionary_id}"]["get"];
 type DictionaryNotFoundResponse =
   GetDictionaryOperation["responses"][404]["content"]["application/json"];
 
+type ListDictionariesOperation = paths["/dictionaries"]["get"];
+export type DictionaryListResponse =
+  ListDictionariesOperation["responses"][200]["content"]["application/json"];
+
+type DeleteDictionaryOperation = paths["/dictionaries/{dictionary_id}"]["delete"];
+type DeleteDictionaryNotFoundResponse =
+  DeleteDictionaryOperation["responses"][404]["content"]["application/json"];
+
 type SaveMetadataOperation = paths["/dictionaries/{dictionary_id}"]["patch"];
 export type SaveMetadataRequest =
   SaveMetadataOperation["requestBody"]["content"]["application/json"];
@@ -158,6 +166,38 @@ function patch<Body, Success, Failure>(
     body: JSON.stringify(body),
     signal: options.signal,
   });
+}
+
+/** A 204 No Content response has no body, so this never calls `response.json()`. */
+async function del<Failure>(
+  path: keyof paths,
+  options: RequestOptions = {},
+): Promise<void> {
+  let response: Response | undefined;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      let payload: Failure | undefined;
+      try {
+        payload = (await response.json()) as Failure;
+      } catch {
+        payload = undefined;
+      }
+      throw new ApiError<Failure>("http", response.status, payload);
+    }
+  } catch (error) {
+    if (error instanceof ApiError || isAbortError(error)) throw error;
+    throw new ApiError(
+      response ? "invalid-response" : "network",
+      response?.status,
+      undefined,
+      { cause: error },
+    );
+  }
 }
 
 /** A dynamic resource path is still a real endpoint template; only the ID varies. */
@@ -333,6 +373,17 @@ export const API = {
       );
     },
 
+    list(options?: RequestOptions): Promise<DictionaryListResponse> {
+      return get<DictionaryListResponse, never>("/dictionaries", options);
+    },
+
+    delete(dictionaryId: string, options?: RequestOptions): Promise<void> {
+      return del<DeleteDictionaryNotFoundResponse>(
+        dictionaryPath(dictionaryId),
+        options,
+      );
+    },
+
     saveMetadata(
       dictionaryId: string,
       body: SaveMetadataRequest,
@@ -346,6 +397,10 @@ export const API = {
     },
   },
 } as const;
+
+export function dictionaryThumbnailUrl(dictionaryId: string): string {
+  return `${API_BASE_URL}/dictionaries/${dictionaryId}/thumbnail`;
+}
 
 export function fieldErrorsFrom(error: unknown): FieldErrorsResponse["errors"] | undefined {
   if (!(error instanceof ApiError) || error.kind !== "http") return undefined;
