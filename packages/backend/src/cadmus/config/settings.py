@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
         str_strip_whitespace=True,
+        env_ignore_empty=True,
     )
 
     name: str = Field(default="cadmus-api", min_length=1)
@@ -76,6 +77,10 @@ class Settings(BaseSettings):
     )
     geography_api_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     geography_api_max_retries: int = Field(default=3, ge=0, le=5)
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: SecretStr | None = None
+    google_oauth_redirect_url: str | None = None
+    google_oauth_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
     def sqlalchemy_database_url(self) -> URL:
         """Return the single effective database URL without logging credentials."""

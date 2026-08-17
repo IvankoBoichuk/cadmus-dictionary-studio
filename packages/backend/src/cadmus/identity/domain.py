@@ -19,7 +19,7 @@ class User:
 
     id: UUID
     email: str
-    password_hash: str
+    password_hash: str | None
     status: AccountStatus
     created_at: datetime
     activated_at: datetime | None = None
@@ -76,4 +76,15 @@ class AuthenticatedSession:
     user_id: UUID
     token_digest: str
     expires_at: datetime
+    created_at: datetime
+
+
+@dataclass
+class GoogleIdentity:
+    """A Google account linked to a Cadmus user for sign-in."""
+
+    id: UUID
+    user_id: UUID
+    subject: str
+    email: str
     created_at: datetime

@@ -8,6 +8,7 @@ import pytest
 from cadmus.identity import (
     AccountStatus,
     AuthenticatedSession,
+    GoogleIdentity,
     PasswordResetError,
     PasswordResetFailure,
     PasswordResetService,
@@ -41,6 +42,9 @@ class MemoryIdentityRepository:
     def get_session(self, token_digest: str) -> AuthenticatedSession | None:
         return self.sessions.get(token_digest)
 
+    def get_google_identity_by_subject(self, subject: str) -> GoogleIdentity | None:
+        return None
+
     def add_user(self, user: User) -> None:
         self.users[user.id] = user
 
@@ -52,6 +56,9 @@ class MemoryIdentityRepository:
 
     def add_session(self, session: AuthenticatedSession) -> None:
         self.sessions[session.token_digest] = session
+
+    def add_google_identity(self, identity: GoogleIdentity) -> None:
+        raise AssertionError("not used by password reset")
 
     def delete_session(self, token_digest: str) -> None:
         self.sessions.pop(token_digest, None)

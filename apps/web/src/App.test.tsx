@@ -293,6 +293,21 @@ it("renders a password-protected Formik login form", async () => {
   expect(screen.getByLabelText("Email")).toBeInTheDocument();
   expect(screen.getByLabelText("Пароль")).toHaveAttribute("type", "password");
   expect(screen.getByRole("button", { name: "Увійти" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Продовжити з Google" })).toHaveAttribute(
+    "href",
+    "/api/auth/google/start",
+  );
+});
+
+it("shows a controlled error banner when Google sign-in fails", async () => {
+  window.history.replaceState({}, "", "/login?error=google_auth_failed");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(sessionResponse(false)));
+
+  render(<App />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Не вдалося увійти через Google.",
+  );
 });
 
 it("keeps required and email validation inside Formik without submitting", async () => {

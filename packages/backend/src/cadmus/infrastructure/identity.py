@@ -23,6 +23,7 @@ from cadmus.identity import (
     AccountStatus,
     AuthenticatedSession,
     DuplicateEmailError,
+    GoogleIdentity,
     IdentityUnitOfWorkFactory,
     PasswordResetToken,
     User,
@@ -37,7 +38,7 @@ users = Table(
     metadata,
     Column("id", Uuid(as_uuid=True), primary_key=True),
     Column("email", String(254), nullable=False, unique=True),
-    Column("password_hash", String(255), nullable=False),
+    Column("password_hash", String(255), nullable=True),
     Column(
         "status",
         Enum(
@@ -106,10 +107,27 @@ authenticated_sessions = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+google_identities = Table(
+    "google_identities",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "user_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("subject", String(255), nullable=False, unique=True),
+    Column("email", String(254), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+
 identity_registry.map_imperatively(User, users)
 identity_registry.map_imperatively(VerificationToken, verification_tokens)
 identity_registry.map_imperatively(PasswordResetToken, password_reset_tokens)
 identity_registry.map_imperatively(AuthenticatedSession, authenticated_sessions)
+identity_registry.map_imperatively(GoogleIdentity, google_identities)
 
 
 class SqlAlchemyIdentityRepository:
@@ -147,6 +165,11 @@ class SqlAlchemyIdentityRepository:
             )
         )
 
+    def get_google_identity_by_subject(self, subject: str) -> GoogleIdentity | None:
+        return self._session.scalar(
+            select(GoogleIdentity).where(google_identities.c.subject == subject)
+        )
+
     def add_user(self, user: User) -> None:
         self._session.add(user)
         try:
@@ -163,6 +186,9 @@ class SqlAlchemyIdentityRepository:
 
     def add_session(self, session: AuthenticatedSession) -> None:
         self._session.add(session)
+
+    def add_google_identity(self, identity: GoogleIdentity) -> None:
+        self._session.add(identity)
 
     def delete_session(self, token_digest: str) -> None:
         self._session.execute(

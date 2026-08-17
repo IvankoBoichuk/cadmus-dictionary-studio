@@ -1,12 +1,14 @@
 """Application-owned ports for identity infrastructure."""
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
 from cadmus.identity.domain import (
     AuthenticatedSession,
+    GoogleIdentity,
     PasswordResetToken,
     User,
     VerificationToken,
@@ -28,6 +30,8 @@ class IdentityRepository(Protocol):
 
     def get_session(self, token_digest: str) -> AuthenticatedSession | None: ...
 
+    def get_google_identity_by_subject(self, subject: str) -> GoogleIdentity | None: ...
+
     def add_user(self, user: User) -> None: ...
 
     def add_verification_token(self, token: VerificationToken) -> None: ...
@@ -35,6 +39,8 @@ class IdentityRepository(Protocol):
     def add_password_reset_token(self, token: PasswordResetToken) -> None: ...
 
     def add_session(self, session: AuthenticatedSession) -> None: ...
+
+    def add_google_identity(self, identity: GoogleIdentity) -> None: ...
 
     def delete_session(self, token_digest: str) -> None: ...
 
@@ -100,3 +106,28 @@ class EmailSender(Protocol):
     def send_verification(self, recipient: str, verification_url: str) -> None: ...
 
     def send_password_reset(self, recipient: str, reset_url: str) -> None: ...
+
+
+class GoogleOAuthError(Exception):
+    """A Google authorization-code exchange or ID-token verification failure."""
+
+
+@dataclass(frozen=True)
+class GoogleIdentityClaims:
+    """Verified identity claims extracted from a Google ID token."""
+
+    subject: str
+    email: str
+    email_verified: bool
+
+
+class GoogleOAuthClient(Protocol):
+    """Boundary for the Google OAuth 2.0 / OIDC authorization-code exchange."""
+
+    def build_authorization_url(
+        self, state: str, nonce: str, code_challenge: str
+    ) -> str: ...
+
+    def exchange_code(
+        self, code: str, code_verifier: str, expected_nonce: str
+    ) -> GoogleIdentityClaims: ...

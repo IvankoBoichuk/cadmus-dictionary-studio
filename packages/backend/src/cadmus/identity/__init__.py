@@ -18,12 +18,22 @@ from cadmus.identity.application import (
 from cadmus.identity.domain import (
     AccountStatus,
     AuthenticatedSession,
+    GoogleIdentity,
     PasswordResetToken,
     User,
     VerificationToken,
 )
+from cadmus.identity.google_oauth import (
+    GoogleAuthenticationError,
+    GoogleAuthenticationService,
+    GoogleAuthFailure,
+    GoogleLoginChallenge,
+)
 from cadmus.identity.ports import (
     EmailSender,
+    GoogleIdentityClaims,
+    GoogleOAuthClient,
+    GoogleOAuthError,
     IdentityRepository,
     IdentityUnitOfWork,
     IdentityUnitOfWorkFactory,
@@ -43,6 +53,14 @@ __all__ = [
     "AuthenticationService",
     "DuplicateEmailError",
     "EmailSender",
+    "GoogleAuthFailure",
+    "GoogleAuthenticationError",
+    "GoogleAuthenticationService",
+    "GoogleIdentity",
+    "GoogleIdentityClaims",
+    "GoogleLoginChallenge",
+    "GoogleOAuthClient",
+    "GoogleOAuthError",
     "IdentityRepository",
     "IdentityUnitOfWork",
     "IdentityUnitOfWorkFactory",

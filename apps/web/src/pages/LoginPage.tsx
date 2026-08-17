@@ -1,10 +1,13 @@
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 
+import { API_BASE_URL } from "../config";
 import { useLoginForm } from "../hooks/useLoginForm";
 import { useAuth } from "../authContext";
 
 function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
   const form = useLoginForm();
+  const [searchParams] = useSearchParams();
+  const googleAuthFailed = searchParams.get("error") === "google_auth_failed";
   const emailError = form.touched.email ? form.errors.email : undefined;
   const passwordError = form.touched.password ? form.errors.password : undefined;
 
@@ -19,6 +22,12 @@ function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
         {sessionUnavailable && (
           <p className="form-error" role="alert">
             Не вдалося перевірити поточну сесію. Ви можете спробувати увійти.
+          </p>
+        )}
+        {googleAuthFailed && (
+          <p className="form-error" role="alert">
+            Не вдалося увійти через Google. Спробуйте ще раз або скористайтеся
+            email і паролем.
           </p>
         )}
         <form noValidate onSubmit={form.handleSubmit}>
@@ -68,6 +77,10 @@ function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
             {form.isSubmitting ? "Входимо…" : "Увійти"}
           </button>
         </form>
+        <p className="oauth-divider">або</p>
+        <a className="google-oauth-button" href={`${API_BASE_URL}/auth/google/start`}>
+          Продовжити з Google
+        </a>
       </section>
     </main>
   );

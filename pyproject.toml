@@ -38,3 +38,7 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["pypdfium2", "pypdfium2.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["authlib", "authlib.*"]
+ignore_missing_imports = true

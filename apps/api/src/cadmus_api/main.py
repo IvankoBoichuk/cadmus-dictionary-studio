@@ -8,12 +8,14 @@ from cadmus.config import Settings
 from cadmus.geography import GeographyQueryService
 from cadmus.identity import (
     AuthenticationService,
+    GoogleAuthenticationService,
     PasswordResetService,
     RegistrationService,
 )
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.email import SmtpEmailSender
 from cadmus.infrastructure.geography import create_geography_unit_of_work_factory
+from cadmus.infrastructure.google_oauth import AuthlibGoogleOAuthClient
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.security import (
@@ -48,6 +50,7 @@ from cadmus_api.routes.abbreviations import create_abbreviations_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
 from cadmus_api.routes.geography import create_geography_router
+from cadmus_api.routes.google_oauth import create_google_oauth_router
 from cadmus_api.routes.health import create_health_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.settlements import create_settlements_router
@@ -61,6 +64,7 @@ def create_app(
     object_storage: ObjectStorage | None = None,
     registration_service: RegistrationService | None = None,
     authentication_service: AuthenticationService | None = None,
+    google_authentication_service: GoogleAuthenticationService | None = None,
     password_reset_service: PasswordResetService | None = None,
     upload_dictionary_service: UploadDictionaryService | None = None,
     save_dictionary_metadata_service: SaveDictionaryMetadataService | None = None,
@@ -132,6 +136,22 @@ def create_app(
             session_lifetime=timedelta(hours=app_settings.session_lifetime_hours),
         )
     )
+    app.state.google_authentication_service = google_authentication_service
+    if app.state.google_authentication_service is None and (
+        app_settings.google_oauth_client_id is not None
+        and app_settings.google_oauth_client_secret is not None
+        and app_settings.google_oauth_redirect_url is not None
+    ):
+        app.state.google_authentication_service = GoogleAuthenticationService(
+            unit_of_work_factory=unit_of_work_factory,
+            google_oauth_client=AuthlibGoogleOAuthClient(
+                client_id=app_settings.google_oauth_client_id,
+                client_secret=app_settings.google_oauth_client_secret.get_secret_value(),
+                redirect_url=app_settings.google_oauth_redirect_url,
+                timeout_seconds=app_settings.google_oauth_timeout_seconds,
+            ),
+            authentication_service=app.state.authentication_service,
+        )
     app.state.password_reset_service = (
         password_reset_service
         if password_reset_service is not None
@@ -215,6 +235,16 @@ def create_app(
             secure_cookie=app_settings.environment.value in {"staging", "production"},
         )
     )
+    if app.state.google_authentication_service is not None:
+        app.include_router(
+            create_google_oauth_router(
+                app.state.google_authentication_service,
+                session_lifetime=timedelta(hours=app_settings.session_lifetime_hours),
+                secure_cookie=app_settings.environment.value
+                in {"staging", "production"},
+                public_web_url=app_settings.public_web_url,
+            )
+        )
     app.include_router(create_tasks_router(app.state.task_queue))
     app.include_router(
         create_dictionaries_router(

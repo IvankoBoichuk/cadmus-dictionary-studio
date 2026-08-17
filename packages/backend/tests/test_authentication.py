@@ -11,6 +11,7 @@ from cadmus.identity import (
     AuthenticationError,
     AuthenticationFailure,
     AuthenticationService,
+    GoogleIdentity,
     PasswordResetToken,
     User,
     VerificationToken,
@@ -40,6 +41,9 @@ class MemoryIdentityRepository:
     def get_session(self, token_digest: str) -> AuthenticatedSession | None:
         return self.sessions.get(token_digest)
 
+    def get_google_identity_by_subject(self, subject: str) -> GoogleIdentity | None:
+        return None
+
     def add_user(self, user: User) -> None:
         self.users[user.id] = user
 
@@ -51,6 +55,9 @@ class MemoryIdentityRepository:
 
     def add_session(self, session: AuthenticatedSession) -> None:
         self.sessions[session.token_digest] = session
+
+    def add_google_identity(self, identity: GoogleIdentity) -> None:
+        raise AssertionError("not used by authentication")
 
     def delete_session(self, token_digest: str) -> None:
         self.sessions.pop(token_digest, None)
@@ -182,6 +189,19 @@ def test_login_rejects_unverified_account_only_after_password_matches() -> None:
         service.login(user.email, "wrong-password")
     assert wrong_password.value.reason is AuthenticationFailure.INVALID_CREDENTIALS
     assert repository.sessions == {}
+
+
+def test_issue_session_creates_a_session_without_checking_credentials() -> None:
+    user = active_user()
+    repository = MemoryIdentityRepository(users={user.id: user})
+
+    result = create_service(repository).issue_session(user)
+
+    assert result.user is user
+    assert result.session_token == "raw-session-token"
+    session = repository.sessions[sha256(b"raw-session-token").hexdigest()]
+    assert session.user_id == user.id
+    assert session.expires_at == NOW + timedelta(hours=8)
 
 
 def test_authenticate_resolves_valid_session_and_rejects_expired_session() -> None:

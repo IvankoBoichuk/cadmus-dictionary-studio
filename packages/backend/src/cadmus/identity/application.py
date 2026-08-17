@@ -128,7 +128,6 @@ class AuthenticationService:
     def login(self, email: str, password: str) -> LoginResult:
         """Create a session only for valid credentials on an active account."""
         normalized_email = email.strip().casefold()
-        now = self._clock()
 
         with self._unit_of_work_factory() as unit_of_work:
             user = unit_of_work.users.get_user_by_email(normalized_email)
@@ -141,6 +140,12 @@ class AuthenticationService:
             if user.status is not AccountStatus.ACTIVE:
                 raise AuthenticationError(AuthenticationFailure.UNVERIFIED_ACCOUNT)
 
+        return self.issue_session(user)
+
+    def issue_session(self, user: User) -> LoginResult:
+        """Create a new server-side session for an already-authenticated user."""
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
             raw_token, token_digest = self._session_token_provider.issue()
             session = AuthenticatedSession(
                 id=uuid4(),

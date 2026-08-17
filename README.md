@@ -125,6 +125,33 @@ Start only the local inbox with `make mailpit-up`. Production deployments must
 override the SMTP settings and public web URL; Mailpit is a development and test
 dependency, not a production mail delivery service.
 
+## Google sign-in (BH-188)
+
+"Продовжити з Google" on `/login` is optional: the API only mounts the
+`/auth/google/*` routes when `CADMUS_GOOGLE_OAUTH_CLIENT_ID`,
+`CADMUS_GOOGLE_OAUTH_CLIENT_SECRET`, and `CADMUS_GOOGLE_OAUTH_REDIRECT_URL` are
+all set, so `docker compose up` works out of the box without Google
+credentials.
+
+To enable it locally:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   create an OAuth 2.0 Client ID of type "Web application".
+2. Add `http://localhost:5173/api/auth/google/callback` as an authorized
+   redirect URI (adjust the host/port if you override `CADMUS_WEB_PORT`). This
+   is the browser-facing address — Compose's `web` nginx proxies `/api/*` to
+   the `api` service, so Google must redirect here, not directly to the API
+   container.
+3. Copy `.env.example` to `.env` and set `CADMUS_GOOGLE_OAUTH_CLIENT_ID`,
+   `CADMUS_GOOGLE_OAUTH_CLIENT_SECRET`, and `CADMUS_GOOGLE_OAUTH_REDIRECT_URL`
+   from the client you just created.
+4. Restart the API: `docker compose up -d api`.
+
+A first-time Google sign-in creates an `active` account with no password (the
+email is already verified by Google). If a password account with the same
+verified email already exists, the Google identity is linked to it instead of
+creating a duplicate.
+
 ## MinIO and S3-compatible object storage
 
 The local S3 API is published at `http://localhost:9000`; the administration
@@ -330,6 +357,9 @@ have safe local defaults:
 | `CADMUS_SMTP_USE_TLS` | `false` | enable SMTP STARTTLS |
 | `CADMUS_EMAIL_FROM` | `Cadmus <noreply@cadmus.local>` | verification message sender |
 | `CADMUS_MAILPIT_UI_PORT` | `8025` | local Mailpit inbox port |
+| `CADMUS_GOOGLE_OAUTH_CLIENT_ID` | unset | Google OAuth 2.0 client ID; leave unset to disable Google sign-in |
+| `CADMUS_GOOGLE_OAUTH_CLIENT_SECRET` | unset | Google OAuth 2.0 client secret |
+| `CADMUS_GOOGLE_OAUTH_REDIRECT_URL` | unset | browser-facing callback URL registered with Google, e.g. `http://localhost:5173/api/auth/google/callback` |
 | `CADMUS_DATABASE_NAME` | `cadmus` | PostgreSQL database name |
 | `CADMUS_DATABASE_USER` | `cadmus` | PostgreSQL user |
 | `CADMUS_DATABASE_PASSWORD` | `cadmus-local` | local-only password; override outside local development |
