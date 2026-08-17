@@ -217,6 +217,18 @@ class DictionaryNotReadyError(ValueError):
         self.blockers = list(blockers)
 
 
+class PageRangeValidationError(ValueError):
+    """Field-addressable BH-28 page-range validation errors (AC4, AC5)."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("page ranges are invalid")
+        self.errors = dict(errors)
+
+
+class PageRangesUnavailableError(ValueError):
+    """Raised when ranges are saved before the PDF's page count is known."""
+
+
 @dataclass
 class Contributor:
     """An ordered author or compiler entry belonging to one dictionary."""
@@ -304,6 +316,22 @@ class DictionarySettlementMapping:
     koatuu: str | None = None
     confirmed_by: UUID | None = None
     confirmed_at: datetime | None = None
+
+
+@dataclass
+class DictionaryPageRange:
+    """One BH-28 physical-page-index range of dictionary entries to process.
+
+    ``start_page``/``end_page`` are 1-based, inclusive, and refer to the
+    PDF's physical page index — never the printed page number shown on the
+    page itself (see ``DictionaryPage.printed_page_number`` for that).
+    """
+
+    id: UUID
+    dictionary_id: UUID
+    start_page: int
+    end_page: int
+    position: int
 
 
 @dataclass
@@ -455,14 +483,16 @@ class ReadinessBlocker:
 
 
 def readiness_blockers(
-    dictionary: Dictionary, source_file: SourceFile | None
+    dictionary: Dictionary,
+    source_file: SourceFile | None,
+    page_ranges: Sequence[DictionaryPageRange] | None = None,
 ) -> list[ReadinessBlocker]:
     """List every reason ``dictionary`` cannot become ``configured`` (AC4).
 
-    Combines BH-27's required metadata with BH-26's PDF availability. Page
-    range validation (BH-28) does not exist yet in this codebase; extend
-    this list once that Story lands instead of adding a second readiness
-    check elsewhere.
+    Combines BH-27's required metadata, BH-26's PDF availability, and
+    BH-28's page ranges. ``page_ranges`` defaults to ``None`` (treated as
+    "none configured") only to keep call sites that predate BH-28 valid;
+    every current caller passes the dictionary's actual list.
     """
     blockers = [
         ReadinessBlocker(code=field, message=_MISSING_FIELD_MESSAGES[field])
@@ -486,6 +516,13 @@ def readiness_blockers(
             ReadinessBlocker(
                 code="source_not_verified",
                 message="Перевірка PDF ще триває. Зачекайте на її завершення.",
+            )
+        )
+    if not page_ranges:
+        blockers.append(
+            ReadinessBlocker(
+                code="page_ranges_missing",
+                message="Вкажіть щонайменше один діапазон сторінок для обробки.",
             )
         )
     return blockers
@@ -651,3 +688,67 @@ def validate_settlement_mapping_fields(
 def settlement_mapping_duplicate_key(source_label: str) -> str:
     """Normalize the field used to detect a duplicate mapping (trim-only)."""
     return source_label.strip()
+
+
+@dataclass(frozen=True)
+class PageRangeInput:
+    """One BH-28 page range as submitted by the client, pre-persistence."""
+
+    start_page: int
+    end_page: int
+
+
+def validate_page_ranges(
+    ranges: Sequence[PageRangeInput], *, page_count: int
+) -> dict[str, str]:
+    """Validate each range's PDF bounds (AC4) and start/end order (AC5).
+
+    Errors are keyed ``ranges.<index>.<field>`` so the client can address
+    the specific row and field that failed.
+    """
+    errors: dict[str, str] = {}
+    for index, page_range in enumerate(ranges):
+        start_key = f"ranges.{index}.start_page"
+        end_key = f"ranges.{index}.end_page"
+        if page_range.start_page < 1 or page_range.start_page > page_count:
+            errors[start_key] = (
+                f"Початкова сторінка має бути в межах від 1 до {page_count}."
+            )
+        if page_range.end_page < 1 or page_range.end_page > page_count:
+            errors[end_key] = (
+                f"Кінцева сторінка має бути в межах від 1 до {page_count}."
+            )
+        if (
+            start_key not in errors
+            and end_key not in errors
+            and page_range.start_page > page_range.end_page
+        ):
+            errors[end_key] = "Кінцева сторінка має бути не меншою за початкову."
+    return errors
+
+
+def normalize_page_ranges(
+    ranges: Sequence[PageRangeInput],
+) -> tuple[list[PageRangeInput], bool]:
+    """Merge overlapping or duplicate ranges into their union (AC6).
+
+    Only genuine overlaps (sharing at least one page) are merged; merely
+    adjacent ranges (e.g. ``1-10`` and ``11-20``) are kept distinct since no
+    page would otherwise be processed twice. Returns the merged, sorted
+    list and whether any merge actually happened, so the caller can surface
+    an explicit notice.
+    """
+    if not ranges:
+        return [], False
+    ordered = sorted(ranges, key=lambda r: (r.start_page, r.end_page))
+    merged: list[PageRangeInput] = [ordered[0]]
+    changed = False
+    for current in ordered[1:]:
+        last = merged[-1]
+        if current.start_page <= last.end_page:
+            changed = True
+            if current.end_page > last.end_page:
+                merged[-1] = PageRangeInput(last.start_page, current.end_page)
+        else:
+            merged.append(current)
+    return merged, changed

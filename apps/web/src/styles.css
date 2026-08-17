@@ -436,6 +436,33 @@ h1 {
   opacity: 0.4;
 }
 
+.page-range-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page-range-row {
+  display: grid;
+  grid-template-columns: 6rem auto 6rem auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.page-range-row input {
+  min-height: 2.6rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #9aa7a1;
+  border-radius: 0.5rem;
+  font: inherit;
+}
+
+.page-range-row .field-error {
+  grid-column: 1 / -1;
+}
+
 .language-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));

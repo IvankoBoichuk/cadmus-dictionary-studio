@@ -6,6 +6,7 @@ from cadmus.sources import (
     ContributorRole,
     Dictionary,
     DictionaryLanguage,
+    DictionaryPageRange,
     DictionaryStatus,
     InspectionStatus,
     LegalStatus,
@@ -16,10 +17,13 @@ from cadmus.sources import (
 )
 from cadmus.sources.domain import (
     Contributor,
+    PageRangeInput,
     apply_status_after_edit,
     normalize_isbn,
+    normalize_page_ranges,
     validate_isbn,
     validate_legal_status,
+    validate_page_ranges,
     validate_publication_year,
 )
 
@@ -42,6 +46,18 @@ def _source_file(**overrides: object) -> SourceFile:
     }
     defaults.update(overrides)
     return SourceFile(**defaults)  # type: ignore[arg-type]
+
+
+def _page_ranges(dictionary_id: object = None) -> list[DictionaryPageRange]:
+    return [
+        DictionaryPageRange(
+            id=uuid4(),
+            dictionary_id=dictionary_id or uuid4(),  # type: ignore[arg-type]
+            start_page=1,
+            end_page=2,
+            position=0,
+        )
+    ]
 
 
 def _dictionary(**overrides: object) -> Dictionary:
@@ -101,16 +117,16 @@ def _ready_dictionary(**overrides: object) -> Dictionary:
     return dictionary
 
 
-def test_readiness_blockers_empty_once_metadata_and_source_are_ready() -> None:
+def test_readiness_blockers_empty_once_metadata_source_and_ranges_are_ready() -> None:
     dictionary = _ready_dictionary()
 
-    assert readiness_blockers(dictionary, _source_file()) == []
+    assert readiness_blockers(dictionary, _source_file(), _page_ranges()) == []
 
 
 def test_readiness_blockers_reports_missing_source_file() -> None:
     dictionary = _ready_dictionary()
 
-    blockers = readiness_blockers(dictionary, None)
+    blockers = readiness_blockers(dictionary, None, _page_ranges())
 
     assert [b.code for b in blockers] == ["source_missing"]
 
@@ -119,7 +135,7 @@ def test_readiness_blockers_reports_unverified_source() -> None:
     dictionary = _ready_dictionary()
     source = _source_file(inspection_status=InspectionStatus.PENDING)
 
-    blockers = readiness_blockers(dictionary, source)
+    blockers = readiness_blockers(dictionary, source, _page_ranges())
 
     assert [b.code for b in blockers] == ["source_not_verified"]
 
@@ -128,21 +144,39 @@ def test_readiness_blockers_reports_failed_source() -> None:
     dictionary = _ready_dictionary()
     source = _source_file(inspection_status=InspectionStatus.FAILED)
 
-    blockers = readiness_blockers(dictionary, source)
+    blockers = readiness_blockers(dictionary, source, _page_ranges())
 
     assert [b.code for b in blockers] == ["source_invalid"]
 
 
-def test_readiness_blockers_combines_metadata_and_source_gaps() -> None:
+def test_readiness_blockers_reports_missing_page_ranges() -> None:
+    dictionary = _ready_dictionary()
+
+    blockers = readiness_blockers(dictionary, _source_file(), [])
+
+    assert [b.code for b in blockers] == ["page_ranges_missing"]
+
+
+def test_readiness_blockers_treats_omitted_page_ranges_as_missing() -> None:
+    """The ``page_ranges=None`` default only exists for pre-BH-28 call sites."""
+    dictionary = _ready_dictionary()
+
+    blockers = readiness_blockers(dictionary, _source_file())
+
+    assert [b.code for b in blockers] == ["page_ranges_missing"]
+
+
+def test_readiness_blockers_combines_metadata_source_and_range_gaps() -> None:
     dictionary = _dictionary()
 
-    blockers = readiness_blockers(dictionary, None)
+    blockers = readiness_blockers(dictionary, None, [])
 
     assert [b.code for b in blockers] == [
         "title",
         "languages",
         "legal_status",
         "source_missing",
+        "page_ranges_missing",
     ]
 
 
@@ -159,7 +193,7 @@ def test_apply_status_after_edit_leaves_configured_untouched_when_ready() -> Non
     dictionary = _ready_dictionary(status=DictionaryStatus.CONFIGURED)
 
     reverted = apply_status_after_edit(
-        dictionary, readiness_blockers(dictionary, _source_file())
+        dictionary, readiness_blockers(dictionary, _source_file(), _page_ranges())
     )
 
     assert reverted is False
@@ -187,7 +221,7 @@ def test_readiness_blockers_treats_a_plain_string_inspection_status_as_verified(
     source = _source_file()
     source.inspection_status = "verified"  # type: ignore[assignment]
 
-    assert readiness_blockers(dictionary, source) == []
+    assert readiness_blockers(dictionary, source, _page_ranges()) == []
 
 
 def test_apply_status_after_edit_treats_a_plain_string_status_as_configured() -> None:
@@ -302,3 +336,97 @@ def test_contributor_role_enum_supports_author_and_compiler() -> None:
         position=0,
     )
     assert contributor.role is ContributorRole.COMPILER
+
+
+def test_validate_page_ranges_accepts_ranges_within_bounds() -> None:
+    ranges = [PageRangeInput(10, 220), PageRangeInput(225, 310)]
+
+    assert validate_page_ranges(ranges, page_count=310) == {}
+
+
+def test_validate_page_ranges_rejects_start_page_below_one() -> None:
+    errors = validate_page_ranges([PageRangeInput(0, 5)], page_count=100)
+
+    assert "ranges.0.start_page" in errors
+    assert "ranges.0.end_page" not in errors
+
+
+def test_validate_page_ranges_rejects_end_page_beyond_pdf() -> None:
+    errors = validate_page_ranges([PageRangeInput(1, 101)], page_count=100)
+
+    assert "ranges.0.end_page" in errors
+
+
+def test_validate_page_ranges_rejects_start_after_end() -> None:
+    errors = validate_page_ranges([PageRangeInput(50, 10)], page_count=100)
+
+    assert errors == {
+        "ranges.0.end_page": "Кінцева сторінка має бути не меншою за початкову."
+    }
+
+
+def test_validate_page_ranges_addresses_each_offending_row_independently() -> None:
+    ranges = [PageRangeInput(1, 10), PageRangeInput(0, 999), PageRangeInput(20, 30)]
+
+    errors = validate_page_ranges(ranges, page_count=100)
+
+    assert set(errors) == {"ranges.1.start_page", "ranges.1.end_page"}
+
+
+def test_normalize_page_ranges_of_an_empty_list() -> None:
+    assert normalize_page_ranges([]) == ([], False)
+
+
+def test_normalize_page_ranges_sorts_distinct_ranges_without_flagging_a_merge() -> None:
+    ranges = [PageRangeInput(225, 310), PageRangeInput(10, 220)]
+
+    merged, changed = normalize_page_ranges(ranges)
+
+    assert merged == [PageRangeInput(10, 220), PageRangeInput(225, 310)]
+    assert changed is False
+
+
+def test_normalize_page_ranges_keeps_merely_adjacent_ranges_distinct() -> None:
+    """No page is shared, so ``1-10`` and ``11-20`` must not collapse (AC6)."""
+    ranges = [PageRangeInput(1, 10), PageRangeInput(11, 20)]
+
+    merged, changed = normalize_page_ranges(ranges)
+
+    assert merged == [PageRangeInput(1, 10), PageRangeInput(11, 20)]
+    assert changed is False
+
+
+def test_normalize_page_ranges_merges_overlapping_ranges() -> None:
+    ranges = [PageRangeInput(1, 10), PageRangeInput(8, 20)]
+
+    merged, changed = normalize_page_ranges(ranges)
+
+    assert merged == [PageRangeInput(1, 20)]
+    assert changed is True
+
+
+def test_normalize_page_ranges_merges_exact_duplicates() -> None:
+    ranges = [PageRangeInput(5, 15), PageRangeInput(5, 15)]
+
+    merged, changed = normalize_page_ranges(ranges)
+
+    assert merged == [PageRangeInput(5, 15)]
+    assert changed is True
+
+
+def test_normalize_page_ranges_drops_a_fully_contained_range() -> None:
+    ranges = [PageRangeInput(1, 100), PageRangeInput(10, 20)]
+
+    merged, changed = normalize_page_ranges(ranges)
+
+    assert merged == [PageRangeInput(1, 100)]
+    assert changed is True
+
+
+def test_normalize_page_ranges_merges_only_the_overlapping_pair() -> None:
+    ranges = [PageRangeInput(1, 10), PageRangeInput(5, 15), PageRangeInput(50, 60)]
+
+    merged, changed = normalize_page_ranges(ranges)
+
+    assert merged == [PageRangeInput(1, 15), PageRangeInput(50, 60)]
+    assert changed is True

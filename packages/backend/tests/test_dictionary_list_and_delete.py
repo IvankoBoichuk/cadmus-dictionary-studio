@@ -15,6 +15,7 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     DictionaryStatus,
     GetDictionaryService,
@@ -210,6 +211,14 @@ class MemorySourcesRepository:
         raise AssertionError("not used by list/delete tests")
 
     def delete_settlement_mapping(self, dictionary_id: UUID, mapping_id: UUID) -> None:
+        raise AssertionError("not used by list/delete tests")
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]:
+        return []
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
+    ) -> None:
         raise AssertionError("not used by list/delete tests")
 
 

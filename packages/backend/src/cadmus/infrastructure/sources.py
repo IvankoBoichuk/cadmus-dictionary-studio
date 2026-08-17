@@ -40,6 +40,7 @@ from cadmus.sources.domain import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     InspectionStatus,
     PagesStatus,
@@ -127,6 +128,24 @@ dictionary_languages = Table(
     ),
     Column("language_code", String(2), nullable=False),
     Column("position", Integer, nullable=False),
+)
+
+dictionary_page_ranges = Table(
+    "dictionary_page_ranges",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "dictionary_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("start_page", Integer, nullable=False),
+    Column("end_page", Integer, nullable=False),
+    Column("position", Integer, nullable=False),
+    CheckConstraint("start_page >= 1", name="dictionary_page_range_start_page"),
+    CheckConstraint("end_page >= start_page", name="dictionary_page_range_end_page"),
 )
 
 dictionary_abbreviations = Table(
@@ -379,6 +398,7 @@ dictionary_events = Table(
 sources_registry.map_imperatively(Dictionary, dictionaries)
 sources_registry.map_imperatively(Contributor, dictionary_contributors)
 sources_registry.map_imperatively(DictionaryLanguage, dictionary_languages)
+sources_registry.map_imperatively(DictionaryPageRange, dictionary_page_ranges)
 sources_registry.map_imperatively(Abbreviation, dictionary_abbreviations)
 sources_registry.map_imperatively(AbbreviationVariant, dictionary_abbreviation_variants)
 sources_registry.map_imperatively(
@@ -474,6 +494,26 @@ class SqlAlchemySourcesRepository:
         )
         for language in languages:
             self._session.add(language)
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]:
+        return list(
+            self._session.scalars(
+                select(DictionaryPageRange)
+                .where(dictionary_page_ranges.c.dictionary_id == dictionary_id)
+                .order_by(dictionary_page_ranges.c.position)
+            )
+        )
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
+    ) -> None:
+        self._session.execute(
+            delete(dictionary_page_ranges).where(
+                dictionary_page_ranges.c.dictionary_id == dictionary_id
+            )
+        )
+        for page_range in ranges:
+            self._session.add(page_range)
 
     def add_event(self, event: DictionaryEvent) -> None:
         self._session.add(event)

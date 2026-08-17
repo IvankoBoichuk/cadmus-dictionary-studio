@@ -34,6 +34,7 @@ from cadmus.sources import (
     GetDictionaryService,
     ObjectStorage,
     SaveDictionaryMetadataService,
+    SavePageRangesService,
     SettlementConfirmationService,
     SettlementMappingCrudService,
     SettlementMappingImportService,
@@ -48,6 +49,7 @@ from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.health import create_health_router
+from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
 
@@ -65,6 +67,7 @@ def create_app(
     get_dictionary_service: GetDictionaryService | None = None,
     delete_dictionary_service: DeleteDictionaryService | None = None,
     dictionary_readiness_service: DictionaryReadinessService | None = None,
+    save_page_ranges_service: SavePageRangesService | None = None,
     abbreviation_crud_service: AbbreviationCrudService | None = None,
     abbreviation_import_service: AbbreviationImportService | None = None,
     geography_query_service: GeographyQueryService | None = None,
@@ -181,6 +184,13 @@ def create_app(
             unit_of_work_factory=sources_unit_of_work_factory,
         )
     )
+    app.state.save_page_ranges_service = (
+        save_page_ranges_service
+        if save_page_ranges_service is not None
+        else SavePageRangesService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -215,6 +225,13 @@ def create_app(
             app.state.object_storage,
             app.state.delete_dictionary_service,
             app.state.dictionary_readiness_service,
+        )
+    )
+    app.include_router(
+        create_page_ranges_router(
+            app.state.authentication_service,
+            app.state.get_dictionary_service,
+            app.state.save_page_ranges_service,
         )
     )
     app.include_router(

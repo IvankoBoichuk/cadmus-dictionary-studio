@@ -86,6 +86,21 @@ export type ConfigureDictionaryNotReadyResponse =
 type ConfigureDictionaryNotFoundResponse =
   ConfigureDictionaryOperation["responses"][404]["content"]["application/json"];
 
+type GetPageRangesOperation =
+  paths["/dictionaries/{dictionary_id}/page-ranges"]["get"];
+export type PageRangesResponse =
+  GetPageRangesOperation["responses"][200]["content"]["application/json"];
+export type PageRange = PageRangesResponse["ranges"][number];
+type PageRangesNotFoundResponse =
+  GetPageRangesOperation["responses"][404]["content"]["application/json"];
+
+type SavePageRangesOperation =
+  paths["/dictionaries/{dictionary_id}/page-ranges"]["put"];
+export type SavePageRangesRequest =
+  SavePageRangesOperation["requestBody"]["content"]["application/json"];
+export type SavePageRangesFieldErrorsResponse =
+  SavePageRangesOperation["responses"][422]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -257,6 +272,19 @@ function postWithoutBody<Success, Failure>(
   });
 }
 
+function put<Body, Success, Failure>(
+  path: keyof paths,
+  body: Body,
+  options: RequestOptions = {},
+): Promise<Success> {
+  return request<Success, Failure>(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+}
+
 function patch<Body, Success, Failure>(
   path: keyof paths,
   body: Body,
@@ -309,6 +337,10 @@ function dictionaryPath(dictionaryId: string): keyof paths {
 
 function dictionaryConfigurePath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/configure` as keyof paths;
+}
+
+function pageRangesPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/page-ranges` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -595,6 +627,30 @@ export const API = {
         DictionaryResponse,
         ConfigureDictionaryNotReadyResponse | ConfigureDictionaryNotFoundResponse
       >(dictionaryConfigurePath(dictionaryId), options);
+    },
+  },
+
+  pageRanges: {
+    get(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<PageRangesResponse> {
+      return get<PageRangesResponse, PageRangesNotFoundResponse>(
+        pageRangesPath(dictionaryId),
+        options,
+      );
+    },
+
+    save(
+      dictionaryId: string,
+      body: SavePageRangesRequest,
+      options?: RequestOptions,
+    ): Promise<PageRangesResponse> {
+      return put<
+        SavePageRangesRequest,
+        PageRangesResponse,
+        SavePageRangesFieldErrorsResponse | PageRangesNotFoundResponse
+      >(pageRangesPath(dictionaryId), body, options);
     },
   },
 

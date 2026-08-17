@@ -14,6 +14,7 @@ from cadmus.sources import (
     DictionaryListEntry,
     DictionaryNotReadyError,
     DictionaryPage,
+    DictionaryPageRange,
     DictionaryReadinessService,
     DictionaryStatus,
     DuplicateSourceError,
@@ -117,6 +118,12 @@ class StubSaveDictionaryMetadataService:
         return self.outcome
 
 
+def _page_range(dictionary_id: UUID) -> DictionaryPageRange:
+    return DictionaryPageRange(
+        id=uuid4(), dictionary_id=dictionary_id, start_page=1, end_page=3, position=0
+    )
+
+
 def _page(source_file_id: UUID, page_index: int = 0) -> DictionaryPage:
     return DictionaryPage(
         id=uuid4(),
@@ -137,6 +144,7 @@ class StubGetDictionaryService:
     access_error: DictionaryAccessError | None = None
     entries: list[DictionaryListEntry] | None = None
     first_page: DictionaryPage | None = None
+    page_ranges: list[DictionaryPageRange] = field(default_factory=list)
 
     def get(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
         if self.access_error is not None:
@@ -150,6 +158,13 @@ class StubGetDictionaryService:
         if self.source_file is None:
             raise DictionaryAccessError(dictionary_id)
         return self.source_file
+
+    def get_page_ranges(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> list[DictionaryPageRange]:
+        if self.access_error is not None:
+            raise self.access_error
+        return self.page_ranges
 
     def list_for_owner(self, owner_id: UUID) -> list[DictionaryListEntry]:
         return self.entries or []
@@ -346,7 +361,9 @@ def test_get_dictionary_returns_full_draft() -> None:
         )
     ]
     service = StubGetDictionaryService(
-        dictionary=dictionary, source_file=_source_file(dictionary.id)
+        dictionary=dictionary,
+        source_file=_source_file(dictionary.id),
+        page_ranges=[_page_range(dictionary.id)],
     )
 
     with client_for(get_service=service) as client:
@@ -479,7 +496,9 @@ def test_list_dictionaries_returns_the_callers_drafts() -> None:
     service = StubGetDictionaryService(
         entries=[
             DictionaryListEntry(
-                dictionary=dictionary, source_file=_source_file(dictionary.id)
+                dictionary=dictionary,
+                source_file=_source_file(dictionary.id),
+                page_ranges=[],
             )
         ]
     )
@@ -574,7 +593,9 @@ def test_configure_dictionary_returns_the_configured_draft() -> None:
     source_file.inspection_status = InspectionStatus.VERIFIED
     service = StubDictionaryReadinessService(dictionary=dictionary)
     get_service = StubGetDictionaryService(
-        dictionary=dictionary, source_file=source_file
+        dictionary=dictionary,
+        source_file=source_file,
+        page_ranges=[_page_range(dictionary.id)],
     )
 
     with client_for(readiness_service=service, get_service=get_service) as client:

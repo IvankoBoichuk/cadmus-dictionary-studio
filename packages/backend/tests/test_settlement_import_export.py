@@ -16,6 +16,7 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     DictionaryStatus,
     SettlementMappingImportService,
@@ -189,6 +190,14 @@ class MemorySourcesRepository:
         self.mappings[mapping.id] = mapping
 
     def delete_settlement_mapping(self, dictionary_id: UUID, mapping_id: UUID) -> None:
+        raise AssertionError("not used by settlement import/export")
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]:
+        raise AssertionError("not used by settlement import/export")
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
+    ) -> None:
         raise AssertionError("not used by settlement import/export")
 
 

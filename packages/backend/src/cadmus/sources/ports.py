@@ -15,6 +15,7 @@ from cadmus.sources.domain import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     SourceFile,
 )
@@ -118,6 +119,12 @@ class SourcesRepository(Protocol):
 
     def delete_settlement_mapping(
         self, dictionary_id: UUID, mapping_id: UUID
+    ) -> None: ...
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]: ...
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
     ) -> None: ...
 
 

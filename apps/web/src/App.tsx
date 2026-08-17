@@ -9,6 +9,7 @@ import { DictionariesList } from "./pages/DictionariesList";
 import { DictionaryFormPage } from "./pages/DictionaryFormPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
+import { PageRangesPage } from "./pages/PageRangesPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SettlementsPage } from "./pages/SettlementsPage";
@@ -73,6 +74,10 @@ export function App() {
             <Route
               path="/dictionaries/:dictionaryId/settlements"
               element={<SettlementsPage />}
+            />
+            <Route
+              path="/dictionaries/:dictionaryId/page-ranges"
+              element={<PageRangesPage />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
