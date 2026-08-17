@@ -28,6 +28,7 @@ from cadmus.sources.domain import (
     DictionaryLanguage,
     DictionaryNotReadyError,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     DictionaryStatus,
     DuplicateAbbreviationError,
@@ -37,6 +38,9 @@ from cadmus.sources.domain import (
     InvalidUploadError,
     LegalStatus,
     MetadataValidationError,
+    PageRangeInput,
+    PageRangesUnavailableError,
+    PageRangeValidationError,
     SettlementMappingAccessError,
     SettlementMappingStatus,
     SettlementMappingValidationError,
@@ -44,11 +48,13 @@ from cadmus.sources.domain import (
     UploadTooLargeError,
     apply_status_after_edit,
     missing_required_fields,
+    normalize_page_ranges,
     readiness_blockers,
     settlement_mapping_duplicate_key,
     validate_abbreviation_fields,
     validate_isbn,
     validate_legal_status,
+    validate_page_ranges,
     validate_publication_year,
     validate_settlement_mapping_fields,
 )
@@ -412,8 +418,9 @@ class SaveDictionaryMetadataService:
 
             previous_status = DictionaryStatus(dictionary.status)
             source_file = unit_of_work.sources.get_source_file(dictionary_id)
+            page_ranges = unit_of_work.sources.list_page_ranges(dictionary_id)
             reverted = apply_status_after_edit(
-                dictionary, readiness_blockers(dictionary, source_file)
+                dictionary, readiness_blockers(dictionary, source_file, page_ranges)
             )
             if reverted:
                 unit_of_work.sources.add_event(
@@ -507,6 +514,7 @@ class DictionaryListEntry:
 
     dictionary: Dictionary
     source_file: SourceFile | None
+    page_ranges: list[DictionaryPageRange]
 
 
 class GetDictionaryService:
@@ -530,6 +538,13 @@ class GetDictionaryService:
                 raise DictionaryAccessError(dictionary_id)
             return source_file
 
+    def get_page_ranges(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> list[DictionaryPageRange]:
+        dictionary = self.get(dictionary_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            return unit_of_work.sources.list_page_ranges(dictionary.id)
+
     def list_for_owner(self, owner_id: UUID) -> list[DictionaryListEntry]:
         """List every dictionary owned by ``owner_id``, newest-updated first."""
         with self._unit_of_work_factory() as unit_of_work:
@@ -538,6 +553,7 @@ class GetDictionaryService:
                 DictionaryListEntry(
                     dictionary=dictionary,
                     source_file=unit_of_work.sources.get_source_file(dictionary.id),
+                    page_ranges=unit_of_work.sources.list_page_ranges(dictionary.id),
                 )
                 for dictionary in dictionaries
             ]
@@ -617,7 +633,8 @@ class DictionaryReadinessService:
                 raise DictionaryAccessError(dictionary_id)
 
             source_file = unit_of_work.sources.get_source_file(dictionary_id)
-            blockers = readiness_blockers(dictionary, source_file)
+            page_ranges = unit_of_work.sources.list_page_ranges(dictionary_id)
+            blockers = readiness_blockers(dictionary, source_file, page_ranges)
             if blockers:
                 raise DictionaryNotReadyError(blockers)
 
@@ -640,6 +657,96 @@ class DictionaryReadinessService:
                 )
             unit_of_work.commit()
         return dictionary
+
+
+@dataclass(frozen=True)
+class PageRangeSaveOutcome:
+    """Result of a BH-28 page-range save: the stored ranges and merge flag."""
+
+    dictionary_id: UUID
+    ranges: list[DictionaryPageRange]
+    merged: bool
+
+
+class SavePageRangesService:
+    """Validate, normalize, and persist BH-28 page ranges for one dictionary."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock
+
+    def save(
+        self,
+        dictionary_id: UUID,
+        actor_id: UUID,
+        inputs: Sequence[PageRangeInput],
+    ) -> PageRangeSaveOutcome:
+        """Replace the dictionary's page ranges with a validated, merged set.
+
+        Requires a source whose page count is already known (AC1); ranges
+        cannot be validated against PDF bounds before that. Mirrors
+        ``SaveDictionaryMetadataService``: clearing or narrowing ranges on a
+        ``configured`` dictionary until it fails readiness reverts it to
+        ``draft`` (BH-31 AC7) rather than being blocked.
+        """
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+
+            source_file = unit_of_work.sources.get_source_file(dictionary_id)
+            if source_file is None or source_file.page_count is None:
+                raise PageRangesUnavailableError(
+                    "the PDF's page count is not known yet"
+                )
+
+            errors = validate_page_ranges(inputs, page_count=source_file.page_count)
+            if errors:
+                raise PageRangeValidationError(errors)
+
+            merged, changed = normalize_page_ranges(inputs)
+            ranges = [
+                DictionaryPageRange(
+                    id=uuid4(),
+                    dictionary_id=dictionary_id,
+                    start_page=page_range.start_page,
+                    end_page=page_range.end_page,
+                    position=position,
+                )
+                for position, page_range in enumerate(merged)
+            ]
+            unit_of_work.sources.replace_page_ranges(dictionary_id, ranges)
+
+            previous_status = DictionaryStatus(dictionary.status)
+            reverted = apply_status_after_edit(
+                dictionary, readiness_blockers(dictionary, source_file, ranges)
+            )
+            if reverted:
+                dictionary.updated_at = now
+                dictionary.updated_by = actor_id
+                unit_of_work.sources.update_dictionary(dictionary)
+                unit_of_work.sources.add_event(
+                    DictionaryEvent(
+                        id=uuid4(),
+                        dictionary_id=dictionary_id,
+                        event_type=DictionaryEventType.STATUS_CHANGED,
+                        actor_user_id=actor_id,
+                        occurred_at=now,
+                        previous_status=previous_status,
+                        new_status=dictionary.status,
+                        reason="page_ranges_no_longer_ready",
+                    )
+                )
+
+            unit_of_work.commit()
+        return PageRangeSaveOutcome(
+            dictionary_id=dictionary_id, ranges=ranges, merged=changed
+        )
 
 
 @dataclass(frozen=True)

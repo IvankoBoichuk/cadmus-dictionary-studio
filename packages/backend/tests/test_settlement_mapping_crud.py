@@ -16,6 +16,7 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     DictionaryStatus,
     DuplicateSettlementMappingError,
@@ -164,6 +165,14 @@ class MemorySourcesRepository:
         item = self.mappings.get(mapping_id)
         if item is not None and item.dictionary_id == dictionary_id:
             del self.mappings[mapping_id]
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]:
+        raise AssertionError("not used by settlement mapping CRUD")
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
+    ) -> None:
+        raise AssertionError("not used by settlement mapping CRUD")
 
 
 class MemorySourcesUnitOfWork:

@@ -15,6 +15,7 @@ from cadmus.sources import (
     Dictionary,
     DictionaryAccessError,
     DictionaryNotReadyError,
+    DictionaryPageRange,
     DictionaryReadinessService,
     DictionaryStatus,
     DuplicateSourceError,
@@ -229,6 +230,7 @@ def _dictionary_response(
     dictionary: Dictionary,
     missing_required_fields: list[str],
     source_file: SourceFile | None = None,
+    page_ranges: list[DictionaryPageRange] | None = None,
 ) -> DictionaryResponse:
     return DictionaryResponse(
         id=dictionary.id,
@@ -258,7 +260,7 @@ def _dictionary_response(
         updated_at=dictionary.updated_at,
         missing_required_fields=missing_required_fields,
         readiness_blockers=_readiness_blocker_responses(
-            readiness_blockers(dictionary, source_file)
+            readiness_blockers(dictionary, source_file, page_ranges)
         ),
         source=_source_file_response(source_file),
     )
@@ -310,6 +312,14 @@ def create_dictionaries_router(
             ) from error
 
     AuthenticatedUser = Annotated[User, Depends(current_user)]
+
+    def _page_ranges_or_empty(
+        dictionary_id: UUID, actor_id: UUID
+    ) -> list[DictionaryPageRange]:
+        try:
+            return get_service.get_page_ranges(dictionary_id, actor_id)
+        except DictionaryAccessError:
+            return []
 
     @router.post(
         "/upload",
@@ -376,6 +386,7 @@ def create_dictionaries_router(
             outcome.dictionary,
             outcome.missing_required_fields,
             outcome.source_file,
+            [],
         )
 
     @router.get(
@@ -390,6 +401,7 @@ def create_dictionaries_router(
                 entry.dictionary,
                 missing_required_fields(entry.dictionary),
                 entry.source_file,
+                entry.page_ranges,
             )
             for entry in get_service.list_for_owner(user.id)
         ]
@@ -431,7 +443,10 @@ def create_dictionaries_router(
         except DictionaryAccessError:
             source_file = None
         return _dictionary_response(
-            dictionary, missing_required_fields(dictionary), source_file
+            dictionary,
+            missing_required_fields(dictionary),
+            source_file,
+            _page_ranges_or_empty(dictionary_id, user.id),
         )
 
     @router.patch(
@@ -486,7 +501,10 @@ def create_dictionaries_router(
         except DictionaryAccessError:
             source_file = None
         return _dictionary_response(
-            outcome.dictionary, outcome.missing_required_fields, source_file
+            outcome.dictionary,
+            outcome.missing_required_fields,
+            source_file,
+            _page_ranges_or_empty(dictionary_id, user.id),
         )
 
     @router.post(
@@ -523,7 +541,10 @@ def create_dictionaries_router(
         except DictionaryAccessError:
             source_file = None
         return _dictionary_response(
-            dictionary, missing_required_fields(dictionary), source_file
+            dictionary,
+            missing_required_fields(dictionary),
+            source_file,
+            _page_ranges_or_empty(dictionary_id, user.id),
         )
 
     @router.get(

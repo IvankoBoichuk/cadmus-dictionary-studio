@@ -280,6 +280,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/page-ranges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a dictionary's page ranges and its PDF page count (AC1) */
+        get: operations["get_page_ranges_dictionaries__dictionary_id__page_ranges_get"];
+        /** Replace a dictionary's page ranges (AC3, AC6, AC7, AC8) */
+        put: operations["save_page_ranges_dictionaries__dictionary_id__page_ranges_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/settlements": {
         parameters: {
             query?: never;
@@ -946,16 +964,6 @@ export interface components {
             message: string;
         };
         /**
-         * FieldErrorsResponse
-         * @description Validation errors addressable by form field.
-         */
-        FieldErrorsResponse: {
-            /** Errors */
-            errors: {
-                [key: string]: string;
-            };
-        };
-        /**
          * ForgotPasswordRequest
          * @description Bounded password-reset request input carried only in a POST body.
          */
@@ -1021,6 +1029,41 @@ export interface components {
         LogoutResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * PageRangeRequest
+         * @description One BH-28 page range as submitted by the client (AC2).
+         */
+        PageRangeRequest: {
+            /** End Page */
+            end_page: number;
+            /** Start Page */
+            start_page: number;
+        };
+        /**
+         * PageRangeResponse
+         * @description One persisted, normalized BH-28 page range.
+         */
+        PageRangeResponse: {
+            /** End Page */
+            end_page: number;
+            /** Start Page */
+            start_page: number;
+        };
+        /**
+         * PageRangesResponse
+         * @description The dictionary's page ranges alongside the PDF's total page count (AC1).
+         */
+        PageRangesResponse: {
+            /**
+             * Merged
+             * @default false
+             */
+            merged: boolean;
+            /** Page Count */
+            page_count: number | null;
+            /** Ranges */
+            ranges: components["schemas"]["PageRangeResponse"][];
         };
         /**
          * PagesStatus
@@ -1162,6 +1205,14 @@ export interface components {
             rights_note?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * SavePageRangesRequest
+         * @description The full replacement set of page ranges for a dictionary (AC3, AC7).
+         */
+        SavePageRangesRequest: {
+            /** Ranges */
+            ranges?: components["schemas"]["PageRangeRequest"][];
         };
         /**
          * SettlementMappingRequest
@@ -1372,6 +1423,16 @@ export interface components {
             message: string;
         };
         /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__abbreviations__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
          * ImportCommitRequest
          * @description The rows the client kept from a preview, to actually persist (AC6).
          */
@@ -1429,6 +1490,46 @@ export interface components {
             };
             /** Row Number */
             row_number: number;
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__auth__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__dictionaries__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by ``ranges.<index>.<field>`` (AC4, AC5).
+         */
+        cadmus_api__routes__page_ranges__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__settlements__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
         };
         /**
          * ImportCommitRequest
@@ -1641,7 +1742,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__auth__FieldErrorsResponse"];
                 };
             };
             /** @description Registration fields are invalid */
@@ -1650,7 +1751,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__auth__FieldErrorsResponse"];
                 };
             };
         };
@@ -1692,7 +1793,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__auth__FieldErrorsResponse"];
                 };
             };
         };
@@ -1876,7 +1977,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__dictionaries__FieldErrorsResponse"];
                 };
             };
         };
@@ -2031,7 +2132,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__dictionaries__FieldErrorsResponse"];
                 };
             };
         };
@@ -2146,7 +2247,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__abbreviations__FieldErrorsResponse"];
                 };
             };
         };
@@ -2424,7 +2525,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__abbreviations__FieldErrorsResponse"];
                 };
             };
         };
@@ -2476,6 +2577,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessBlockersResponse"];
+                };
+            };
+        };
+    };
+    get_page_ranges_dictionaries__dictionary_id__page_ranges_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageRangesResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_page_ranges_dictionaries__dictionary_id__page_ranges_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePageRangesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageRangesResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description One or more ranges are out of bounds or inverted, or the PDF's page count is not known yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__page_ranges__FieldErrorsResponse"];
                 };
             };
         };
@@ -2590,7 +2797,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__settlements__FieldErrorsResponse"];
                 };
             };
         };
@@ -2925,7 +3132,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__settlements__FieldErrorsResponse"];
                 };
             };
         };
@@ -2977,7 +3184,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__settlements__FieldErrorsResponse"];
                 };
             };
         };

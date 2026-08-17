@@ -40,6 +40,9 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
   return (
     <>
       <div className="form-actions">
+        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/page-ranges`}>
+          Налаштувати діапазони сторінок
+        </Link>
         <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/abbreviations`}>
           Налаштувати скорочення словника
         </Link>

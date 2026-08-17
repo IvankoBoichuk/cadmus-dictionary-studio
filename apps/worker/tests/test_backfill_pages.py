@@ -13,6 +13,7 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionaryPageRange,
     DictionarySettlementMapping,
     InspectionStatus,
     PagesStatus,
@@ -163,6 +164,14 @@ class MemorySourcesRepository:
         raise AssertionError("not used by backfill tests")
 
     def delete_settlement_mapping(self, dictionary_id: UUID, mapping_id: UUID) -> None:
+        raise AssertionError("not used by backfill tests")
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]:
+        raise AssertionError("not used by backfill tests")
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
+    ) -> None:
         raise AssertionError("not used by backfill tests")
 
 

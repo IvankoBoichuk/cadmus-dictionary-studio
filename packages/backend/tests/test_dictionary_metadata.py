@@ -19,6 +19,7 @@ from cadmus.sources import (
     DictionaryLanguage,
     DictionaryNotReadyError,
     DictionaryPage,
+    DictionaryPageRange,
     DictionaryReadinessService,
     DictionarySettlementMapping,
     DictionaryStatus,
@@ -41,6 +42,7 @@ class MemorySourcesRepository:
     languages: dict[UUID, list[DictionaryLanguage]] = field(default_factory=dict)
     events: list[DictionaryEvent] = field(default_factory=list)
     source_files: dict[UUID, SourceFile] = field(default_factory=dict)
+    page_ranges: dict[UUID, list[DictionaryPageRange]] = field(default_factory=dict)
 
     def get_dictionary(self, dictionary_id: UUID) -> Dictionary | None:
         dictionary = self.dictionaries.get(dictionary_id)
@@ -80,6 +82,14 @@ class MemorySourcesRepository:
         self, dictionary_id: UUID, languages: Sequence[DictionaryLanguage]
     ) -> None:
         self.languages[dictionary_id] = list(languages)
+
+    def list_page_ranges(self, dictionary_id: UUID) -> list[DictionaryPageRange]:
+        return list(self.page_ranges.get(dictionary_id, []))
+
+    def replace_page_ranges(
+        self, dictionary_id: UUID, ranges: Sequence[DictionaryPageRange]
+    ) -> None:
+        self.page_ranges[dictionary_id] = list(ranges)
 
     def add_event(self, event: DictionaryEvent) -> None:
         self.events.append(event)
@@ -502,7 +512,10 @@ def test_saving_missing_dictionary_raises_access_error_not_found() -> None:
 
 
 def _ready_draft(owner_id: UUID, repository: MemorySourcesRepository) -> Dictionary:
-    """A draft with complete BH-27 metadata and a verified source (BH-31 AC5)."""
+    """A draft with complete BH-27 metadata, a verified source (BH-31 AC5),
+
+    and a BH-28 page range -- everything ``readiness_blockers`` requires.
+    """
     dictionary = _draft(owner_id)
     dictionary.title = "Словник української мови"
     dictionary.legal_status = LegalStatus.PUBLIC_DOMAIN
@@ -513,6 +526,15 @@ def _ready_draft(owner_id: UUID, repository: MemorySourcesRepository) -> Diction
         )
     ]
     repository.source_files[dictionary.id] = _source_file(dictionary.id)
+    repository.page_ranges[dictionary.id] = [
+        DictionaryPageRange(
+            id=uuid4(),
+            dictionary_id=dictionary.id,
+            start_page=1,
+            end_page=3,
+            position=0,
+        )
+    ]
     return dictionary
 
 
