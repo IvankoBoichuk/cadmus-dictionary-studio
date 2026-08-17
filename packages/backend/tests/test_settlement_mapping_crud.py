@@ -5,6 +5,14 @@ from types import TracebackType
 from uuid import UUID, uuid4
 
 import pytest
+from cadmus.geography.domain import (
+    Area,
+    Community,
+    CommunityGeometry,
+    Region,
+    Settlement,
+    SyncRun,
+)
 from cadmus.geography.ports import GeographyRepository
 from cadmus.sources import (
     Abbreviation,
@@ -143,6 +151,7 @@ class MemorySourcesRepository:
         self,
         dictionary_id: UUID,
         source_label_key: str,
+        settlement_id: UUID | None = None,
         exclude_id: UUID | None = None,
     ) -> DictionarySettlementMapping | None:
         for item in self.mappings.values():
@@ -150,6 +159,11 @@ class MemorySourcesRepository:
                 item.dictionary_id == dictionary_id
                 and item.source_label == source_label_key
                 and item.id != exclude_id
+                and (
+                    settlement_id is None
+                    or item.settlement_id is None
+                    or item.settlement_id == settlement_id
+                )
             ):
                 return item
         return None
@@ -210,6 +224,100 @@ class UnusedGeographyUnitOfWork:
         raise AssertionError("not used")
 
 
+_GEOGRAPHY_UNUSED = "not used by BH-191 duplicate-detection tests"
+
+
+@dataclass
+class MemoryGeographyRepository:
+    """Geography cache used by BH-191's cross-settlement duplicate tests."""
+
+    settlements: dict[UUID, Settlement] = field(default_factory=dict)
+    communities: dict[UUID, Community] = field(default_factory=dict)
+
+    def upsert_area(self, area: Area) -> None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def upsert_region(self, region: Region) -> None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def upsert_community(
+        self, community: Community, settlements: Sequence[Settlement]
+    ) -> None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def upsert_geometry(self, geometry: CommunityGeometry) -> None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def find_area_by_external_id(self, external_id: str) -> Area | None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def find_region_by_external_id(self, external_id: str) -> Region | None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def find_community_by_external_id(self, external_id: str) -> Community | None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def get_area(self, area_id: UUID) -> Area | None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def get_region(self, region_id: UUID) -> Region | None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def get_settlement(self, settlement_id: UUID) -> Settlement | None:
+        return self.settlements.get(settlement_id)
+
+    def list_areas(self) -> list[Area]:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def list_regions(self, area_id: UUID | None = None) -> list[Region]:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def list_communities(
+        self, area_id: UUID | None = None, region_id: UUID | None = None
+    ) -> list[Community]:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def search_settlements(
+        self,
+        *,
+        query: str | None,
+        area_id: UUID | None,
+        region_id: UUID | None,
+        community_id: UUID | None,
+        category: str | None,
+        limit: int = 25,
+    ) -> list[tuple[Settlement, Community]]:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def get_community(self, community_id: UUID) -> Community | None:
+        return self.communities.get(community_id)
+
+    def get_community_geometry(self, community_id: UUID) -> CommunityGeometry | None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+    def add_sync_run(self, run: SyncRun) -> None:
+        raise AssertionError(_GEOGRAPHY_UNUSED)
+
+
+class MemoryGeographyUnitOfWork:
+    def __init__(self, repository: MemoryGeographyRepository) -> None:
+        self.geography = repository
+
+    def __enter__(self) -> "MemoryGeographyUnitOfWork":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        pass
+
+    def commit(self) -> None:
+        pass
+
+
 def _dictionary(owner_id: UUID) -> Dictionary:
     return Dictionary(
         id=uuid4(),
@@ -222,11 +330,17 @@ def _dictionary(owner_id: UUID) -> Dictionary:
 
 
 def _service(
-    repository: MemorySourcesRepository, clock: datetime = NOW
+    repository: MemorySourcesRepository,
+    clock: datetime = NOW,
+    geography: MemoryGeographyRepository | None = None,
 ) -> SettlementMappingCrudService:
     return SettlementMappingCrudService(
         unit_of_work_factory=lambda: MemorySourcesUnitOfWork(repository),
-        geography_unit_of_work_factory=lambda: UnusedGeographyUnitOfWork(),
+        geography_unit_of_work_factory=(
+            (lambda: MemoryGeographyUnitOfWork(geography))
+            if geography is not None
+            else (lambda: UnusedGeographyUnitOfWork())
+        ),
         clock=lambda: clock,
     )
 
@@ -305,6 +419,94 @@ def test_duplicate_check_trims_whitespace() -> None:
 
     with pytest.raises(DuplicateSettlementMappingError):
         service.create(dictionary.id, owner_id, _input(source_label="  Іванівка  "))
+
+
+def _settlement(title: str, category: str) -> tuple[Settlement, Community]:
+    community_id = uuid4()
+    community = Community(
+        id=community_id,
+        external_id=str(uuid4()),
+        name=f"{title} ({category}) громада",
+        area_id=uuid4(),
+        region_id=uuid4(),
+        last_synced_at=NOW,
+    )
+    settlement = Settlement(
+        id=uuid4(), community_id=community_id, title=title, category=category
+    )
+    return settlement, community
+
+
+def test_same_label_linked_to_different_settlements_is_not_a_duplicate() -> None:
+    """BH-191: homonym settlements (e.g. "Банилів" village vs. town) must
+    both be addable once each is resolved to its own distinct settlement."""
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _dictionary(owner_id)
+    repository.add_dictionary(dictionary)
+    geography = MemoryGeographyRepository()
+    village, village_community = _settlement("Банилів", "село")
+    town, town_community = _settlement("Банилів", "селище")
+    geography.settlements[village.id] = village
+    geography.communities[village_community.id] = village_community
+    geography.settlements[town.id] = town
+    geography.communities[town_community.id] = town_community
+    service = _service(repository, geography=geography)
+
+    first = service.create(
+        dictionary.id,
+        owner_id,
+        _input(source_label="Банилів", settlement_id=village.id),
+    )
+    second = service.create(
+        dictionary.id,
+        owner_id,
+        _input(source_label="Банилів", settlement_id=town.id),
+    )
+
+    assert first.settlement_id == village.id
+    assert second.settlement_id == town.id
+    assert first.community_id == village_community.id
+    assert second.community_id == town_community.id
+
+
+def test_same_label_linked_to_the_same_settlement_is_still_a_duplicate() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _dictionary(owner_id)
+    repository.add_dictionary(dictionary)
+    geography = MemoryGeographyRepository()
+    village, village_community = _settlement("Банилів", "село")
+    geography.settlements[village.id] = village
+    geography.communities[village_community.id] = village_community
+    service = _service(repository, geography=geography)
+    service.create(
+        dictionary.id,
+        owner_id,
+        _input(source_label="Банилів", settlement_id=village.id),
+    )
+
+    with pytest.raises(DuplicateSettlementMappingError):
+        service.create(
+            dictionary.id,
+            owner_id,
+            _input(source_label="Банилів", settlement_id=village.id),
+        )
+
+
+def test_same_label_still_conflicts_with_an_unresolved_entry() -> None:
+    """A second, not-yet-resolved entry can't tell it apart from an
+    existing one yet, so the original text-only duplicate check still
+    applies until the user actually resolves it to a distinct settlement."""
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _dictionary(owner_id)
+    repository.add_dictionary(dictionary)
+    service = _service(repository)
+    service.create(dictionary.id, owner_id, _input(source_label="Банилів"))
+
+    with pytest.raises(DuplicateSettlementMappingError):
+        service.create(dictionary.id, owner_id, _input(source_label="Банилів"))
 
 
 def test_update_can_change_fields_without_conflicting_with_itself() -> None:

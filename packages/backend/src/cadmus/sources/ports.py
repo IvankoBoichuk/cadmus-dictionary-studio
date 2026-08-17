@@ -106,6 +106,7 @@ class SourcesRepository(Protocol):
         self,
         dictionary_id: UUID,
         source_label_key: str,
+        settlement_id: UUID | None = None,
         exclude_id: UUID | None = None,
     ) -> DictionarySettlementMapping | None: ...
 

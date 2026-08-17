@@ -165,6 +165,7 @@ class MemorySourcesRepository:
         self,
         dictionary_id: UUID,
         source_label_key: str,
+        settlement_id: UUID | None = None,
         exclude_id: UUID | None = None,
     ) -> DictionarySettlementMapping | None:
         for item in self.mappings.values():
@@ -172,6 +173,11 @@ class MemorySourcesRepository:
                 item.dictionary_id == dictionary_id
                 and item.source_label == source_label_key
                 and item.id != exclude_id
+                and (
+                    settlement_id is None
+                    or item.settlement_id is None
+                    or item.settlement_id == settlement_id
+                )
             ):
                 return item
         return None
