@@ -6,7 +6,7 @@ from cadmus.identity import GoogleAuthenticationError, GoogleAuthenticationServi
 from fastapi import APIRouter, Cookie
 from fastapi.responses import RedirectResponse
 
-from cadmus_api.routes.auth import SESSION_COOKIE_NAME
+from cadmus_api.routes.auth import set_session_cookie
 
 STATE_COOKIE_NAME = "cadmus_g_state"
 NONCE_COOKIE_NAME = "cadmus_g_nonce"
@@ -84,14 +84,8 @@ def create_google_oauth_router(
                 response = RedirectResponse(
                     f"{frontend_base_url}/dashboard", status_code=302
                 )
-                response.set_cookie(
-                    key=SESSION_COOKIE_NAME,
-                    value=result.session_token,
-                    max_age=int(session_lifetime.total_seconds()),
-                    httponly=True,
-                    secure=secure_cookie,
-                    samesite="lax",
-                    path="/",
+                set_session_cookie(
+                    response, result.session_token, session_lifetime, secure_cookie
                 )
         _clear_oauth_cookies(response)
         return response

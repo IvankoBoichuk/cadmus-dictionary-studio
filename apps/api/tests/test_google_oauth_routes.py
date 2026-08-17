@@ -213,6 +213,11 @@ def test_openapi_documents_google_oauth_routes() -> None:
 def test_google_routes_are_absent_when_not_configured() -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     app = create_app(
+        settings=Settings(
+            google_oauth_client_id=None,
+            google_oauth_client_secret=None,
+            google_oauth_redirect_url=None,
+        ),
         database_engine=engine,
         registration_service=cast(RegistrationService, object()),
         authentication_service=cast(AuthenticationService, object()),

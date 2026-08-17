@@ -9,7 +9,11 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from cadmus.identity.application import AuthenticationService, LoginResult
+from cadmus.identity.application import (
+    AuthenticationService,
+    DuplicateEmailError,
+    LoginResult,
+)
 from cadmus.identity.domain import AccountStatus, GoogleIdentity, User
 from cadmus.identity.ports import (
     GoogleOAuthClient,
@@ -26,6 +30,7 @@ class GoogleAuthFailure(StrEnum):
     TOKEN_EXCHANGE_FAILED = "token_exchange_failed"
     EMAIL_NOT_VERIFIED = "email_not_verified"
     ACCOUNT_INACTIVE = "account_inactive"
+    EMAIL_ALREADY_REGISTERED = "email_already_registered"
 
 
 class GoogleAuthenticationError(ValueError):
@@ -134,7 +139,12 @@ class GoogleAuthenticationService:
                         created_at=now,
                         activated_at=now,
                     )
-                    unit_of_work.users.add_user(user)
+                    try:
+                        unit_of_work.users.add_user(user)
+                    except DuplicateEmailError as error:
+                        raise GoogleAuthenticationError(
+                            GoogleAuthFailure.EMAIL_ALREADY_REGISTERED
+                        ) from error
                 unit_of_work.users.add_google_identity(
                     GoogleIdentity(
                         id=uuid4(),

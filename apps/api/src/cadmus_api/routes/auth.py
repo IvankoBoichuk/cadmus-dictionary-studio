@@ -157,6 +157,24 @@ class PasswordResetErrorResponse(BaseModel):
 SESSION_COOKIE_NAME = "cadmus_session"
 
 
+def set_session_cookie(
+    response: Response,
+    session_token: str,
+    session_lifetime: timedelta,
+    secure_cookie: bool,
+) -> None:
+    """Set the authenticated-session cookie shared by all login flows."""
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_token,
+        max_age=int(session_lifetime.total_seconds()),
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        path="/",
+    )
+
+
 FIELD_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_409_CONFLICT: {
         "model": FieldErrorsResponse,
@@ -219,14 +237,8 @@ def create_auth_router(
                 headers={"Cache-Control": "no-store"},
             )
 
-        response.set_cookie(
-            key=SESSION_COOKIE_NAME,
-            value=result.session_token,
-            max_age=int(session_lifetime.total_seconds()),
-            httponly=True,
-            secure=secure_cookie,
-            samesite="lax",
-            path="/",
+        set_session_cookie(
+            response, result.session_token, session_lifetime, secure_cookie
         )
         response.headers["Cache-Control"] = "no-store"
         return AuthenticatedUserResponse(id=result.user.id, email=result.user.email)
