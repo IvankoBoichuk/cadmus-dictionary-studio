@@ -11,6 +11,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { SettlementsPage } from "./pages/SettlementsPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 
 function HomePage() {
@@ -68,6 +69,10 @@ export function App() {
             <Route
               path="/dictionaries/:dictionaryId/abbreviations"
               element={<AbbreviationsPage />}
+            />
+            <Route
+              path="/dictionaries/:dictionaryId/settlements"
+              element={<SettlementsPage />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />

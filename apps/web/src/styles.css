@@ -552,6 +552,39 @@ h1 {
   font-size: 0.85rem;
 }
 
+.settlement-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settlement-table th,
+.settlement-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #d6dbd2;
+  text-align: left;
+  vertical-align: top;
+}
+
+.settlement-table th {
+  color: #33443d;
+  font-size: 0.85rem;
+}
+
+.settlement-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settlement-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .table-actions {
   display: flex;
   flex-wrap: wrap;
@@ -571,6 +604,16 @@ h1 {
 .badge--warning {
   color: #7a5b12;
   background: #fbf1da;
+}
+
+.badge--suggested {
+  color: #1d5c8a;
+  background: #e6f0f7;
+}
+
+.badge--confirmed {
+  color: #245847;
+  background: #eaf1ec;
 }
 
 .badge--ok {

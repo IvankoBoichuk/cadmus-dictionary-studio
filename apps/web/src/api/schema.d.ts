@@ -263,6 +263,144 @@ export interface paths {
         patch: operations["update_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__patch"];
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every settlement mapping configured for a dictionary */
+        get: operations["list_mappings_dictionaries__dictionary_id__settlements_get"];
+        put?: never;
+        /** Add a geographic label to a dictionary (AC7) */
+        post: operations["create_mapping_dictionaries__dictionary_id__settlements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export a dictionary's settlement mappings as JSON or CSV */
+        get: operations["export_mappings_dictionaries__dictionary_id__settlements_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Persist the rows kept from a preview */
+        post: operations["commit_import_dictionaries__dictionary_id__settlements_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parse and validate a bulk import file without saving it */
+        post: operations["preview_import_dictionaries__dictionary_id__settlements_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the local settlement cache for a modern equivalent (AC8) */
+        get: operations["search_settlements_dictionaries__dictionary_id__settlements_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/{mapping_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a settlement mapping (AC12) */
+        delete: operations["delete_mapping_dictionaries__dictionary_id__settlements__mapping_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edit an existing settlement mapping (AC12) */
+        patch: operations["update_mapping_dictionaries__dictionary_id__settlements__mapping_id__patch"];
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/{mapping_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a mapping against its linked modern settlement (AC10) */
+        post: operations["confirm_mapping_dictionaries__dictionary_id__settlements__mapping_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/settlements/{mapping_id}/unconfirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revert a confirmed mapping back to unresolved (AC12) */
+        post: operations["unconfirm_mapping_dictionaries__dictionary_id__settlements__mapping_id__unconfirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/source/download": {
         parameters: {
             query?: never;
@@ -289,6 +427,91 @@ export interface paths {
         };
         /** Stream the first rendered page as a thumbnail image */
         get: operations["get_thumbnail_dictionaries__dictionary_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geography/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every synced area (oblast) */
+        get: operations["list_areas_geography_areas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geography/communities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every synced community (hromada), optionally filtered by area and/or region */
+        get: operations["list_communities_geography_communities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geography/communities/{community_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one synced community by its local id */
+        get: operations["get_community_geography_communities__community_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geography/communities/{community_id}/geo_json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one community's cached GeoJSON geometry */
+        get: operations["get_community_geo_json_geography_communities__community_id__geo_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/geography/regions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every synced region (raion), optionally filtered by area */
+        get: operations["list_regions_geography_regions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -427,6 +650,21 @@ export interface components {
          */
         ActivationFailure: "invalid" | "expired" | "used";
         /**
+         * AreaResponse
+         * @description One synced oblast.
+         */
+        AreaResponse: {
+            /** External Id */
+            external_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * AuthenticatedUserResponse
          * @description Non-sensitive identity details for an authenticated browser.
          */
@@ -459,10 +697,75 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_preview_import_dictionaries__dictionary_id__settlements_import_preview_post */
+        Body_preview_import_dictionaries__dictionary_id__settlements_import_preview_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_dictionaries_upload_post */
         Body_upload_dictionaries_upload_post: {
             /** File */
             file: string;
+        };
+        /**
+         * CommunityGeometryResponse
+         * @description One community's cached GeoJSON geometry.
+         */
+        CommunityGeometryResponse: {
+            /**
+             * Community Id
+             * Format: uuid
+             */
+            community_id: string;
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Geometry */
+            geometry: {
+                [key: string]: unknown;
+            };
+            /** Geometry Type */
+            geometry_type: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * CommunityResponse
+         * @description One synced territorial hromada.
+         */
+        CommunityResponse: {
+            /** Admin Center Name */
+            admin_center_name: string | null;
+            /**
+             * Area Id
+             * Format: uuid
+             */
+            area_id: string;
+            /** External Id */
+            external_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Katottg */
+            katottg: string | null;
+            /** Koatuu */
+            koatuu: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Region Id
+             * Format: uuid
+             */
+            region_id: string;
+            /** Website */
+            website: string | null;
         };
         /**
          * ContributorRequest
@@ -567,6 +870,24 @@ export interface components {
             message: string;
         };
         /**
+         * DuplicateSettlementMappingResponse
+         * @description Structured duplicate warning.
+         */
+        DuplicateSettlementMappingResponse: {
+            /**
+             * Code
+             * @default duplicate_settlement_mapping
+             */
+            code: string;
+            /**
+             * Mapping Id
+             * Format: uuid
+             */
+            mapping_id: string;
+            /** Message */
+            message: string;
+        };
+        /**
          * DuplicateSourceResponse
          * @description Structured duplicate-checksum warning; never discloses other users.
          */
@@ -653,65 +974,6 @@ export interface components {
             version: string;
         };
         /**
-         * ImportCommitRequest
-         * @description The rows the client kept from a preview, to actually persist (AC6).
-         */
-        ImportCommitRequest: {
-            /** Rows */
-            rows: components["schemas"]["AbbreviationRequest"][];
-        };
-        /**
-         * ImportCommitResponse
-         * @description What a commit actually persisted vs. skipped (AC6).
-         */
-        ImportCommitResponse: {
-            /** Imported */
-            imported: components["schemas"]["AbbreviationResponse"][];
-            /** Skipped */
-            skipped: components["schemas"]["ImportSkippedRowResponse"][];
-        };
-        /**
-         * ImportPreviewResponse
-         * @description A parsed-and-validated import file, not yet persisted (AC5).
-         */
-        ImportPreviewResponse: {
-            /** Error Count */
-            error_count: number;
-            /** Rows */
-            rows: components["schemas"]["ImportRowResponse"][];
-            /** Valid Count */
-            valid_count: number;
-        };
-        /**
-         * ImportRowResponse
-         * @description One previewed or committed import row (AC5).
-         */
-        ImportRowResponse: {
-            /** Duplicate Of */
-            duplicate_of?: string | null;
-            /** Errors */
-            errors: {
-                [key: string]: string;
-            };
-            input: components["schemas"]["AbbreviationRequest"] | null;
-            /** Row Number */
-            row_number: number;
-            /** Valid */
-            valid: boolean;
-        };
-        /**
-         * ImportSkippedRowResponse
-         * @description One row that a commit could not persist, with the reason (AC6).
-         */
-        ImportSkippedRowResponse: {
-            /** Errors */
-            errors: {
-                [key: string]: string;
-            };
-            /** Row Number */
-            row_number: number;
-        };
-        /**
          * InspectionStatus
          * @description Lifecycle of the asynchronous, worker-side PDF structural inspection.
          * @enum {string}
@@ -769,6 +1031,26 @@ export interface components {
         QueueUnavailableResponse: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * RegionResponse
+         * @description One synced raion.
+         */
+        RegionResponse: {
+            /**
+             * Area Id
+             * Format: uuid
+             */
+            area_id: string;
+            /** External Id */
+            external_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /**
          * RegistrationRequest
@@ -843,6 +1125,120 @@ export interface components {
             rights_note?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * SettlementMappingRequest
+         * @description One BH-30 settlement mapping submission (AC7, AC11, AC12).
+         *
+         *     Deliberately has no ``status`` field: create/update can only ever
+         *     produce ``unresolved``/``suggested`` mappings (AC9) -- the only way to
+         *     reach ``confirmed`` is the dedicated confirm endpoint below.
+         */
+        SettlementMappingRequest: {
+            /** Modern Settlement Name */
+            modern_settlement_name?: string | null;
+            /** Settlement Category */
+            settlement_category?: string | null;
+            /** Settlement Id */
+            settlement_id?: string | null;
+            /** Source Label */
+            source_label: string;
+            /** Source Note */
+            source_note?: string | null;
+        };
+        /**
+         * SettlementMappingResponse
+         * @description One persisted BH-30 settlement mapping entry.
+         */
+        SettlementMappingResponse: {
+            /** Area Id */
+            area_id: string | null;
+            /** Area Name */
+            area_name: string | null;
+            /** Community Geometry Id */
+            community_geometry_id: string | null;
+            /** Community Id */
+            community_id: string | null;
+            /** Community Name */
+            community_name: string | null;
+            /** Confirmed At */
+            confirmed_at: string | null;
+            /** Confirmed By */
+            confirmed_by: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** External Community Id */
+            external_community_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Katottg */
+            katottg: string | null;
+            /** Koatuu */
+            koatuu: string | null;
+            /** Modern Settlement Name */
+            modern_settlement_name: string | null;
+            /** Region Id */
+            region_id: string | null;
+            /** Region Name */
+            region_name: string | null;
+            /** Settlement Category */
+            settlement_category: string | null;
+            /** Settlement Id */
+            settlement_id: string | null;
+            /** Source Label */
+            source_label: string;
+            /** Source Note */
+            source_note: string | null;
+            status: components["schemas"]["SettlementMappingStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * SettlementMappingStatus
+         * @description BH-30 lifecycle of one dictionary-scoped geographic label mapping.
+         * @enum {string}
+         */
+        SettlementMappingStatus: "unresolved" | "suggested" | "confirmed";
+        /**
+         * SettlementSuggestionResponse
+         * @description One AC8 search result: a settlement flattened with its hierarchy.
+         */
+        SettlementSuggestionResponse: {
+            /**
+             * Area Id
+             * Format: uuid
+             */
+            area_id: string;
+            /** Category */
+            category: string;
+            /**
+             * Community Id
+             * Format: uuid
+             */
+            community_id: string;
+            /** Community Name */
+            community_name: string;
+            /**
+             * Region Id
+             * Format: uuid
+             */
+            region_id: string;
+            /**
+             * Settlement Id
+             * Format: uuid
+             */
+            settlement_id: string;
+            /** Title */
+            title: string;
         };
         /**
          * SourceFileResponse
@@ -937,6 +1333,124 @@ export interface components {
         VerificationResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * ImportCommitRequest
+         * @description The rows the client kept from a preview, to actually persist (AC6).
+         */
+        cadmus_api__routes__abbreviations__ImportCommitRequest: {
+            /** Rows */
+            rows: components["schemas"]["AbbreviationRequest"][];
+        };
+        /**
+         * ImportCommitResponse
+         * @description What a commit actually persisted vs. skipped (AC6).
+         */
+        cadmus_api__routes__abbreviations__ImportCommitResponse: {
+            /** Imported */
+            imported: components["schemas"]["AbbreviationResponse"][];
+            /** Skipped */
+            skipped: components["schemas"]["cadmus_api__routes__abbreviations__ImportSkippedRowResponse"][];
+        };
+        /**
+         * ImportPreviewResponse
+         * @description A parsed-and-validated import file, not yet persisted (AC5).
+         */
+        cadmus_api__routes__abbreviations__ImportPreviewResponse: {
+            /** Error Count */
+            error_count: number;
+            /** Rows */
+            rows: components["schemas"]["cadmus_api__routes__abbreviations__ImportRowResponse"][];
+            /** Valid Count */
+            valid_count: number;
+        };
+        /**
+         * ImportRowResponse
+         * @description One previewed or committed import row (AC5).
+         */
+        cadmus_api__routes__abbreviations__ImportRowResponse: {
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            input: components["schemas"]["AbbreviationRequest"] | null;
+            /** Row Number */
+            row_number: number;
+            /** Valid */
+            valid: boolean;
+        };
+        /**
+         * ImportSkippedRowResponse
+         * @description One row that a commit could not persist, with the reason (AC6).
+         */
+        cadmus_api__routes__abbreviations__ImportSkippedRowResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Row Number */
+            row_number: number;
+        };
+        /**
+         * ImportCommitRequest
+         * @description The rows the client kept from a preview, to actually persist.
+         */
+        cadmus_api__routes__settlements__ImportCommitRequest: {
+            /** Rows */
+            rows: components["schemas"]["SettlementMappingRequest"][];
+        };
+        /**
+         * ImportCommitResponse
+         * @description What a commit actually persisted vs. skipped.
+         */
+        cadmus_api__routes__settlements__ImportCommitResponse: {
+            /** Imported */
+            imported: components["schemas"]["SettlementMappingResponse"][];
+            /** Skipped */
+            skipped: components["schemas"]["cadmus_api__routes__settlements__ImportSkippedRowResponse"][];
+        };
+        /**
+         * ImportPreviewResponse
+         * @description A parsed-and-validated import file, not yet persisted.
+         */
+        cadmus_api__routes__settlements__ImportPreviewResponse: {
+            /** Error Count */
+            error_count: number;
+            /** Rows */
+            rows: components["schemas"]["cadmus_api__routes__settlements__ImportRowResponse"][];
+            /** Valid Count */
+            valid_count: number;
+        };
+        /**
+         * ImportRowResponse
+         * @description One previewed or committed import row.
+         */
+        cadmus_api__routes__settlements__ImportRowResponse: {
+            /** Duplicate Of */
+            duplicate_of?: string | null;
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            input: components["schemas"]["SettlementMappingRequest"] | null;
+            /** Row Number */
+            row_number: number;
+            /** Valid */
+            valid: boolean;
+        };
+        /**
+         * ImportSkippedRowResponse
+         * @description One row that a commit could not persist, with the reason.
+         */
+        cadmus_api__routes__settlements__ImportSkippedRowResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+            /** Row Number */
+            row_number: number;
         };
     };
     responses: never;
@@ -1666,7 +2180,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ImportCommitRequest"];
+                "application/json": components["schemas"]["cadmus_api__routes__abbreviations__ImportCommitRequest"];
             };
         };
         responses: {
@@ -1676,7 +2190,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportCommitResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__abbreviations__ImportCommitResponse"];
                 };
             };
             /** @description The browser has no valid session */
@@ -1731,7 +2245,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportPreviewResponse"];
+                    "application/json": components["schemas"]["cadmus_api__routes__abbreviations__ImportPreviewResponse"];
                 };
             };
             /** @description The browser has no valid session */
@@ -1878,6 +2392,560 @@ export interface operations {
             };
         };
     };
+    list_mappings_dictionaries__dictionary_id__settlements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementMappingResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_mapping_dictionaries__dictionary_id__settlements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementMappingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementMappingResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A mapping with this source label already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateSettlementMappingResponse"];
+                };
+            };
+            /** @description Settlement mapping fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    export_mappings_dictionaries__dictionary_id__settlements_export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_import_dictionaries__dictionary_id__settlements_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["cadmus_api__routes__settlements__ImportCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__settlements__ImportCommitResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_import_dictionaries__dictionary_id__settlements_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_import_dictionaries__dictionary_id__settlements_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__settlements__ImportPreviewResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The file is not well-formed CSV or JSON */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_settlements_dictionaries__dictionary_id__settlements_search_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                area_id?: string | null;
+                region_id?: string | null;
+                community_id?: string | null;
+                category?: string | null;
+            };
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementSuggestionResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_mapping_dictionaries__dictionary_id__settlements__mapping_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                mapping_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_mapping_dictionaries__dictionary_id__settlements__mapping_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                mapping_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementMappingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementMappingResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A mapping with this source label already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateSettlementMappingResponse"];
+                };
+            };
+            /** @description Settlement mapping fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    confirm_mapping_dictionaries__dictionary_id__settlements__mapping_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                mapping_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementMappingResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The mapping has no linked settlement, or it no longer exists in the reference data */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    unconfirm_mapping_dictionaries__dictionary_id__settlements__mapping_id__unconfirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                mapping_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementMappingResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_source_dictionaries__dictionary_id__source_download_get: {
         parameters: {
             query?: never;
@@ -1962,6 +3030,233 @@ export interface operations {
             };
             /** @description The dictionary does not exist or is not owned by the caller */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_areas_geography_areas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AreaResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_communities_geography_communities_get: {
+        parameters: {
+            query?: {
+                area_id?: string | null;
+                region_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_community_geography_communities__community_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                community_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The requested reference-data record does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_community_geo_json_geography_communities__community_id__geo_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                community_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityGeometryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The requested reference-data record does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_regions_geography_regions_get: {
+        parameters: {
+            query?: {
+                area_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

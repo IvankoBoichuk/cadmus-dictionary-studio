@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = False
     smtp_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     email_from: str = Field(default="Cadmus <noreply@cadmus.local>", min_length=3)
+    geography_api_graphql_url: str = Field(
+        default="https://decentralization.ua/graphql", min_length=1
+    )
+    geography_api_rest_base_url: str = Field(
+        default="https://decentralization.ua/api/v1", min_length=1
+    )
+    geography_api_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    geography_api_max_retries: int = Field(default=3, ge=0, le=5)
 
     def sqlalchemy_database_url(self) -> URL:
         """Return the single effective database URL without logging credentials."""

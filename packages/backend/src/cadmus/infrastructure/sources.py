@@ -39,6 +39,7 @@ from cadmus.sources.domain import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionarySettlementMapping,
     InspectionStatus,
     PagesStatus,
     SourceFile,
@@ -180,6 +181,85 @@ dictionary_abbreviation_variants = Table(
     Column("position", Integer, nullable=False),
 )
 
+dictionary_settlement_mappings = Table(
+    "dictionary_settlement_mappings",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "dictionary_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("source_label", String(512), nullable=False),
+    Column("source_note", Text, nullable=True),
+    Column("modern_settlement_name", String(255), nullable=True),
+    Column("settlement_category", String(64), nullable=True),
+    Column(
+        "area_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.geography_areas.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column(
+        "region_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.geography_regions.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column(
+        "community_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.geography_communities.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column(
+        "settlement_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.geography_settlements.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column(
+        "community_geometry_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.geography_community_geometries.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column("area_name", String(255), nullable=True),
+    Column("region_name", String(255), nullable=True),
+    Column("community_name", String(255), nullable=True),
+    Column("external_community_id", String(64), nullable=True),
+    Column("katottg", String(32), nullable=True),
+    Column("koatuu", String(32), nullable=True),
+    Column("status", String(16), nullable=False),
+    Column(
+        "confirmed_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column("confirmed_at", DateTime(timezone=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "created_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "updated_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    CheckConstraint(
+        "status IN ('unresolved', 'suggested', 'confirmed')",
+        name="dictionary_settlement_mapping_status",
+    ),
+)
+
 dictionary_source_files = Table(
     "dictionary_source_files",
     metadata,
@@ -288,6 +368,9 @@ sources_registry.map_imperatively(Contributor, dictionary_contributors)
 sources_registry.map_imperatively(DictionaryLanguage, dictionary_languages)
 sources_registry.map_imperatively(Abbreviation, dictionary_abbreviations)
 sources_registry.map_imperatively(AbbreviationVariant, dictionary_abbreviation_variants)
+sources_registry.map_imperatively(
+    DictionarySettlementMapping, dictionary_settlement_mappings
+)
 sources_registry.map_imperatively(SourceFile, dictionary_source_files)
 sources_registry.map_imperatively(DictionaryPage, dictionary_pages)
 sources_registry.map_imperatively(DictionaryEvent, dictionary_events)
@@ -500,6 +583,55 @@ class SqlAlchemySourcesRepository:
             delete(dictionary_abbreviations).where(
                 dictionary_abbreviations.c.id == abbreviation_id,
                 dictionary_abbreviations.c.dictionary_id == dictionary_id,
+            )
+        )
+
+    def list_settlement_mappings(
+        self, dictionary_id: UUID
+    ) -> list[DictionarySettlementMapping]:
+        return list(
+            self._session.scalars(
+                select(DictionarySettlementMapping)
+                .where(dictionary_settlement_mappings.c.dictionary_id == dictionary_id)
+                .order_by(dictionary_settlement_mappings.c.source_label)
+            )
+        )
+
+    def get_settlement_mapping(
+        self, dictionary_id: UUID, mapping_id: UUID
+    ) -> DictionarySettlementMapping | None:
+        mapping = self._session.get(DictionarySettlementMapping, mapping_id)
+        if mapping is None or mapping.dictionary_id != dictionary_id:
+            return None
+        return mapping
+
+    def find_settlement_mapping_duplicate(
+        self,
+        dictionary_id: UUID,
+        source_label_key: str,
+        exclude_id: UUID | None = None,
+    ) -> DictionarySettlementMapping | None:
+        conditions = [
+            dictionary_settlement_mappings.c.dictionary_id == dictionary_id,
+            dictionary_settlement_mappings.c.source_label == source_label_key,
+        ]
+        if exclude_id is not None:
+            conditions.append(dictionary_settlement_mappings.c.id != exclude_id)
+        return self._session.scalar(
+            select(DictionarySettlementMapping).where(*conditions)
+        )
+
+    def add_settlement_mapping(self, mapping: DictionarySettlementMapping) -> None:
+        self._session.add(mapping)
+
+    def update_settlement_mapping(self, mapping: DictionarySettlementMapping) -> None:
+        self._session.add(mapping)
+
+    def delete_settlement_mapping(self, dictionary_id: UUID, mapping_id: UUID) -> None:
+        self._session.execute(
+            delete(dictionary_settlement_mappings).where(
+                dictionary_settlement_mappings.c.id == mapping_id,
+                dictionary_settlement_mappings.c.dictionary_id == dictionary_id,
             )
         )
 

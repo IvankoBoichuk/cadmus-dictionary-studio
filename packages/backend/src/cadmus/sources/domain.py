@@ -64,6 +64,14 @@ class AbbreviationCategory(StrEnum):
     OTHER = "other"
 
 
+class SettlementMappingStatus(StrEnum):
+    """BH-30 lifecycle of one dictionary-scoped geographic label mapping."""
+
+    UNRESOLVED = "unresolved"
+    SUGGESTED = "suggested"
+    CONFIRMED = "confirmed"
+
+
 class InspectionStatus(StrEnum):
     """Lifecycle of the asynchronous, worker-side PDF structural inspection."""
 
@@ -175,6 +183,31 @@ class DuplicateAbbreviationError(ValueError):
         self.abbreviation = abbreviation
 
 
+class SettlementMappingValidationError(ValueError):
+    """Field-addressable BH-30 settlement mapping validation errors."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("settlement mapping is invalid")
+        self.errors = dict(errors)
+
+
+class SettlementMappingAccessError(LookupError):
+    """Raised for a missing settlement mapping or one outside the dictionary."""
+
+    def __init__(self, mapping_id: UUID) -> None:
+        super().__init__(f"settlement mapping {mapping_id} is not accessible")
+        self.mapping_id = mapping_id
+
+
+class DuplicateSettlementMappingError(ValueError):
+    """Raised when the same (dictionary, source label) already exists."""
+
+    def __init__(self, existing_id: UUID, source_label: str) -> None:
+        super().__init__("a settlement mapping with this label already exists")
+        self.existing_id = existing_id
+        self.source_label = source_label
+
+
 @dataclass
 class Contributor:
     """An ordered author or compiler entry belonging to one dictionary."""
@@ -223,6 +256,45 @@ class Abbreviation:
     language_code: str | None = None
     note: str | None = None
     variants: list[AbbreviationVariant] = field(default_factory=list)
+
+
+@dataclass
+class DictionarySettlementMapping:
+    """One BH-30 dictionary-scoped geographic label mapping entry.
+
+    ``source_label`` is the historical/original form and is never overwritten
+    by the modern equivalent (AC7). ``area_name``/``region_name``/
+    ``community_name``/``external_community_id``/``katottg``/``koatuu`` are a
+    snapshot taken at confirmation time (AC10), independent of the live
+    ``area_id``/``region_id``/``community_id``/``settlement_id`` references
+    into the ``geography`` reference-data cache, so a later resync or rename
+    there never mutates an already-confirmed mapping.
+    """
+
+    id: UUID
+    dictionary_id: UUID
+    source_label: str
+    status: SettlementMappingStatus
+    created_at: datetime
+    updated_at: datetime
+    created_by: UUID
+    updated_by: UUID
+    source_note: str | None = None
+    modern_settlement_name: str | None = None
+    settlement_category: str | None = None
+    area_id: UUID | None = None
+    region_id: UUID | None = None
+    community_id: UUID | None = None
+    settlement_id: UUID | None = None
+    community_geometry_id: UUID | None = None
+    area_name: str | None = None
+    region_name: str | None = None
+    community_name: str | None = None
+    external_community_id: str | None = None
+    katottg: str | None = None
+    koatuu: str | None = None
+    confirmed_by: UUID | None = None
+    confirmed_at: datetime | None = None
 
 
 @dataclass
@@ -463,3 +535,35 @@ def abbreviation_duplicate_key(
 ) -> tuple[AbbreviationCategory, str | None, str]:
     """Normalize the fields AC4 compares to detect a duplicate entry."""
     return category, language_code, abbreviation.strip()
+
+
+def validate_settlement_mapping_fields(
+    *,
+    source_label: str,
+    source_note: str | None,
+    modern_settlement_name: str | None,
+) -> dict[str, str]:
+    """Validate one BH-30 settlement mapping entry's fields (BH-48)."""
+    errors: dict[str, str] = {}
+
+    if not source_label or not source_label.strip():
+        errors["source_label"] = "Вкажіть географічну позначку з оригіналу."
+    elif len(source_label) > 512:
+        errors["source_label"] = (
+            "Географічна позначка занадто довга (максимум 512 символів)."
+        )
+
+    if source_note is not None and len(source_note) > 2000:
+        errors["source_note"] = "Примітка занадто довга (максимум 2000 символів)."
+
+    if modern_settlement_name is not None and len(modern_settlement_name) > 255:
+        errors["modern_settlement_name"] = (
+            "Назва сучасного населеного пункту занадто довга (максимум 255 символів)."
+        )
+
+    return errors
+
+
+def settlement_mapping_duplicate_key(source_label: str) -> str:
+    """Normalize the field used to detect a duplicate mapping (trim-only)."""
+    return source_label.strip()

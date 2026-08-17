@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 
 pytestmark = pytest.mark.integration
 
-EXPECTED_REVISION = "bh29_0007"
+EXPECTED_REVISION = "bh30_0009"
 
 
 def _test_database_url() -> str:
@@ -64,8 +64,15 @@ def test_postgresql_connection_and_reversible_idempotent_migration() -> None:
             "dictionary_events",
             "dictionary_languages",
             "dictionary_pages",
+            "dictionary_settlement_mappings",
             "dictionary_source_files",
             "email_verification_tokens",
+            "geography_areas",
+            "geography_communities",
+            "geography_community_geometries",
+            "geography_regions",
+            "geography_settlements",
+            "geography_sync_runs",
             "password_reset_tokens",
             "users",
         ]
