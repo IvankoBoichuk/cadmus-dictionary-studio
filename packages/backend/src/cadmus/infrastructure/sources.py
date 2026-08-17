@@ -357,9 +357,21 @@ dictionary_events = Table(
     ),
     Column("occurred_at", DateTime(timezone=True), nullable=False, index=True),
     Column("changed_fields", JSONB, nullable=False, default=list),
+    Column("previous_status", String(32), nullable=True),
+    Column("new_status", String(32), nullable=True),
+    Column("reason", String(255), nullable=True),
     CheckConstraint(
-        "event_type IN ('created', 'source_uploaded', 'metadata_updated')",
+        "event_type IN "
+        "('created', 'source_uploaded', 'metadata_updated', 'status_changed')",
         name="dictionary_event_type",
+    ),
+    CheckConstraint(
+        "previous_status IS NULL OR previous_status IN ('draft', 'configured')",
+        name="dictionary_event_previous_status",
+    ),
+    CheckConstraint(
+        "new_status IS NULL OR new_status IN ('draft', 'configured')",
+        name="dictionary_event_new_status",
     ),
 )
 

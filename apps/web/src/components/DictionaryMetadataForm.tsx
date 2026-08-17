@@ -26,11 +26,13 @@ const CONTRIBUTOR_ROLE_OPTIONS: { value: ContributorRole; label: string }[] = [
 export function DictionaryMetadataForm({
   initialDictionary,
   source,
+  onSaved,
 }: {
   initialDictionary: DictionaryResponse;
   source?: DictionaryResponse["source"];
+  onSaved?: (dictionary: DictionaryResponse) => void;
 }) {
-  const form = useDictionaryMetadataForm(initialDictionary);
+  const form = useDictionaryMetadataForm(initialDictionary, onSaved);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

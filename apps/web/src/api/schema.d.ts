@@ -263,6 +263,23 @@ export interface paths {
         patch: operations["update_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__patch"];
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/configure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm readiness and mark a draft as configured (BH-31 AC5, AC6) */
+        post: operations["configure_dictionary_dictionaries__dictionary_id__configure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/settlements": {
         parameters: {
             query?: never;
@@ -833,6 +850,8 @@ export interface components {
             publication_year: number | null;
             /** Publisher */
             publisher: string | null;
+            /** Readiness Blockers */
+            readiness_blockers: components["schemas"]["ReadinessBlockerResponse"][];
             /** Rights Note */
             rights_note: string | null;
             source?: components["schemas"]["SourceFileResponse"] | null;
@@ -1031,6 +1050,24 @@ export interface components {
         QueueUnavailableResponse: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * ReadinessBlockerResponse
+         * @description One reason a draft cannot yet become ``configured`` (BH-31 AC3, AC4).
+         */
+        ReadinessBlockerResponse: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * ReadinessBlockersResponse
+         * @description AC6: structured reasons a ``configure`` request was rejected.
+         */
+        ReadinessBlockersResponse: {
+            /** Blockers */
+            blockers: components["schemas"]["ReadinessBlockerResponse"][];
         };
         /**
          * RegionResponse
@@ -2388,6 +2425,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    configure_dictionary_dictionaries__dictionary_id__configure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The draft is not ready to become configured */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessBlockersResponse"];
                 };
             };
         };

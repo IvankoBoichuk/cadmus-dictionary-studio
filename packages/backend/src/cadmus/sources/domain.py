@@ -107,6 +107,7 @@ class DictionaryEventType(StrEnum):
     CREATED = "created"
     SOURCE_UPLOADED = "source_uploaded"
     METADATA_UPDATED = "metadata_updated"
+    STATUS_CHANGED = "status_changed"
 
 
 REQUIRED_FIELDS: tuple[str, ...] = ("title", "languages", "legal_status")
@@ -206,6 +207,14 @@ class DuplicateSettlementMappingError(ValueError):
         super().__init__("a settlement mapping with this label already exists")
         self.existing_id = existing_id
         self.source_label = source_label
+
+
+class DictionaryNotReadyError(ValueError):
+    """BH-31 AC6: raised when a draft fails readiness and cannot be configured."""
+
+    def __init__(self, blockers: "list[ReadinessBlocker]") -> None:
+        super().__init__("dictionary is not ready to be marked as configured")
+        self.blockers = list(blockers)
 
 
 @dataclass
@@ -370,7 +379,12 @@ class DictionaryPage:
 
 @dataclass
 class DictionaryEvent:
-    """One append-only provenance/audit entry for a dictionary draft."""
+    """One append-only provenance/audit entry for a dictionary draft.
+
+    ``previous_status``/``new_status``/``reason`` are populated only for
+    ``STATUS_CHANGED`` events (BH-31 AC10); ``reason`` distinguishes a
+    system-triggered reversion (AC7) from an explicit user confirmation.
+    """
 
     id: UUID
     dictionary_id: UUID
@@ -378,6 +392,9 @@ class DictionaryEvent:
     actor_user_id: UUID
     occurred_at: datetime
     changed_fields: tuple[str, ...] = ()
+    previous_status: DictionaryStatus | None = None
+    new_status: DictionaryStatus | None = None
+    reason: str | None = None
 
 
 @dataclass
@@ -420,6 +437,73 @@ def missing_required_fields(dictionary: Dictionary) -> list[str]:
     if dictionary.legal_status is None:
         missing.append("legal_status")
     return missing
+
+
+_MISSING_FIELD_MESSAGES: dict[str, str] = {
+    "title": "Вкажіть назву словника.",
+    "languages": "Вкажіть щонайменше одну мову.",
+    "legal_status": "Вкажіть правовий статус.",
+}
+
+
+@dataclass(frozen=True)
+class ReadinessBlocker:
+    """One reason a draft cannot yet become ``configured`` (BH-31 AC3, AC4)."""
+
+    code: str
+    message: str
+
+
+def readiness_blockers(
+    dictionary: Dictionary, source_file: SourceFile | None
+) -> list[ReadinessBlocker]:
+    """List every reason ``dictionary`` cannot become ``configured`` (AC4).
+
+    Combines BH-27's required metadata with BH-26's PDF availability. Page
+    range validation (BH-28) does not exist yet in this codebase; extend
+    this list once that Story lands instead of adding a second readiness
+    check elsewhere.
+    """
+    blockers = [
+        ReadinessBlocker(code=field, message=_MISSING_FIELD_MESSAGES[field])
+        for field in missing_required_fields(dictionary)
+    ]
+    if source_file is None:
+        blockers.append(
+            ReadinessBlocker(
+                code="source_missing", message="Завантажте файл словника (PDF)."
+            )
+        )
+    elif source_file.inspection_status == InspectionStatus.FAILED:
+        blockers.append(
+            ReadinessBlocker(
+                code="source_invalid",
+                message="Перевірка PDF завершилася помилкою. Завантажте файл повторно.",
+            )
+        )
+    elif source_file.inspection_status != InspectionStatus.VERIFIED:
+        blockers.append(
+            ReadinessBlocker(
+                code="source_not_verified",
+                message="Перевірка PDF ще триває. Зачекайте на її завершення.",
+            )
+        )
+    return blockers
+
+
+def apply_status_after_edit(
+    dictionary: Dictionary, blockers: Sequence[ReadinessBlocker]
+) -> bool:
+    """Revert a ``configured`` draft to ``draft`` once it fails readiness (AC7).
+
+    Editing is never blocked (mirrors the BH-27 draft-save philosophy); a
+    ``configured`` dictionary that no longer satisfies readiness is instead
+    demoted automatically. Returns ``True`` iff the status changed.
+    """
+    if dictionary.status == DictionaryStatus.CONFIGURED and blockers:
+        dictionary.status = DictionaryStatus.DRAFT
+        return True
+    return False
 
 
 def validate_publication_year(year: int, *, current_year: int) -> str | None:

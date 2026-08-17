@@ -14,6 +14,8 @@ from cadmus.sources import (
     DeleteDictionaryService,
     Dictionary,
     DictionaryAccessError,
+    DictionaryNotReadyError,
+    DictionaryReadinessService,
     DictionaryStatus,
     DuplicateSourceError,
     GetDictionaryService,
@@ -25,11 +27,13 @@ from cadmus.sources import (
     ObjectNotFoundError,
     ObjectStorage,
     PagesStatus,
+    ReadinessBlocker,
     SaveDictionaryMetadataService,
     SourceFile,
     UploadDictionaryService,
     UploadTooLargeError,
     missing_required_fields,
+    readiness_blockers,
 )
 from fastapi import (
     APIRouter,
@@ -108,6 +112,15 @@ class SourceFileResponse(BaseModel):
     pages_error: str | None = None
 
 
+class ReadinessBlockerResponse(BaseModel):
+    """One reason a draft cannot yet become ``configured`` (BH-31 AC3, AC4)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: str
+    message: str
+
+
 class DictionaryResponse(BaseModel):
     """The dictionary draft, its structured metadata, and readiness gaps."""
 
@@ -132,7 +145,16 @@ class DictionaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     missing_required_fields: list[str]
+    readiness_blockers: list[ReadinessBlockerResponse]
     source: SourceFileResponse | None = None
+
+
+class ReadinessBlockersResponse(BaseModel):
+    """AC6: structured reasons a ``configure`` request was rejected."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    blockers: list[ReadinessBlockerResponse]
 
 
 class ErrorResponse(BaseModel):
@@ -194,6 +216,15 @@ def _source_file_response(source_file: SourceFile | None) -> SourceFileResponse 
     )
 
 
+def _readiness_blocker_responses(
+    blockers: list[ReadinessBlocker],
+) -> list[ReadinessBlockerResponse]:
+    return [
+        ReadinessBlockerResponse(code=blocker.code, message=blocker.message)
+        for blocker in blockers
+    ]
+
+
 def _dictionary_response(
     dictionary: Dictionary,
     missing_required_fields: list[str],
@@ -226,6 +257,9 @@ def _dictionary_response(
         created_at=dictionary.created_at,
         updated_at=dictionary.updated_at,
         missing_required_fields=missing_required_fields,
+        readiness_blockers=_readiness_blocker_responses(
+            readiness_blockers(dictionary, source_file)
+        ),
         source=_source_file_response(source_file),
     )
 
@@ -254,6 +288,7 @@ def create_dictionaries_router(
     get_service: GetDictionaryService,
     object_storage: ObjectStorage,
     delete_service: DeleteDictionaryService,
+    readiness_service: DictionaryReadinessService,
 ) -> APIRouter:
     """Create dictionary draft routes bound to application use cases."""
     router = APIRouter(prefix="/dictionaries", tags=["dictionaries"])
@@ -445,7 +480,51 @@ def create_dictionaries_router(
             )
         except DictionaryAccessError:
             return _not_found()
-        return _dictionary_response(outcome.dictionary, outcome.missing_required_fields)
+        source_file = None
+        try:
+            source_file = get_service.get_source_file(dictionary_id, user.id)
+        except DictionaryAccessError:
+            source_file = None
+        return _dictionary_response(
+            outcome.dictionary, outcome.missing_required_fields, source_file
+        )
+
+    @router.post(
+        "/{dictionary_id}/configure",
+        response_model=DictionaryResponse,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **NOT_FOUND_RESPONSE,
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": ReadinessBlockersResponse,
+                "description": "The draft is not ready to become configured",
+            },
+        },
+        summary="Confirm readiness and mark a draft as configured (BH-31 AC5, AC6)",
+    )
+    def configure_dictionary(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+    ) -> DictionaryResponse | JSONResponse:
+        try:
+            dictionary = readiness_service.confirm_configured(dictionary_id, user.id)
+        except DictionaryNotReadyError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content=ReadinessBlockersResponse(
+                    blockers=_readiness_blocker_responses(error.blockers)
+                ).model_dump(mode="json"),
+            )
+        except DictionaryAccessError:
+            return _not_found()
+        source_file = None
+        try:
+            source_file = get_service.get_source_file(dictionary_id, user.id)
+        except DictionaryAccessError:
+            source_file = None
+        return _dictionary_response(
+            dictionary, missing_required_fields(dictionary), source_file
+        )
 
     @router.get(
         "/{dictionary_id}/source/download",

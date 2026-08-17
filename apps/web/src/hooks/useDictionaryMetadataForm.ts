@@ -87,7 +87,10 @@ function validate(values: MetadataFormValues): FormErrors {
  * Drives BH-27's metadata step for one already-uploaded dictionary draft.
  * Saving never requires (or replaces) the uploaded PDF.
  */
-export function useDictionaryMetadataForm(initialDictionary: DictionaryResponse) {
+export function useDictionaryMetadataForm(
+  initialDictionary: DictionaryResponse,
+  onSaved?: (dictionary: DictionaryResponse) => void,
+) {
   const [dictionary, setDictionary] = useState(initialDictionary);
   const [missingRequiredFields, setMissingRequiredFields] = useState(
     initialDictionary.missing_required_fields,
@@ -128,6 +131,7 @@ export function useDictionaryMetadataForm(initialDictionary: DictionaryResponse)
               ? "Чернетку збережено. Усі обов'язкові поля заповнено."
               : "Чернетку збережено. Деякі обов'язкові поля ще відсутні.",
         });
+        onSaved?.(saved);
       } catch (error) {
         const apiErrors = fieldErrorsFrom(error);
         if (apiErrors) {
