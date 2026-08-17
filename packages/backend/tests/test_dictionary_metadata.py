@@ -17,9 +17,12 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryEventType,
     DictionaryLanguage,
+    DictionaryNotReadyError,
     DictionaryPage,
+    DictionaryReadinessService,
     DictionarySettlementMapping,
     DictionaryStatus,
+    InspectionStatus,
     LegalStatus,
     MetadataInput,
     MetadataValidationError,
@@ -37,6 +40,7 @@ class MemorySourcesRepository:
     contributors: dict[UUID, list[Contributor]] = field(default_factory=dict)
     languages: dict[UUID, list[DictionaryLanguage]] = field(default_factory=dict)
     events: list[DictionaryEvent] = field(default_factory=list)
+    source_files: dict[UUID, SourceFile] = field(default_factory=dict)
 
     def get_dictionary(self, dictionary_id: UUID) -> Dictionary | None:
         dictionary = self.dictionaries.get(dictionary_id)
@@ -46,8 +50,8 @@ class MemorySourcesRepository:
         dictionary.languages = list(self.languages.get(dictionary_id, []))
         return dictionary
 
-    def get_source_file(self, dictionary_id: UUID) -> None:
-        return None
+    def get_source_file(self, dictionary_id: UUID) -> SourceFile | None:
+        return self.source_files.get(dictionary_id)
 
     def get_source_file_by_id(self, source_file_id: UUID) -> None:
         return None
@@ -61,11 +65,11 @@ class MemorySourcesRepository:
     def update_dictionary(self, dictionary: Dictionary) -> None:
         self.dictionaries[dictionary.id] = dictionary
 
-    def add_source_file(self, source_file: object) -> None:
-        raise AssertionError("not used by metadata save")
+    def add_source_file(self, source_file: SourceFile) -> None:
+        self.source_files[source_file.dictionary_id] = source_file
 
-    def update_source_file(self, source_file: object) -> None:
-        raise AssertionError("not used by metadata save")
+    def update_source_file(self, source_file: SourceFile) -> None:
+        self.source_files[source_file.dictionary_id] = source_file
 
     def replace_contributors(
         self, dictionary_id: UUID, contributors: Sequence[Contributor]
@@ -195,6 +199,33 @@ def _service(
         unit_of_work_factory=lambda: MemorySourcesUnitOfWork(repository),
         clock=lambda: clock,
     )
+
+
+def _readiness_service(
+    repository: MemorySourcesRepository, clock: datetime = FIRST_SAVE
+) -> DictionaryReadinessService:
+    return DictionaryReadinessService(
+        unit_of_work_factory=lambda: MemorySourcesUnitOfWork(repository),
+        clock=lambda: clock,
+    )
+
+
+def _source_file(dictionary_id: UUID, **overrides: object) -> SourceFile:
+    defaults: dict[str, object] = {
+        "id": uuid4(),
+        "dictionary_id": dictionary_id,
+        "original_filename": "dictionary.pdf",
+        "mime_type": "application/pdf",
+        "byte_size": 1024,
+        "checksum_sha256": "a" * 64,
+        "storage_key": f"sources/{dictionary_id}/file.pdf",
+        "uploaded_at": FIRST_SAVE,
+        "uploaded_by": dictionary_id,
+        "inspection_status": InspectionStatus.VERIFIED,
+        "page_count": 3,
+    }
+    defaults.update(overrides)
+    return SourceFile(**defaults)  # type: ignore[arg-type]
 
 
 def _minimal_input(**overrides: object) -> MetadataInput:
@@ -468,3 +499,142 @@ def test_saving_missing_dictionary_raises_access_error_not_found() -> None:
 
     with pytest.raises(DictionaryAccessError):
         service.save(uuid4(), uuid4(), _minimal_input())
+
+
+def _ready_draft(owner_id: UUID, repository: MemorySourcesRepository) -> Dictionary:
+    """A draft with complete BH-27 metadata and a verified source (BH-31 AC5)."""
+    dictionary = _draft(owner_id)
+    dictionary.title = "Словник української мови"
+    dictionary.legal_status = LegalStatus.PUBLIC_DOMAIN
+    repository.add_dictionary(dictionary)
+    repository.languages[dictionary.id] = [
+        DictionaryLanguage(
+            id=uuid4(), dictionary_id=dictionary.id, language_code="uk", position=0
+        )
+    ]
+    repository.source_files[dictionary.id] = _source_file(dictionary.id)
+    return dictionary
+
+
+def test_confirm_configured_transitions_a_ready_draft() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    service = _readiness_service(repository, clock=SECOND_SAVE)
+
+    configured = service.confirm_configured(dictionary.id, owner_id)
+
+    assert configured.status is DictionaryStatus.CONFIGURED
+    assert configured.updated_at == SECOND_SAVE
+    assert repository.dictionaries[dictionary.id].status is DictionaryStatus.CONFIGURED
+
+
+def test_confirm_configured_records_a_status_changed_event() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    service = _readiness_service(repository, clock=SECOND_SAVE)
+
+    service.confirm_configured(dictionary.id, owner_id)
+
+    assert len(repository.events) == 1
+    event = repository.events[0]
+    assert event.event_type is DictionaryEventType.STATUS_CHANGED
+    assert event.previous_status is DictionaryStatus.DRAFT
+    assert event.new_status is DictionaryStatus.CONFIGURED
+    assert event.actor_user_id == owner_id
+
+
+def test_confirm_configured_rejects_incomplete_metadata_and_leaves_draft() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _draft(owner_id)
+    repository.add_dictionary(dictionary)
+    repository.source_files[dictionary.id] = _source_file(dictionary.id)
+    service = _readiness_service(repository)
+
+    with pytest.raises(DictionaryNotReadyError) as error:
+        service.confirm_configured(dictionary.id, owner_id)
+
+    codes = {blocker.code for blocker in error.value.blockers}
+    assert {"title", "languages", "legal_status"} <= codes
+    assert repository.dictionaries[dictionary.id].status is DictionaryStatus.DRAFT
+    assert repository.events == []
+
+
+def test_confirm_configured_rejects_missing_source() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    del repository.source_files[dictionary.id]
+    service = _readiness_service(repository)
+
+    with pytest.raises(DictionaryNotReadyError) as error:
+        service.confirm_configured(dictionary.id, owner_id)
+
+    assert [b.code for b in error.value.blockers] == ["source_missing"]
+
+
+def test_confirm_configured_records_previous_status_from_a_plain_string() -> None:
+    """Regression: a freshly DB-loaded ``status`` is a plain str, not the enum
+    member; the recorded ``previous_status`` must still normalize correctly.
+    """
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    dictionary.status = "draft"  # type: ignore[assignment]
+    service = _readiness_service(repository, clock=SECOND_SAVE)
+
+    service.confirm_configured(dictionary.id, owner_id)
+
+    assert repository.events[0].previous_status is DictionaryStatus.DRAFT
+
+
+def test_confirm_configured_actor_other_than_owner_raises_access_error() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    service = _readiness_service(repository)
+
+    with pytest.raises(DictionaryAccessError):
+        service.confirm_configured(dictionary.id, uuid4())
+
+
+def test_saving_metadata_that_breaks_readiness_reverts_configured_to_draft() -> None:
+    """BH-31 AC7: editing never blocks, but an invalid configured draft demotes."""
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    dictionary.status = DictionaryStatus.CONFIGURED
+    service = _service(repository, clock=SECOND_SAVE)
+
+    outcome = service.save(dictionary.id, owner_id, _minimal_input(legal_status=None))
+
+    assert outcome.dictionary.status is DictionaryStatus.DRAFT
+    status_events = [
+        event
+        for event in repository.events
+        if event.event_type is DictionaryEventType.STATUS_CHANGED
+    ]
+    assert len(status_events) == 1
+    assert status_events[0].previous_status is DictionaryStatus.CONFIGURED
+    assert status_events[0].new_status is DictionaryStatus.DRAFT
+    assert status_events[0].reason == "metadata_no_longer_ready"
+
+
+def test_saving_metadata_that_keeps_readiness_valid_leaves_configured_status() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _ready_draft(owner_id, repository)
+    dictionary.status = DictionaryStatus.CONFIGURED
+    service = _service(repository, clock=SECOND_SAVE)
+
+    outcome = service.save(dictionary.id, owner_id, _minimal_input(title="Новий"))
+
+    assert outcome.dictionary.status is DictionaryStatus.CONFIGURED
+    status_events = [
+        event
+        for event in repository.events
+        if event.event_type is DictionaryEventType.STATUS_CHANGED
+    ]
+    assert status_events == []

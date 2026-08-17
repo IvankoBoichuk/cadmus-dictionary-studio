@@ -77,6 +77,15 @@ export type SaveMetadataRequest =
 type SaveMetadataFieldErrorsResponse =
   SaveMetadataOperation["responses"][422]["content"]["application/json"];
 
+export type ReadinessBlocker = components["schemas"]["ReadinessBlockerResponse"];
+
+type ConfigureDictionaryOperation =
+  paths["/dictionaries/{dictionary_id}/configure"]["post"];
+export type ConfigureDictionaryNotReadyResponse =
+  ConfigureDictionaryOperation["responses"][422]["content"]["application/json"];
+type ConfigureDictionaryNotFoundResponse =
+  ConfigureDictionaryOperation["responses"][404]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -296,6 +305,10 @@ async function del<Failure>(
 /** A dynamic resource path is still a real endpoint template; only the ID varies. */
 function dictionaryPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}` as keyof paths;
+}
+
+function dictionaryConfigurePath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/configure` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -572,6 +585,16 @@ export const API = {
         DictionaryResponse,
         SaveMetadataFieldErrorsResponse | DictionaryNotFoundResponse
       >(dictionaryPath(dictionaryId), body, options);
+    },
+
+    configure(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<DictionaryResponse> {
+      return postWithoutBody<
+        DictionaryResponse,
+        ConfigureDictionaryNotReadyResponse | ConfigureDictionaryNotFoundResponse
+      >(dictionaryConfigurePath(dictionaryId), options);
     },
   },
 
@@ -872,5 +895,15 @@ export function duplicateSettlementMappingFrom(
   const payload = error.payload as DuplicateSettlementMappingResponse | undefined;
   return payload && typeof payload === "object" && "mapping_id" in payload
     ? payload
+    : undefined;
+}
+
+export function readinessBlockersFrom(error: unknown): ReadinessBlocker[] | undefined {
+  if (!(error instanceof ApiError) || error.kind !== "http" || error.status !== 422) {
+    return undefined;
+  }
+  const payload = error.payload as ConfigureDictionaryNotReadyResponse | undefined;
+  return payload && typeof payload === "object" && "blockers" in payload
+    ? payload.blockers
     : undefined;
 }

@@ -30,6 +30,7 @@ from cadmus.sources import (
     AbbreviationCrudService,
     AbbreviationImportService,
     DeleteDictionaryService,
+    DictionaryReadinessService,
     GetDictionaryService,
     ObjectStorage,
     SaveDictionaryMetadataService,
@@ -63,6 +64,7 @@ def create_app(
     save_dictionary_metadata_service: SaveDictionaryMetadataService | None = None,
     get_dictionary_service: GetDictionaryService | None = None,
     delete_dictionary_service: DeleteDictionaryService | None = None,
+    dictionary_readiness_service: DictionaryReadinessService | None = None,
     abbreviation_crud_service: AbbreviationCrudService | None = None,
     abbreviation_import_service: AbbreviationImportService | None = None,
     geography_query_service: GeographyQueryService | None = None,
@@ -172,6 +174,13 @@ def create_app(
             object_storage=app.state.object_storage,
         )
     )
+    app.state.dictionary_readiness_service = (
+        dictionary_readiness_service
+        if dictionary_readiness_service is not None
+        else DictionaryReadinessService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -205,6 +214,7 @@ def create_app(
             app.state.get_dictionary_service,
             app.state.object_storage,
             app.state.delete_dictionary_service,
+            app.state.dictionary_readiness_service,
         )
     )
     app.include_router(

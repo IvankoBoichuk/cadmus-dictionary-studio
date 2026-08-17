@@ -12,9 +12,11 @@ from cadmus.sources import (
     PagesStatus,
     SourceFile,
     missing_required_fields,
+    readiness_blockers,
 )
 from cadmus.sources.domain import (
     Contributor,
+    apply_status_after_edit,
     normalize_isbn,
     validate_isbn,
     validate_legal_status,
@@ -83,6 +85,119 @@ def test_missing_required_fields_treats_blank_title_as_missing() -> None:
     dictionary = _dictionary(title="   ")
 
     assert "title" in missing_required_fields(dictionary)
+
+
+def _ready_dictionary(**overrides: object) -> Dictionary:
+    dictionary = _dictionary(
+        title="Словник української мови",
+        legal_status=LegalStatus.PUBLIC_DOMAIN,
+        **overrides,
+    )
+    dictionary.languages = [
+        DictionaryLanguage(
+            id=uuid4(), dictionary_id=dictionary.id, language_code="uk", position=0
+        )
+    ]
+    return dictionary
+
+
+def test_readiness_blockers_empty_once_metadata_and_source_are_ready() -> None:
+    dictionary = _ready_dictionary()
+
+    assert readiness_blockers(dictionary, _source_file()) == []
+
+
+def test_readiness_blockers_reports_missing_source_file() -> None:
+    dictionary = _ready_dictionary()
+
+    blockers = readiness_blockers(dictionary, None)
+
+    assert [b.code for b in blockers] == ["source_missing"]
+
+
+def test_readiness_blockers_reports_unverified_source() -> None:
+    dictionary = _ready_dictionary()
+    source = _source_file(inspection_status=InspectionStatus.PENDING)
+
+    blockers = readiness_blockers(dictionary, source)
+
+    assert [b.code for b in blockers] == ["source_not_verified"]
+
+
+def test_readiness_blockers_reports_failed_source() -> None:
+    dictionary = _ready_dictionary()
+    source = _source_file(inspection_status=InspectionStatus.FAILED)
+
+    blockers = readiness_blockers(dictionary, source)
+
+    assert [b.code for b in blockers] == ["source_invalid"]
+
+
+def test_readiness_blockers_combines_metadata_and_source_gaps() -> None:
+    dictionary = _dictionary()
+
+    blockers = readiness_blockers(dictionary, None)
+
+    assert [b.code for b in blockers] == [
+        "title",
+        "languages",
+        "legal_status",
+        "source_missing",
+    ]
+
+
+def test_apply_status_after_edit_reverts_configured_dictionary_with_blockers() -> None:
+    dictionary = _ready_dictionary(status=DictionaryStatus.CONFIGURED)
+
+    reverted = apply_status_after_edit(dictionary, readiness_blockers(dictionary, None))
+
+    assert reverted is True
+    assert dictionary.status is DictionaryStatus.DRAFT
+
+
+def test_apply_status_after_edit_leaves_configured_untouched_when_ready() -> None:
+    dictionary = _ready_dictionary(status=DictionaryStatus.CONFIGURED)
+
+    reverted = apply_status_after_edit(
+        dictionary, readiness_blockers(dictionary, _source_file())
+    )
+
+    assert reverted is False
+    assert dictionary.status is DictionaryStatus.CONFIGURED
+
+
+def test_apply_status_after_edit_leaves_draft_dictionary_untouched() -> None:
+    dictionary = _dictionary()
+
+    reverted = apply_status_after_edit(dictionary, readiness_blockers(dictionary, None))
+
+    assert reverted is False
+    assert dictionary.status is DictionaryStatus.DRAFT
+
+
+def test_readiness_blockers_treats_a_plain_string_inspection_status_as_verified() -> (
+    None
+):
+    """SQLAlchemy's String-column mapping returns a plain str, not the enum
+
+    member, once a row is freshly loaded from the database; ``==`` (not
+    ``is``) must be used so a verified source is recognized either way.
+    """
+    dictionary = _ready_dictionary()
+    source = _source_file()
+    source.inspection_status = "verified"  # type: ignore[assignment]
+
+    assert readiness_blockers(dictionary, source) == []
+
+
+def test_apply_status_after_edit_treats_a_plain_string_status_as_configured() -> None:
+    dictionary = _ready_dictionary()
+    dictionary.status = "configured"  # type: ignore[assignment]
+
+    reverted = apply_status_after_edit(dictionary, readiness_blockers(dictionary, None))
+
+    assert reverted is True
+    assert dictionary.status is DictionaryStatus.DRAFT
 
 
 @pytest.mark.parametrize(

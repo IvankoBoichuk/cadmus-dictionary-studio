@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../authContext";
 import { DictionaryMetadataForm } from "../components/DictionaryMetadataForm";
+import { DictionaryReadiness } from "../components/DictionaryReadiness";
 import { DictionarySourceUpload } from "../components/DictionarySourceUpload";
 import type { DictionaryResponse } from "../api";
 import { useDictionary } from "../hooks/useDictionary";
@@ -23,16 +24,18 @@ function NewDictionaryFlow() {
 
 function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
   const state = useDictionary(dictionaryId);
+  const [override, setOverride] = useState<DictionaryResponse | null>(null);
+  const dictionary = override ?? (state.status === "loaded" ? state.dictionary : null);
 
-  if (state.status === "loading") {
-    return <p role="status">Завантажуємо словник…</p>;
-  }
   if (state.status === "error") {
     return (
       <p className="form-error" role="alert">
         {state.message}
       </p>
     );
+  }
+  if (state.status === "loading" || !dictionary) {
+    return <p role="status">Завантажуємо словник…</p>;
   }
   return (
     <>
@@ -44,9 +47,11 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
           Зіставити географічні мітки словника
         </Link>
       </div>
+      <DictionaryReadiness dictionary={dictionary} onConfigured={setOverride} />
       <DictionaryMetadataForm
-        initialDictionary={state.dictionary}
-        source={state.dictionary.source}
+        initialDictionary={dictionary}
+        source={dictionary.source}
+        onSaved={setOverride}
       />
     </>
   );

@@ -12,7 +12,9 @@ from cadmus.sources import (
     DictionaryAccessError,
     DictionaryLanguage,
     DictionaryListEntry,
+    DictionaryNotReadyError,
     DictionaryPage,
+    DictionaryReadinessService,
     DictionaryStatus,
     DuplicateSourceError,
     GetDictionaryService,
@@ -23,6 +25,7 @@ from cadmus.sources import (
     MetadataValidationError,
     ObjectNotFoundError,
     ObjectStorage,
+    ReadinessBlocker,
     SaveDictionaryMetadataService,
     SourceFile,
     UploadDictionaryService,
@@ -144,7 +147,8 @@ class StubGetDictionaryService:
     def get_source_file(self, dictionary_id: UUID, actor_id: UUID) -> SourceFile:
         if self.access_error is not None:
             raise self.access_error
-        assert self.source_file is not None
+        if self.source_file is None:
+            raise DictionaryAccessError(dictionary_id)
         return self.source_file
 
     def list_for_owner(self, owner_id: UUID) -> list[DictionaryListEntry]:
@@ -167,6 +171,18 @@ class StubDeleteDictionaryService:
         if self.error is not None:
             raise self.error
         self.deleted.append(dictionary_id)
+
+
+@dataclass
+class StubDictionaryReadinessService:
+    dictionary: Dictionary | None = None
+    error: Exception | None = None
+
+    def confirm_configured(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
+        if self.error is not None:
+            raise self.error
+        assert self.dictionary is not None
+        return self.dictionary
 
 
 class StubObjectStorage:
@@ -193,6 +209,7 @@ def client_for(
     object_storage: StubObjectStorage | None = None,
     authentication: StubAuthenticationService | None = None,
     delete_service: StubDeleteDictionaryService | None = None,
+    readiness_service: StubDictionaryReadinessService | None = None,
 ) -> TestClient:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     return TestClient(
@@ -216,6 +233,10 @@ def client_for(
             delete_dictionary_service=cast(
                 DeleteDictionaryService,
                 delete_service or StubDeleteDictionaryService(),
+            ),
+            dictionary_readiness_service=cast(
+                DictionaryReadinessService,
+                readiness_service or StubDictionaryReadinessService(),
             ),
         )
     )
@@ -338,6 +359,7 @@ def test_get_dictionary_returns_full_draft() -> None:
     assert body["language_codes"] == ["uk"]
     assert body["contributors"][0]["name"] == "Автор"
     assert body["missing_required_fields"] == []
+    assert [b["code"] for b in body["readiness_blockers"]] == ["source_not_verified"]
 
 
 def test_get_dictionary_not_owned_returns_404_not_403() -> None:
@@ -535,3 +557,64 @@ def test_thumbnail_not_owned_returns_404() -> None:
         response = client.get(f"/dictionaries/{uuid4()}/thumbnail")
 
     assert response.status_code == 404
+
+
+def test_configure_dictionary_returns_the_configured_draft() -> None:
+    dictionary = _dictionary(
+        title="Словник",
+        legal_status=LegalStatus.PUBLIC_DOMAIN,
+        status=DictionaryStatus.CONFIGURED,
+    )
+    dictionary.languages = [
+        DictionaryLanguage(
+            id=uuid4(), dictionary_id=dictionary.id, language_code="uk", position=0
+        )
+    ]
+    source_file = _source_file(dictionary.id)
+    source_file.inspection_status = InspectionStatus.VERIFIED
+    service = StubDictionaryReadinessService(dictionary=dictionary)
+    get_service = StubGetDictionaryService(
+        dictionary=dictionary, source_file=source_file
+    )
+
+    with client_for(readiness_service=service, get_service=get_service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(f"/dictionaries/{dictionary.id}/configure")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "configured"
+    assert body["readiness_blockers"] == []
+
+
+def test_configure_dictionary_rejects_when_not_ready() -> None:
+    service = StubDictionaryReadinessService(
+        error=DictionaryNotReadyError(
+            [ReadinessBlocker(code="title", message="Вкажіть назву словника.")]
+        )
+    )
+
+    with client_for(readiness_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(f"/dictionaries/{uuid4()}/configure")
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["blockers"] == [{"code": "title", "message": "Вкажіть назву словника."}]
+
+
+def test_configure_dictionary_not_owned_returns_404() -> None:
+    service = StubDictionaryReadinessService(error=DictionaryAccessError(uuid4()))
+
+    with client_for(readiness_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(f"/dictionaries/{uuid4()}/configure")
+
+    assert response.status_code == 404
+
+
+def test_configure_dictionary_requires_authentication() -> None:
+    with client_for() as client:
+        response = client.post(f"/dictionaries/{uuid4()}/configure")
+
+    assert response.status_code == 401

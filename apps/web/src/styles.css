@@ -457,6 +457,31 @@ h1 {
   font-size: 0.92rem;
 }
 
+.status-badge {
+  display: inline-flex;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.status-badge--draft {
+  color: #7a5b12;
+  background: #fbf1da;
+}
+
+.status-badge--configured {
+  color: #175c3a;
+  background: #ddf3e8;
+}
+
+.readiness-blockers {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.92rem;
+}
+
 .dictionary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));

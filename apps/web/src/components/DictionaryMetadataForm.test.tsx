@@ -27,6 +27,7 @@ function baseDictionary(
     created_at: "2026-08-15T12:00:00Z",
     updated_at: "2026-08-15T12:00:00Z",
     missing_required_fields: ["title", "languages", "legal_status"],
+    readiness_blockers: [],
     source: null,
     ...overrides,
   };

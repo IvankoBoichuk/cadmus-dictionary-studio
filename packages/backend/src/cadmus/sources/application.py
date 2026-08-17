@@ -26,6 +26,7 @@ from cadmus.sources.domain import (
     DictionaryEvent,
     DictionaryEventType,
     DictionaryLanguage,
+    DictionaryNotReadyError,
     DictionaryPage,
     DictionarySettlementMapping,
     DictionaryStatus,
@@ -41,7 +42,9 @@ from cadmus.sources.domain import (
     SettlementMappingValidationError,
     SourceFile,
     UploadTooLargeError,
+    apply_status_after_edit,
     missing_required_fields,
+    readiness_blockers,
     settlement_mapping_duplicate_key,
     validate_abbreviation_fields,
     validate_isbn,
@@ -395,9 +398,6 @@ class SaveDictionaryMetadataService:
                 for position, code in enumerate(data.language_codes)
             ]
 
-            unit_of_work.sources.update_dictionary(dictionary)
-            unit_of_work.sources.replace_contributors(dictionary_id, contributors)
-            unit_of_work.sources.replace_languages(dictionary_id, languages)
             if changed_fields:
                 unit_of_work.sources.add_event(
                     DictionaryEvent(
@@ -409,6 +409,29 @@ class SaveDictionaryMetadataService:
                         changed_fields=tuple(changed_fields),
                     )
                 )
+
+            previous_status = DictionaryStatus(dictionary.status)
+            source_file = unit_of_work.sources.get_source_file(dictionary_id)
+            reverted = apply_status_after_edit(
+                dictionary, readiness_blockers(dictionary, source_file)
+            )
+            if reverted:
+                unit_of_work.sources.add_event(
+                    DictionaryEvent(
+                        id=uuid4(),
+                        dictionary_id=dictionary_id,
+                        event_type=DictionaryEventType.STATUS_CHANGED,
+                        actor_user_id=actor_id,
+                        occurred_at=now,
+                        previous_status=previous_status,
+                        new_status=dictionary.status,
+                        reason="metadata_no_longer_ready",
+                    )
+                )
+
+            unit_of_work.sources.update_dictionary(dictionary)
+            unit_of_work.sources.replace_contributors(dictionary_id, contributors)
+            unit_of_work.sources.replace_languages(dictionary_id, languages)
             unit_of_work.commit()
 
         dictionary.contributors = contributors
@@ -568,6 +591,55 @@ class DeleteDictionaryService:
                 "failed to clean up object storage after dictionary delete",
                 exc_info=True,
             )
+
+
+class DictionaryReadinessService:
+    """BH-31: confirm a draft's readiness and mark it ``configured`` (AC5, AC6)."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock
+
+    def confirm_configured(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
+        """Mark ``dictionary_id`` ``configured`` once every check passes.
+
+        Raises ``DictionaryNotReadyError`` (carrying the structured blocker
+        list) and leaves the draft untouched when any check fails (AC6).
+        """
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+
+            source_file = unit_of_work.sources.get_source_file(dictionary_id)
+            blockers = readiness_blockers(dictionary, source_file)
+            if blockers:
+                raise DictionaryNotReadyError(blockers)
+
+            previous_status = DictionaryStatus(dictionary.status)
+            dictionary.status = DictionaryStatus.CONFIGURED
+            dictionary.updated_at = now
+            dictionary.updated_by = actor_id
+            unit_of_work.sources.update_dictionary(dictionary)
+            if previous_status != DictionaryStatus.CONFIGURED:
+                unit_of_work.sources.add_event(
+                    DictionaryEvent(
+                        id=uuid4(),
+                        dictionary_id=dictionary_id,
+                        event_type=DictionaryEventType.STATUS_CHANGED,
+                        actor_user_id=actor_id,
+                        occurred_at=now,
+                        previous_status=previous_status,
+                        new_status=DictionaryStatus.CONFIGURED,
+                    )
+                )
+            unit_of_work.commit()
+        return dictionary
 
 
 @dataclass(frozen=True)
