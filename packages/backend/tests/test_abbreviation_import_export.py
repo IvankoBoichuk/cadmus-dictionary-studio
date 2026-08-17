@@ -182,6 +182,7 @@ class MemorySourcesRepository:
         self,
         dictionary_id: UUID,
         source_label_key: str,
+        settlement_id: UUID | None = None,
         exclude_id: UUID | None = None,
     ) -> DictionarySettlementMapping | None:
         raise AssertionError("not used by abbreviation import/export")

@@ -23,6 +23,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     delete,
+    or_,
     select,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -621,12 +622,27 @@ class SqlAlchemySourcesRepository:
         self,
         dictionary_id: UUID,
         source_label_key: str,
+        settlement_id: UUID | None = None,
         exclude_id: UUID | None = None,
     ) -> DictionarySettlementMapping | None:
         conditions = [
             dictionary_settlement_mappings.c.dictionary_id == dictionary_id,
             dictionary_settlement_mappings.c.source_label == source_label_key,
         ]
+        if settlement_id is not None:
+            # Two rows sharing a historical label are only a genuine
+            # duplicate if they resolve to the same real settlement (or the
+            # other row isn't resolved yet). Ukrainian toponymy has
+            # legitimate homonyms -- e.g. "Банилів" is both a village and a
+            # separate town in different districts (BH-191) -- so a label
+            # match against an already-resolved *different* settlement must
+            # not be flagged.
+            conditions.append(
+                or_(
+                    dictionary_settlement_mappings.c.settlement_id.is_(None),
+                    dictionary_settlement_mappings.c.settlement_id == settlement_id,
+                )
+            )
         if exclude_id is not None:
             conditions.append(dictionary_settlement_mappings.c.id != exclude_id)
         return self._session.scalar(

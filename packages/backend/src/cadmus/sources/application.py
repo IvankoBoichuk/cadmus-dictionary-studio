@@ -889,7 +889,9 @@ class SettlementMappingCrudService:
                 raise DictionaryAccessError(dictionary_id)
 
             duplicate = unit_of_work.sources.find_settlement_mapping_duplicate(
-                dictionary_id, settlement_mapping_duplicate_key(data.source_label)
+                dictionary_id,
+                settlement_mapping_duplicate_key(data.source_label),
+                settlement_id=data.settlement_id,
             )
             if duplicate is not None:
                 raise DuplicateSettlementMappingError(
@@ -946,6 +948,7 @@ class SettlementMappingCrudService:
             duplicate = unit_of_work.sources.find_settlement_mapping_duplicate(
                 dictionary_id,
                 settlement_mapping_duplicate_key(data.source_label),
+                settlement_id=data.settlement_id,
                 exclude_id=mapping_id,
             )
             if duplicate is not None:
