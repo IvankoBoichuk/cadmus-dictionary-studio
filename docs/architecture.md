@@ -102,6 +102,7 @@ Web-клієнт не звертається напряму до БД, Redis а�
 | `review` | annotations, validation status, corrections, audit trail | автоматичне розпізнавання |
 | `exports` | snapshots та serializers JSON/TEI | редагування записів |
 | `quality` | gold samples, measurements, run statistics | production decisions без експериментів |
+| `geography` | синхронізований з decentralization.ua кеш areas/regions/communities/settlements, geometry громад, sync runs | зіставлення геолейблів словника з населеними пунктами |
 
 ## 6. Правило залежностей
 
@@ -121,8 +122,9 @@ flowchart TD
 
 ```text
 identity
+geography
 projects -> identity
-sources -> projects
+sources -> projects, geography
 processing -> sources
 document -> sources
 lexicography -> document
@@ -132,6 +134,8 @@ quality -> processing, document, lexicography, review
 ```
 
 Зворотні імпорти заборонені. Наприклад, `document` не знає про `lexicography`, а `lexicography` не запускає `processing`. Взаємодія між модулями відбувається через application services, IDs, DTO та доменні події після commit.
+
+`geography` — незалежний leaf-модуль без залежностей на будь-який інший предметний модуль: це спільний, tenant-independent кеш довідкових даних (areas/regions/communities/settlements), синхронізований окремим CLI-процесом. `sources` імпортує з нього лише для пошуку/зіставлення населених пунктів (`SettlementSearchService`, `SettlementMappingCrudService`, `SettlementConfirmationService`); зворотного імпорту `geography -> sources` немає.
 
 ## 7. Основні потоки даних
 
@@ -206,7 +210,12 @@ class OcrProvider(Protocol):
 cadmus-dictionary-studio/
 ├── apps/
 │   ├── api/
+│   │   └── src/cadmus_api/routes/
+│   │       ├── geography.py
+│   │       └── settlements.py
 │   ├── worker/
+│   │   └── src/cadmus_worker/
+│   │       └── sync_geography.py
 │   └── web/
 ├── packages/
 │   └── backend/
@@ -219,7 +228,11 @@ cadmus-dictionary-studio/
 │           ├── lexicography/
 │           ├── review/
 │           ├── exports/
-│           └── quality/
+│           ├── quality/
+│           ├── geography/
+│           └── infrastructure/
+│               ├── geography.py
+│               └── geography_client.py
 ├── infrastructure/
 ├── docs/
 │   └── decisions/

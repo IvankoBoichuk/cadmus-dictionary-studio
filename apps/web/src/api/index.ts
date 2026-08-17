@@ -80,9 +80,6 @@ type SaveMetadataFieldErrorsResponse =
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
-export type ImportRowResponse = components["schemas"]["ImportRowResponse"];
-export type ImportPreviewResponse = components["schemas"]["ImportPreviewResponse"];
-export type ImportCommitResponse = components["schemas"]["ImportCommitResponse"];
 export type DuplicateAbbreviationResponse =
   components["schemas"]["DuplicateAbbreviationResponse"];
 
@@ -96,8 +93,16 @@ type CreateAbbreviationOperation =
 type AbbreviationFieldErrorsResponse =
   CreateAbbreviationOperation["responses"][422]["content"]["application/json"];
 
+// The `Import*Response`/`Import*Request` schema names collide across the
+// abbreviations and settlements routers, so FastAPI disambiguates their
+// OpenAPI component names with a module-path prefix. Deriving these types
+// from the operation itself (rather than a `components["schemas"][...]`
+// literal) keeps this file oblivious to whatever prefix FastAPI picks.
 type ImportPreviewOperation =
   paths["/dictionaries/{dictionary_id}/abbreviations/import/preview"]["post"];
+export type ImportPreviewResponse =
+  ImportPreviewOperation["responses"][200]["content"]["application/json"];
+export type ImportRowResponse = ImportPreviewResponse["rows"][number];
 type UnparsableImportResponse =
   ImportPreviewOperation["responses"][422]["content"]["application/json"];
 
@@ -105,6 +110,65 @@ type ImportCommitOperation =
   paths["/dictionaries/{dictionary_id}/abbreviations/import/commit"]["post"];
 export type ImportCommitRequest =
   ImportCommitOperation["requestBody"]["content"]["application/json"];
+export type ImportCommitResponse =
+  ImportCommitOperation["responses"][200]["content"]["application/json"];
+
+export type AreaResponse = components["schemas"]["AreaResponse"];
+export type RegionResponse = components["schemas"]["RegionResponse"];
+export type CommunityResponse = components["schemas"]["CommunityResponse"];
+export type CommunityGeometryResponse =
+  components["schemas"]["CommunityGeometryResponse"];
+
+type GetCommunityOperation =
+  paths["/geography/communities/{community_id}"]["get"];
+type CommunityNotFoundResponse =
+  GetCommunityOperation["responses"][404]["content"]["application/json"];
+type GetCommunityGeoJsonOperation =
+  paths["/geography/communities/{community_id}/geo_json"]["get"];
+type CommunityGeoJsonNotFoundResponse =
+  GetCommunityGeoJsonOperation["responses"][404]["content"]["application/json"];
+
+export type SettlementMappingStatus =
+  components["schemas"]["SettlementMappingStatus"];
+export type SettlementMappingRequest =
+  components["schemas"]["SettlementMappingRequest"];
+export type SettlementMappingResponse =
+  components["schemas"]["SettlementMappingResponse"];
+export type SettlementSuggestionResponse =
+  components["schemas"]["SettlementSuggestionResponse"];
+export type DuplicateSettlementMappingResponse =
+  components["schemas"]["DuplicateSettlementMappingResponse"];
+
+type ListSettlementMappingsOperation =
+  paths["/dictionaries/{dictionary_id}/settlements"]["get"];
+type SettlementMappingsNotFoundResponse =
+  ListSettlementMappingsOperation["responses"][404]["content"]["application/json"];
+
+type CreateSettlementMappingOperation =
+  paths["/dictionaries/{dictionary_id}/settlements"]["post"];
+type SettlementMappingFieldErrorsResponse =
+  CreateSettlementMappingOperation["responses"][422]["content"]["application/json"];
+
+type ConfirmSettlementMappingOperation =
+  paths["/dictionaries/{dictionary_id}/settlements/{mapping_id}/confirm"]["post"];
+type ConfirmSettlementMappingErrorResponse =
+  ConfirmSettlementMappingOperation["responses"][422]["content"]["application/json"];
+
+type SettlementImportPreviewOperation =
+  paths["/dictionaries/{dictionary_id}/settlements/import/preview"]["post"];
+export type SettlementImportPreviewResponse =
+  SettlementImportPreviewOperation["responses"][200]["content"]["application/json"];
+export type SettlementImportRowResponse =
+  SettlementImportPreviewResponse["rows"][number];
+type UnparsableSettlementImportResponse =
+  SettlementImportPreviewOperation["responses"][422]["content"]["application/json"];
+
+type SettlementImportCommitOperation =
+  paths["/dictionaries/{dictionary_id}/settlements/import/commit"]["post"];
+export type SettlementImportCommitRequest =
+  SettlementImportCommitOperation["requestBody"]["content"]["application/json"];
+export type SettlementImportCommitResponse =
+  SettlementImportCommitOperation["responses"][200]["content"]["application/json"];
 
 export type ApiErrorKind = "http" | "network" | "invalid-response";
 
@@ -248,6 +312,75 @@ function abbreviationsImportPreviewPath(dictionaryId: string): keyof paths {
 
 function abbreviationsImportCommitPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/abbreviations/import/commit` as keyof paths;
+}
+
+function geographyRegionsPath(areaId?: string): keyof paths {
+  const query = areaId ? `?area_id=${encodeURIComponent(areaId)}` : "";
+  return `/geography/regions${query}` as keyof paths;
+}
+
+function geographyCommunitiesPath(areaId?: string, regionId?: string): keyof paths {
+  const params = new URLSearchParams();
+  if (areaId) params.set("area_id", areaId);
+  if (regionId) params.set("region_id", regionId);
+  const query = params.toString();
+  return `/geography/communities${query ? `?${query}` : ""}` as keyof paths;
+}
+
+function geographyCommunityPath(communityId: string): keyof paths {
+  return `/geography/communities/${communityId}` as keyof paths;
+}
+
+function geographyCommunityGeoJsonPath(communityId: string): keyof paths {
+  return `/geography/communities/${communityId}/geo_json` as keyof paths;
+}
+
+function settlementsPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements` as keyof paths;
+}
+
+function settlementPath(dictionaryId: string, mappingId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/${mappingId}` as keyof paths;
+}
+
+function settlementConfirmPath(dictionaryId: string, mappingId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/${mappingId}/confirm` as keyof paths;
+}
+
+function settlementUnconfirmPath(dictionaryId: string, mappingId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/${mappingId}/unconfirm` as keyof paths;
+}
+
+export type SettlementSearchFilters = {
+  query?: string;
+  areaId?: string;
+  regionId?: string;
+  communityId?: string;
+  category?: string;
+};
+
+function settlementsSearchPath(
+  dictionaryId: string,
+  filters: SettlementSearchFilters,
+): keyof paths {
+  const params = new URLSearchParams();
+  if (filters.query) params.set("query", filters.query);
+  if (filters.areaId) params.set("area_id", filters.areaId);
+  if (filters.regionId) params.set("region_id", filters.regionId);
+  if (filters.communityId) params.set("community_id", filters.communityId);
+  if (filters.category) params.set("category", filters.category);
+  const query = params.toString();
+  return `/dictionaries/${dictionaryId}/settlements/search${
+    query ? `?${query}` : ""
+  }` as keyof paths;
+}
+
+function settlementsImportPreviewPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/import/preview` as keyof paths;
+}
+
+function settlementsImportCommitPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/import/commit` as keyof paths;
 }
 
 type UploadOptions = RequestOptions & {
@@ -517,6 +650,154 @@ export const API = {
       );
     },
   },
+
+  geography: {
+    listAreas(options?: RequestOptions): Promise<AreaResponse[]> {
+      return get<AreaResponse[], never>("/geography/areas", options);
+    },
+
+    listRegions(areaId?: string, options?: RequestOptions): Promise<RegionResponse[]> {
+      return get<RegionResponse[], never>(geographyRegionsPath(areaId), options);
+    },
+
+    listCommunities(
+      filters: { areaId?: string; regionId?: string } = {},
+      options?: RequestOptions,
+    ): Promise<CommunityResponse[]> {
+      return get<CommunityResponse[], never>(
+        geographyCommunitiesPath(filters.areaId, filters.regionId),
+        options,
+      );
+    },
+
+    getCommunity(
+      communityId: string,
+      options?: RequestOptions,
+    ): Promise<CommunityResponse> {
+      return get<CommunityResponse, CommunityNotFoundResponse>(
+        geographyCommunityPath(communityId),
+        options,
+      );
+    },
+
+    getCommunityGeoJson(
+      communityId: string,
+      options?: RequestOptions,
+    ): Promise<CommunityGeometryResponse> {
+      return get<CommunityGeometryResponse, CommunityGeoJsonNotFoundResponse>(
+        geographyCommunityGeoJsonPath(communityId),
+        options,
+      );
+    },
+  },
+
+  settlements: {
+    list(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<SettlementMappingResponse[]> {
+      return get<SettlementMappingResponse[], SettlementMappingsNotFoundResponse>(
+        settlementsPath(dictionaryId),
+        options,
+      );
+    },
+
+    create(
+      dictionaryId: string,
+      body: SettlementMappingRequest,
+      options?: RequestOptions,
+    ): Promise<SettlementMappingResponse> {
+      return post<
+        SettlementMappingRequest,
+        SettlementMappingResponse,
+        | SettlementMappingFieldErrorsResponse
+        | DuplicateSettlementMappingResponse
+        | SettlementMappingsNotFoundResponse
+      >(settlementsPath(dictionaryId), body, options);
+    },
+
+    update(
+      dictionaryId: string,
+      mappingId: string,
+      body: SettlementMappingRequest,
+      options?: RequestOptions,
+    ): Promise<SettlementMappingResponse> {
+      return patch<
+        SettlementMappingRequest,
+        SettlementMappingResponse,
+        | SettlementMappingFieldErrorsResponse
+        | DuplicateSettlementMappingResponse
+        | SettlementMappingsNotFoundResponse
+      >(settlementPath(dictionaryId, mappingId), body, options);
+    },
+
+    delete(
+      dictionaryId: string,
+      mappingId: string,
+      options?: RequestOptions,
+    ): Promise<void> {
+      return del<SettlementMappingsNotFoundResponse>(
+        settlementPath(dictionaryId, mappingId),
+        options,
+      );
+    },
+
+    confirm(
+      dictionaryId: string,
+      mappingId: string,
+      options?: RequestOptions,
+    ): Promise<SettlementMappingResponse> {
+      return postWithoutBody<
+        SettlementMappingResponse,
+        ConfirmSettlementMappingErrorResponse | SettlementMappingsNotFoundResponse
+      >(settlementConfirmPath(dictionaryId, mappingId), options);
+    },
+
+    unconfirm(
+      dictionaryId: string,
+      mappingId: string,
+      options?: RequestOptions,
+    ): Promise<SettlementMappingResponse> {
+      return postWithoutBody<
+        SettlementMappingResponse,
+        SettlementMappingsNotFoundResponse
+      >(settlementUnconfirmPath(dictionaryId, mappingId), options);
+    },
+
+    search(
+      dictionaryId: string,
+      filters: SettlementSearchFilters = {},
+      options?: RequestOptions,
+    ): Promise<SettlementSuggestionResponse[]> {
+      return get<SettlementSuggestionResponse[], SettlementMappingsNotFoundResponse>(
+        settlementsSearchPath(dictionaryId, filters),
+        options,
+      );
+    },
+
+    importPreview(
+      dictionaryId: string,
+      file: File,
+      options?: UploadOptions,
+    ): Promise<SettlementImportPreviewResponse> {
+      return uploadFile<
+        SettlementImportPreviewResponse,
+        UnparsableSettlementImportResponse
+      >(settlementsImportPreviewPath(dictionaryId), file, options);
+    },
+
+    importCommit(
+      dictionaryId: string,
+      body: SettlementImportCommitRequest,
+      options?: RequestOptions,
+    ): Promise<SettlementImportCommitResponse> {
+      return post<
+        SettlementImportCommitRequest,
+        SettlementImportCommitResponse,
+        SettlementMappingsNotFoundResponse
+      >(settlementsImportCommitPath(dictionaryId), body, options);
+    },
+  },
 } as const;
 
 export function abbreviationsExportUrl(
@@ -524,6 +805,13 @@ export function abbreviationsExportUrl(
   format: "json" | "csv",
 ): string {
   return `${API_BASE_URL}/dictionaries/${dictionaryId}/abbreviations/export?format=${format}`;
+}
+
+export function settlementsExportUrl(
+  dictionaryId: string,
+  format: "json" | "csv",
+): string {
+  return `${API_BASE_URL}/dictionaries/${dictionaryId}/settlements/export?format=${format}`;
 }
 
 export function dictionaryThumbnailUrl(dictionaryId: string): string {
@@ -571,6 +859,18 @@ export function duplicateAbbreviationFrom(
   }
   const payload = error.payload as DuplicateAbbreviationResponse | undefined;
   return payload && typeof payload === "object" && "abbreviation_id" in payload
+    ? payload
+    : undefined;
+}
+
+export function duplicateSettlementMappingFrom(
+  error: unknown,
+): DuplicateSettlementMappingResponse | undefined {
+  if (!(error instanceof ApiError) || error.kind !== "http" || error.status !== 409) {
+    return undefined;
+  }
+  const payload = error.payload as DuplicateSettlementMappingResponse | undefined;
+  return payload && typeof payload === "object" && "mapping_id" in payload
     ? payload
     : undefined;
 }

@@ -40,6 +40,9 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
         <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/abbreviations`}>
           Налаштувати скорочення словника
         </Link>
+        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/settlements`}>
+          Зіставити географічні мітки словника
+        </Link>
       </div>
       <DictionaryMetadataForm
         initialDictionary={state.dictionary}

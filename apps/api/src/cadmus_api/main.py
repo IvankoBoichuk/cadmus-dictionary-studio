@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 
 from cadmus.config import Settings
+from cadmus.geography import GeographyQueryService
 from cadmus.identity import (
     AuthenticationService,
     PasswordResetService,
@@ -12,6 +13,7 @@ from cadmus.identity import (
 )
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.email import SmtpEmailSender
+from cadmus.infrastructure.geography import create_geography_unit_of_work_factory
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.security import (
@@ -31,6 +33,10 @@ from cadmus.sources import (
     GetDictionaryService,
     ObjectStorage,
     SaveDictionaryMetadataService,
+    SettlementConfirmationService,
+    SettlementMappingCrudService,
+    SettlementMappingImportService,
+    SettlementSearchService,
     UploadDictionaryService,
 )
 from fastapi import FastAPI
@@ -39,7 +45,9 @@ from sqlalchemy import Engine, text
 from cadmus_api.routes.abbreviations import create_abbreviations_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
+from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.health import create_health_router
+from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
 
 
@@ -57,6 +65,11 @@ def create_app(
     delete_dictionary_service: DeleteDictionaryService | None = None,
     abbreviation_crud_service: AbbreviationCrudService | None = None,
     abbreviation_import_service: AbbreviationImportService | None = None,
+    geography_query_service: GeographyQueryService | None = None,
+    settlement_mapping_crud_service: SettlementMappingCrudService | None = None,
+    settlement_search_service: SettlementSearchService | None = None,
+    settlement_confirmation_service: SettlementConfirmationService | None = None,
+    settlement_mapping_import_service: SettlementMappingImportService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -199,6 +212,59 @@ def create_app(
             app.state.authentication_service,
             app.state.abbreviation_crud_service,
             app.state.abbreviation_import_service,
+        )
+    )
+    geography_unit_of_work_factory = create_geography_unit_of_work_factory(engine)
+    app.state.geography_query_service = (
+        geography_query_service
+        if geography_query_service is not None
+        else GeographyQueryService(
+            unit_of_work_factory=geography_unit_of_work_factory,
+        )
+    )
+    app.include_router(
+        create_geography_router(
+            app.state.authentication_service,
+            app.state.geography_query_service,
+        )
+    )
+    app.state.settlement_mapping_crud_service = (
+        settlement_mapping_crud_service
+        if settlement_mapping_crud_service is not None
+        else SettlementMappingCrudService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            geography_unit_of_work_factory=geography_unit_of_work_factory,
+        )
+    )
+    app.state.settlement_search_service = (
+        settlement_search_service
+        if settlement_search_service is not None
+        else SettlementSearchService(
+            geography_unit_of_work_factory=geography_unit_of_work_factory,
+        )
+    )
+    app.state.settlement_confirmation_service = (
+        settlement_confirmation_service
+        if settlement_confirmation_service is not None
+        else SettlementConfirmationService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            geography_unit_of_work_factory=geography_unit_of_work_factory,
+        )
+    )
+    app.state.settlement_mapping_import_service = (
+        settlement_mapping_import_service
+        if settlement_mapping_import_service is not None
+        else SettlementMappingImportService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
+    app.include_router(
+        create_settlements_router(
+            app.state.authentication_service,
+            app.state.settlement_mapping_crud_service,
+            app.state.settlement_search_service,
+            app.state.settlement_confirmation_service,
+            app.state.settlement_mapping_import_service,
         )
     )
     return app

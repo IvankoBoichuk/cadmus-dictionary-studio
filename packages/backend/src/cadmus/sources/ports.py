@@ -15,6 +15,7 @@ from cadmus.sources.domain import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionarySettlementMapping,
     SourceFile,
 )
 
@@ -91,6 +92,31 @@ class SourcesRepository(Protocol):
 
     def delete_abbreviation(
         self, dictionary_id: UUID, abbreviation_id: UUID
+    ) -> None: ...
+
+    def list_settlement_mappings(
+        self, dictionary_id: UUID
+    ) -> list[DictionarySettlementMapping]: ...
+
+    def get_settlement_mapping(
+        self, dictionary_id: UUID, mapping_id: UUID
+    ) -> DictionarySettlementMapping | None: ...
+
+    def find_settlement_mapping_duplicate(
+        self,
+        dictionary_id: UUID,
+        source_label_key: str,
+        exclude_id: UUID | None = None,
+    ) -> DictionarySettlementMapping | None: ...
+
+    def add_settlement_mapping(self, mapping: DictionarySettlementMapping) -> None: ...
+
+    def update_settlement_mapping(
+        self, mapping: DictionarySettlementMapping
+    ) -> None: ...
+
+    def delete_settlement_mapping(
+        self, dictionary_id: UUID, mapping_id: UUID
     ) -> None: ...
 
 

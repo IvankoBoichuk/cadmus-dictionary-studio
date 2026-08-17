@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
+from cadmus.geography.ports import GeographyUnitOfWorkFactory
 from cadmus.sources.domain import (
     ALLOWED_CONTENT_TYPE,
     ALLOWED_EXTENSION,
@@ -26,20 +27,27 @@ from cadmus.sources.domain import (
     DictionaryEventType,
     DictionaryLanguage,
     DictionaryPage,
+    DictionarySettlementMapping,
     DictionaryStatus,
     DuplicateAbbreviationError,
+    DuplicateSettlementMappingError,
     DuplicateSourceError,
     InspectionStatus,
     InvalidUploadError,
     LegalStatus,
     MetadataValidationError,
+    SettlementMappingAccessError,
+    SettlementMappingStatus,
+    SettlementMappingValidationError,
     SourceFile,
     UploadTooLargeError,
     missing_required_fields,
+    settlement_mapping_duplicate_key,
     validate_abbreviation_fields,
     validate_isbn,
     validate_legal_status,
     validate_publication_year,
+    validate_settlement_mapping_fields,
 )
 from cadmus.sources.object_storage import ObjectStorage
 from cadmus.sources.ports import (
@@ -732,3 +740,381 @@ class AbbreviationCrudService:
             unresolved=data.unresolved,
             variants=data.variants,
         )
+
+
+@dataclass(frozen=True)
+class SettlementMappingInput:
+    """One BH-30 settlement mapping submission, type-checked at the boundary.
+
+    ``status`` may only be ``UNRESOLVED`` or ``SUGGESTED`` here --
+    ``SettlementMappingCrudService`` rejects ``CONFIRMED`` (AC9: the only
+    path that can set it is ``SettlementConfirmationService.confirm``).
+    """
+
+    source_label: str
+    source_note: str | None
+    modern_settlement_name: str | None
+    settlement_category: str | None
+    settlement_id: UUID | None
+    status: SettlementMappingStatus
+
+
+@dataclass(frozen=True)
+class SettlementSuggestion:
+    """One AC8 search result: a settlement flattened with its hierarchy."""
+
+    settlement_id: UUID
+    title: str
+    category: str
+    community_id: UUID
+    community_name: str
+    region_id: UUID
+    area_id: UUID
+
+
+class SettlementMappingCrudService:
+    """Create, read, update, and delete BH-30 settlement mappings.
+
+    Covers AC7, AC11, AC12, AC13. Mirrors ``AbbreviationCrudService``: every
+    call re-checks ownership inside a fresh unit of work, never trusting a
+    cached ``Dictionary``.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        geography_unit_of_work_factory: GeographyUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._geography_unit_of_work_factory = geography_unit_of_work_factory
+        self._clock = clock
+
+    def list_for_dictionary(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> list[DictionarySettlementMapping]:
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            return unit_of_work.sources.list_settlement_mappings(dictionary_id)
+
+    def create(
+        self, dictionary_id: UUID, actor_id: UUID, data: SettlementMappingInput
+    ) -> DictionarySettlementMapping:
+        errors = self._validate(data)
+        if errors:
+            raise SettlementMappingValidationError(errors)
+
+        now = self._clock()
+        mapping_id = uuid4()
+        settlement_category, community_id, region_id, area_id = (
+            self._resolve_settlement(data.settlement_id, data.settlement_category)
+        )
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+
+            duplicate = unit_of_work.sources.find_settlement_mapping_duplicate(
+                dictionary_id, settlement_mapping_duplicate_key(data.source_label)
+            )
+            if duplicate is not None:
+                raise DuplicateSettlementMappingError(
+                    duplicate.id, duplicate.source_label
+                )
+
+            mapping = DictionarySettlementMapping(
+                id=mapping_id,
+                dictionary_id=dictionary_id,
+                source_label=data.source_label.strip(),
+                status=data.status,
+                created_at=now,
+                updated_at=now,
+                created_by=actor_id,
+                updated_by=actor_id,
+                source_note=(data.source_note or "").strip() or None,
+                modern_settlement_name=(data.modern_settlement_name or "").strip()
+                or None,
+                settlement_category=settlement_category,
+                settlement_id=data.settlement_id,
+                community_id=community_id,
+                region_id=region_id,
+                area_id=area_id,
+            )
+            unit_of_work.sources.add_settlement_mapping(mapping)
+            unit_of_work.commit()
+        return mapping
+
+    def update(
+        self,
+        dictionary_id: UUID,
+        mapping_id: UUID,
+        actor_id: UUID,
+        data: SettlementMappingInput,
+    ) -> DictionarySettlementMapping:
+        errors = self._validate(data)
+        if errors:
+            raise SettlementMappingValidationError(errors)
+
+        now = self._clock()
+        settlement_category, community_id, region_id, area_id = (
+            self._resolve_settlement(data.settlement_id, data.settlement_category)
+        )
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            existing = unit_of_work.sources.get_settlement_mapping(
+                dictionary_id, mapping_id
+            )
+            if existing is None:
+                raise SettlementMappingAccessError(mapping_id)
+
+            duplicate = unit_of_work.sources.find_settlement_mapping_duplicate(
+                dictionary_id,
+                settlement_mapping_duplicate_key(data.source_label),
+                exclude_id=mapping_id,
+            )
+            if duplicate is not None:
+                raise DuplicateSettlementMappingError(
+                    duplicate.id, duplicate.source_label
+                )
+
+            existing.source_label = data.source_label.strip()
+            existing.status = data.status
+            existing.source_note = (data.source_note or "").strip() or None
+            existing.modern_settlement_name = (
+                data.modern_settlement_name or ""
+            ).strip() or None
+            existing.settlement_category = settlement_category
+            existing.settlement_id = data.settlement_id
+            existing.community_id = community_id
+            existing.region_id = region_id
+            existing.area_id = area_id
+            existing.updated_at = now
+            existing.updated_by = actor_id
+
+            unit_of_work.sources.update_settlement_mapping(existing)
+            unit_of_work.commit()
+        return existing
+
+    def delete(self, dictionary_id: UUID, mapping_id: UUID, actor_id: UUID) -> None:
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            existing = unit_of_work.sources.get_settlement_mapping(
+                dictionary_id, mapping_id
+            )
+            if existing is None:
+                raise SettlementMappingAccessError(mapping_id)
+            unit_of_work.sources.delete_settlement_mapping(dictionary_id, mapping_id)
+            unit_of_work.commit()
+
+    def unconfirm(
+        self, dictionary_id: UUID, mapping_id: UUID, actor_id: UUID
+    ) -> DictionarySettlementMapping:
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            existing = unit_of_work.sources.get_settlement_mapping(
+                dictionary_id, mapping_id
+            )
+            if existing is None:
+                raise SettlementMappingAccessError(mapping_id)
+
+            existing.status = SettlementMappingStatus.UNRESOLVED
+            existing.confirmed_by = None
+            existing.confirmed_at = None
+            existing.updated_at = now
+            existing.updated_by = actor_id
+
+            unit_of_work.sources.update_settlement_mapping(existing)
+            unit_of_work.commit()
+        return existing
+
+    def _resolve_settlement(
+        self, settlement_id: UUID | None, settlement_category: str | None
+    ) -> tuple[str | None, UUID | None, UUID | None, UUID | None]:
+        """Best-effort hierarchy lookup for a chosen search result.
+
+        Only fills in display fields the caller didn't already supply;
+        never raises if the settlement can no longer be found (a stale
+        search selection just falls back to whatever the caller sent).
+        """
+        if settlement_id is None:
+            return settlement_category, None, None, None
+        with self._geography_unit_of_work_factory() as geography_unit_of_work:
+            settlement = geography_unit_of_work.geography.get_settlement(settlement_id)
+            if settlement is None:
+                return settlement_category, None, None, None
+            community = geography_unit_of_work.geography.get_community(
+                settlement.community_id
+            )
+            if community is None:
+                return settlement_category or settlement.category, None, None, None
+            return (
+                settlement_category or settlement.category,
+                community.id,
+                community.region_id,
+                community.area_id,
+            )
+
+    @staticmethod
+    def _validate(data: SettlementMappingInput) -> dict[str, str]:
+        errors = validate_settlement_mapping_fields(
+            source_label=data.source_label,
+            source_note=data.source_note,
+            modern_settlement_name=data.modern_settlement_name,
+        )
+        if data.status is SettlementMappingStatus.CONFIRMED:
+            errors["status"] = (
+                'Статус "підтверджено" встановлюється лише через '
+                "підтвердження відповідності, не напряму."
+            )
+        return errors
+
+
+class SettlementSearchService:
+    """AC8/AC9 -- search the local geography cache for a modern settlement.
+
+    Reads only, never writes a mapping, never calls the external API. The
+    constructor takes only a ``GeographyUnitOfWorkFactory`` so it cannot
+    touch ``SourcesRepository`` even by mistake.
+    """
+
+    def __init__(
+        self, geography_unit_of_work_factory: GeographyUnitOfWorkFactory
+    ) -> None:
+        self._geography_unit_of_work_factory = geography_unit_of_work_factory
+
+    def search(
+        self,
+        *,
+        query: str | None,
+        area_id: UUID | None,
+        region_id: UUID | None,
+        community_id: UUID | None,
+        category: str | None,
+    ) -> list[SettlementSuggestion]:
+        with self._geography_unit_of_work_factory() as unit_of_work:
+            results = unit_of_work.geography.search_settlements(
+                query=query,
+                area_id=area_id,
+                region_id=region_id,
+                community_id=community_id,
+                category=category,
+            )
+            return [
+                SettlementSuggestion(
+                    settlement_id=settlement.id,
+                    title=settlement.title,
+                    category=settlement.category,
+                    community_id=community.id,
+                    community_name=community.name,
+                    region_id=community.region_id,
+                    area_id=community.area_id,
+                )
+                for settlement, community in results
+            ]
+
+
+class SettlementConfirmationService:
+    """The only code path allowed to set ``status=CONFIRMED`` (AC9).
+
+    Re-reads the current settlement/community/region/area hierarchy from
+    ``geography`` and snapshots it onto the mapping (AC10), rather than
+    trusting whatever was cached on the mapping at ``create``/``update``
+    time.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        geography_unit_of_work_factory: GeographyUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._geography_unit_of_work_factory = geography_unit_of_work_factory
+        self._clock = clock
+
+    def confirm(
+        self, dictionary_id: UUID, mapping_id: UUID, actor_id: UUID
+    ) -> DictionarySettlementMapping:
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+            mapping = unit_of_work.sources.get_settlement_mapping(
+                dictionary_id, mapping_id
+            )
+            if mapping is None:
+                raise SettlementMappingAccessError(mapping_id)
+            if mapping.settlement_id is None:
+                raise SettlementMappingValidationError(
+                    {
+                        "settlement_id": (
+                            "Спочатку оберіть сучасний населений пункт через пошук."
+                        )
+                    }
+                )
+
+            with self._geography_unit_of_work_factory() as geography_unit_of_work:
+                settlement = geography_unit_of_work.geography.get_settlement(
+                    mapping.settlement_id
+                )
+                community = (
+                    geography_unit_of_work.geography.get_community(
+                        settlement.community_id
+                    )
+                    if settlement is not None
+                    else None
+                )
+                region = (
+                    geography_unit_of_work.geography.get_region(community.region_id)
+                    if community is not None
+                    else None
+                )
+                area = (
+                    geography_unit_of_work.geography.get_area(community.area_id)
+                    if community is not None
+                    else None
+                )
+            if (
+                settlement is None
+                or community is None
+                or region is None
+                or area is None
+            ):
+                raise SettlementMappingValidationError(
+                    {
+                        "settlement_id": (
+                            "Обраний населений пункт більше не входить до "
+                            "довідника. Оберіть інший."
+                        )
+                    }
+                )
+
+            mapping.settlement_category = settlement.category
+            mapping.community_id = community.id
+            mapping.region_id = region.id
+            mapping.area_id = area.id
+            mapping.area_name = area.name
+            mapping.region_name = region.name
+            mapping.community_name = community.name
+            mapping.external_community_id = community.external_id
+            mapping.katottg = community.katottg
+            mapping.koatuu = community.koatuu
+            mapping.status = SettlementMappingStatus.CONFIRMED
+            mapping.confirmed_by = actor_id
+            mapping.confirmed_at = now
+            mapping.updated_at = now
+            mapping.updated_by = actor_id
+
+            unit_of_work.sources.update_settlement_mapping(mapping)
+            unit_of_work.commit()
+        return mapping

@@ -13,6 +13,7 @@ from cadmus.sources import (
     DictionaryEvent,
     DictionaryLanguage,
     DictionaryPage,
+    DictionarySettlementMapping,
     InspectionStatus,
     PagesStatus,
     SourceFile,
@@ -135,6 +136,33 @@ class MemorySourcesRepository:
         raise AssertionError("not used by backfill tests")
 
     def delete_abbreviation(self, dictionary_id: UUID, abbreviation_id: UUID) -> None:
+        raise AssertionError("not used by backfill tests")
+
+    def list_settlement_mappings(
+        self, dictionary_id: UUID
+    ) -> list[DictionarySettlementMapping]:
+        raise AssertionError("not used by backfill tests")
+
+    def get_settlement_mapping(
+        self, dictionary_id: UUID, mapping_id: UUID
+    ) -> DictionarySettlementMapping | None:
+        raise AssertionError("not used by backfill tests")
+
+    def find_settlement_mapping_duplicate(
+        self,
+        dictionary_id: UUID,
+        source_label_key: str,
+        exclude_id: UUID | None = None,
+    ) -> DictionarySettlementMapping | None:
+        raise AssertionError("not used by backfill tests")
+
+    def add_settlement_mapping(self, mapping: DictionarySettlementMapping) -> None:
+        raise AssertionError("not used by backfill tests")
+
+    def update_settlement_mapping(self, mapping: DictionarySettlementMapping) -> None:
+        raise AssertionError("not used by backfill tests")
+
+    def delete_settlement_mapping(self, dictionary_id: UUID, mapping_id: UUID) -> None:
         raise AssertionError("not used by backfill tests")
 
 
