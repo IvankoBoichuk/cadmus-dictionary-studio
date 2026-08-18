@@ -63,7 +63,7 @@ lexemes = Table(
         ForeignKey("cadmus.users.id", ondelete="CASCADE"),
         nullable=False,
     ),
-    CheckConstraint("origin IN ('manual')", name="lexeme_origin"),
+    CheckConstraint("origin IN ('manual', 'ocr')", name="lexeme_origin"),
     CheckConstraint("width > 0 AND height > 0", name="lexeme_positive_size"),
 )
 

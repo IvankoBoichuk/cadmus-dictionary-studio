@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { dictionaryPageImageUrl, type LexemeResponse } from "../api";
+import { dictionaryPageImageUrl, type LexemeResponse, type LexemeSuggestion } from "../api";
 import { useDeleteLexeme } from "../hooks/useDeleteLexeme";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
 import { useLexemesForPage } from "../hooks/useLexemesForPage";
+import { useOcrSuggestions } from "../hooks/useOcrSuggestions";
 import { useUpdateLexeme } from "../hooks/useUpdateLexeme";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
@@ -37,6 +38,12 @@ export function DictionaryPageViewer({
   } = useLexemesForPage(dictionaryId, currentPage);
   const { state: updateState, submit: submitUpdate } = useUpdateLexeme(dictionaryId);
   const { remove: deleteLexeme } = useDeleteLexeme(dictionaryId);
+  const {
+    state: ocrState,
+    trigger: triggerOcrSuggestions,
+    dismissSuggestion,
+    reset: resetOcrSuggestions,
+  } = useOcrSuggestions(dictionaryId, currentPage);
 
   const [selectedLexemeId, setSelectedLexemeId] = useState<string | null>(null);
   const [redrawingLexemeId, setRedrawingLexemeId] = useState<string | null>(null);
@@ -46,7 +53,11 @@ export function DictionaryPageViewer({
     setPreviousPageKey(pageKey);
     setSelectedLexemeId(null);
     setRedrawingLexemeId(null);
+    resetOcrSuggestions();
   }
+
+  const suggestions: LexemeSuggestion[] =
+    ocrState.status === "succeeded" ? ocrState.suggestions : [];
 
   if (summary.status === "loading") {
     return <p role="status">Завантажуємо сторінки…</p>;
@@ -107,6 +118,34 @@ export function DictionaryPageViewer({
       <h2 id="page-viewer-heading" className="visually-hidden">
         Перегляд сторінки словника
       </h2>
+      <div className="ocr-suggestions-controls">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => void triggerOcrSuggestions()}
+          disabled={
+            ocrState.status === "starting" ||
+            ocrState.status === "queued" ||
+            ocrState.status === "running"
+          }
+        >
+          {ocrState.status === "starting" ||
+          ocrState.status === "queued" ||
+          ocrState.status === "running"
+            ? "Розпізнаємо слова…"
+            : "Автоматично знайти слова (OCR)"}
+        </button>
+        {ocrState.status === "succeeded" && (
+          <span className="lede" role="status">
+            Знайдено пропозицій: {ocrState.suggestions.length}
+          </span>
+        )}
+        {ocrState.status === "failed" && (
+          <span className="form-error" role="alert">
+            {ocrState.message}
+          </span>
+        )}
+      </div>
       <div className="page-viewer-body">
         <LexemeCanvas
           dictionaryId={dictionaryId}
@@ -121,6 +160,8 @@ export function DictionaryPageViewer({
           onLexemeRedrawn={handleLexemeRedrawn}
           onCancelRedraw={() => setRedrawingLexemeId(null)}
           onSubmitUpdate={submitUpdate}
+          suggestions={suggestions}
+          onAcceptSuggestion={dismissSuggestion}
         />
         <aside className="lexeme-sidebar" aria-labelledby="lexeme-list-heading">
           <h3 id="lexeme-list-heading">Лексеми сторінки</h3>

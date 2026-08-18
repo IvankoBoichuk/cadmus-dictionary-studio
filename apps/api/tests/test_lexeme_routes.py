@@ -183,6 +183,31 @@ def test_create_lexeme_returns_the_persisted_lexeme() -> None:
     assert service.received is not None
     assert service.received.page_number == 1
     assert service.received.confirm_duplicate is False
+    assert service.received.origin == LexemeOrigin.MANUAL
+
+
+def test_create_lexeme_passes_through_an_explicit_ocr_origin() -> None:
+    lexeme = _lexeme(source_text="слово", origin=LexemeOrigin.OCR)
+    service = StubCreateLexemeService(lexeme=lexeme)
+
+    with client_for(create_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(
+            f"/dictionaries/{uuid4()}/pages/1/lexemes",
+            json={
+                "source_text": "слово",
+                "x": 10,
+                "y": 10,
+                "width": 100,
+                "height": 40,
+                "origin": "ocr",
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["origin"] == "ocr"
+    assert service.received is not None
+    assert service.received.origin == LexemeOrigin.OCR
 
 
 def test_create_lexeme_rejects_a_non_positive_bounding_box() -> None:

@@ -6,7 +6,7 @@ import {
   type SyntheticEvent,
 } from "react";
 
-import type { LexemeResponse } from "../api";
+import type { LexemeResponse, LexemeSuggestion } from "../api";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
 import type { UpdateLexemeInput } from "../hooks/useUpdateLexeme";
 import {
@@ -33,6 +33,8 @@ export function LexemeCanvas({
   onLexemeRedrawn,
   onCancelRedraw,
   onSubmitUpdate,
+  suggestions = [],
+  onAcceptSuggestion,
 }: {
   dictionaryId: string;
   pageNumber: number;
@@ -49,6 +51,8 @@ export function LexemeCanvas({
     lexemeId: string,
     input: UpdateLexemeInput,
   ) => Promise<LexemeResponse | null>;
+  suggestions?: LexemeSuggestion[];
+  onAcceptSuggestion?: (suggestion: LexemeSuggestion) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState<Size | null>(null);
@@ -56,6 +60,9 @@ export function LexemeCanvas({
   const [drag, setDrag] = useState<{ start: Point; current: Point } | null>(null);
   const [pendingBox, setPendingBox] = useState<Rect | null>(null);
   const [text, setText] = useState("");
+  const [pendingSuggestion, setPendingSuggestion] = useState<LexemeSuggestion | null>(
+    null,
+  );
 
   const { state: createState, submit, reset: resetCreate } = useCreateLexeme(
     dictionaryId,
@@ -91,6 +98,7 @@ export function LexemeCanvas({
     const point = pointFromEvent(event);
     if (!point) return;
     setPendingBox(null);
+    setPendingSuggestion(null);
     resetCreate();
     setDrag({ start: point, current: point });
   };
@@ -134,6 +142,7 @@ export function LexemeCanvas({
   const cancelPending = () => {
     setPendingBox(null);
     setText("");
+    setPendingSuggestion(null);
     resetCreate();
   };
 
@@ -146,14 +155,20 @@ export function LexemeCanvas({
     const naturalRect = toNaturalRect(pendingBox);
     if (!naturalRect) return;
     const created = await submit(
-      { source_text: text, ...naturalRect },
+      {
+        source_text: text,
+        ...naturalRect,
+        origin: pendingSuggestion ? "ocr" : "manual",
+      },
       confirmDuplicate,
     );
     if (created) {
       onLexemeCreated(created);
       onSelectLexeme(created.id);
+      if (pendingSuggestion) onAcceptSuggestion?.(pendingSuggestion);
       setPendingBox(null);
       setText("");
+      setPendingSuggestion(null);
     }
   };
 
@@ -161,6 +176,25 @@ export function LexemeCanvas({
     displayedSize && naturalSize && naturalSize.width > 0
       ? displayedSize.width / naturalSize.width
       : null;
+
+  const handleAcceptSuggestion = (suggestion: LexemeSuggestion) => {
+    if (!scale) return;
+    setDrag(null);
+    resetCreate();
+    setPendingBox(
+      scaleRect(
+        {
+          x: suggestion.x,
+          y: suggestion.y,
+          width: suggestion.width,
+          height: suggestion.height,
+        },
+        scale,
+      ),
+    );
+    setText(suggestion.source_text);
+    setPendingSuggestion(suggestion);
+  };
 
   return (
     <div className="lexeme-canvas-wrap">
@@ -205,6 +239,24 @@ export function LexemeCanvas({
               }}
             />
           ))}
+        {scale !== null &&
+          suggestions
+            .filter((suggestion) => suggestion !== pendingSuggestion)
+            .map((suggestion, index) => (
+              <div
+                key={`${suggestion.x}-${suggestion.y}-${index}`}
+                className="lexeme-box lexeme-box--suggestion"
+                title={suggestion.source_text}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={() => handleAcceptSuggestion(suggestion)}
+                style={{
+                  left: suggestion.x * scale,
+                  top: suggestion.y * scale,
+                  width: suggestion.width * scale,
+                  height: suggestion.height * scale,
+                }}
+              />
+            ))}
         {drag && (
           <div
             className="lexeme-box lexeme-box--draft"

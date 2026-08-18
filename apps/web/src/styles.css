@@ -558,6 +558,25 @@ h1 {
   background: rgb(185 28 28 / 18%);
 }
 
+.lexeme-box--suggestion {
+  border-color: #2563eb;
+  border-style: dashed;
+  background: rgb(37 99 235 / 10%);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.lexeme-box--suggestion:hover {
+  background: rgb(37 99 235 / 22%);
+}
+
+.ocr-suggestions-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .page-viewer-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);

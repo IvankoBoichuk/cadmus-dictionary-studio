@@ -28,7 +28,12 @@ SESSION_COOKIE_NAME = "cadmus_session"
 
 
 class CreateLexemeRequest(BaseModel):
-    """One BH-54 lexeme submission (AC1, AC2, AC3)."""
+    """One BH-54 lexeme submission (AC1, AC2, AC3).
+
+    ``origin`` defaults to ``manual`` (BH-54's hand-drawn flow); accepting
+    an OCR suggestion sends ``origin="ocr"`` instead, so the resulting
+    ``Lexeme`` records where its text and box actually came from.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -38,6 +43,7 @@ class CreateLexemeRequest(BaseModel):
     width: float = Field(gt=0)
     height: float = Field(gt=0)
     confirm_duplicate: bool = False
+    origin: LexemeOrigin = LexemeOrigin.MANUAL
 
 
 class LexemeResponse(BaseModel):
@@ -225,6 +231,7 @@ def create_lexemes_router(
             width=request.width,
             height=request.height,
             confirm_duplicate=request.confirm_duplicate,
+            origin=request.origin,
         )
         try:
             lexeme = create_service.create(dictionary_id, user.id, data)

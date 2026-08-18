@@ -361,6 +361,28 @@ def test_create_lexeme_persists_a_manual_origin_lexeme() -> None:
     assert stored.source_text == "слово"
 
 
+def test_create_lexeme_accepts_an_explicit_ocr_origin() -> None:
+    fixture = Fixture()
+
+    lexeme = fixture.create_service.create(
+        fixture.dictionary.id,
+        fixture.owner_id,
+        LexemeInput(
+            page_number=1,
+            source_text="слово",
+            x=10,
+            y=10,
+            width=100,
+            height=40,
+            origin=LexemeOrigin.OCR,
+        ),
+    )
+
+    assert lexeme.origin is LexemeOrigin.OCR
+    stored = fixture.lexicography_repository.lexemes[lexeme.id]
+    assert stored.origin is LexemeOrigin.OCR
+
+
 def test_create_lexeme_rejects_invalid_fields() -> None:
     fixture = Fixture()
 

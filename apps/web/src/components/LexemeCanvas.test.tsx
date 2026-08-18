@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { LexemeResponse } from "../api";
+import type { LexemeResponse, LexemeSuggestion } from "../api";
 import { LexemeCanvas } from "./LexemeCanvas";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -52,6 +52,18 @@ function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse 
   };
 }
 
+function suggestionFixture(overrides: Partial<LexemeSuggestion> = {}): LexemeSuggestion {
+  return {
+    source_text: "розпізнане",
+    x: 100,
+    y: 100,
+    width: 200,
+    height: 80,
+    confidence: 0.9,
+    ...overrides,
+  };
+}
+
 function renderCanvas(
   overrides: Partial<{
     lexemes: LexemeResponse[];
@@ -65,6 +77,8 @@ function renderCanvas(
       lexemeId: string,
       input: { source_text: string; x: number; y: number; width: number; height: number },
     ) => Promise<LexemeResponse | null>;
+    suggestions: LexemeSuggestion[];
+    onAcceptSuggestion: (suggestion: LexemeSuggestion) => void;
   }> = {},
 ) {
   return render(
@@ -81,6 +95,8 @@ function renderCanvas(
       onLexemeRedrawn={overrides.onLexemeRedrawn ?? vi.fn()}
       onCancelRedraw={overrides.onCancelRedraw ?? vi.fn()}
       onSubmitUpdate={overrides.onSubmitUpdate ?? vi.fn().mockResolvedValue(null)}
+      suggestions={overrides.suggestions}
+      onAcceptSuggestion={overrides.onAcceptSuggestion}
     />,
   );
 }
@@ -170,6 +186,7 @@ describe("LexemeCanvas", () => {
       y: 100,
       width: 200,
       height: 160,
+      origin: "manual",
       confirm_duplicate: false,
     });
     await vi.waitFor(() => {
@@ -288,5 +305,61 @@ describe("LexemeCanvas", () => {
     );
 
     expect(onCancelRedraw).toHaveBeenCalled();
+  });
+
+  it("renders an OCR suggestion overlay at its scaled position", async () => {
+    stubContainerRect();
+
+    renderCanvas({ suggestions: [suggestionFixture({ source_text: "слово" })] });
+    await loadImage();
+
+    const box = await screen.findByTitle("слово");
+    expect(box.className).toContain("lexeme-box--suggestion");
+    // Container is 500x700 displayed, image natural size is 1000x1400 -> scale 0.5x.
+    expect(box.style.left).toBe("50px");
+    expect(box.style.top).toBe("50px");
+    expect(box.style.width).toBe("100px");
+    expect(box.style.height).toBe("40px");
+  });
+
+  it("clicking a suggestion pre-fills the text field and opens the confirm form", async () => {
+    stubContainerRect();
+
+    renderCanvas({ suggestions: [suggestionFixture({ source_text: "слово" })] });
+    await loadImage();
+
+    fireEvent.click(await screen.findByTitle("слово"));
+
+    expect(await screen.findByLabelText("Текст лексеми")).toHaveValue("слово");
+  });
+
+  it("accepting a suggestion submits with origin ocr and notifies the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        201,
+        lexemeFixture({ id: "lex-ocr", source_text: "слово", origin: "ocr" }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    stubContainerRect();
+    const onAcceptSuggestion = vi.fn();
+    const suggestion = suggestionFixture({ source_text: "слово" });
+
+    renderCanvas({ suggestions: [suggestion], onAcceptSuggestion });
+    await loadImage();
+
+    fireEvent.click(await screen.findByTitle("слово"));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти лексему" }));
+
+    const createCall = await vi.waitFor(() => {
+      const call = fetchMock.mock.calls[0];
+      if (!call) throw new Error("expected a fetch call");
+      return call;
+    });
+    const body = JSON.parse((createCall[1] as RequestInit).body as string);
+    expect(body.origin).toBe("ocr");
+    await vi.waitFor(() => {
+      expect(onAcceptSuggestion).toHaveBeenCalledWith(suggestion);
+    });
   });
 });

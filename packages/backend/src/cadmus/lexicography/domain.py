@@ -20,12 +20,16 @@ proxy for "the user boxed essentially the same word again" (BH-54 AC6).
 class LexemeOrigin(StrEnum):
     """How a lexeme's text and bounding box came to exist (ADR-0004 §9).
 
-    Only ``MANUAL`` exists yet: BH-54 lexemes are drawn by hand before OCR
-    runs. ``ocr``/``rule``/``model`` are reserved for later Stories that
-    derive lexemes from automated recognition, per the provenance model.
+    ``MANUAL`` is a lexeme drawn and typed entirely by hand (BH-54).
+    ``OCR`` is a Tesseract/ALTO suggestion the user reviewed and accepted
+    (see ``LexemeSuggestion``/``SuggestLexemesService``) -- the box and
+    text both come from the recognizer, not from the user typing them.
+    ``rule``/``model`` are reserved for later Stories, per the provenance
+    model.
     """
 
     MANUAL = "manual"
+    OCR = "ocr"
 
 
 class LexemeValidationError(ValueError):
@@ -230,3 +234,69 @@ def find_overlapping_lexeme(
         if ratio >= DUPLICATE_OVERLAP_RATIO:
             return lexeme
     return None
+
+
+class OcrSuggestionStatus(StrEnum):
+    """Transport-neutral state of an in-flight OCR word-suggestion task."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class LexemeSuggestion:
+    """One Tesseract/ALTO word candidate for a page, not yet a ``Lexeme``.
+
+    Ephemeral by design: never persisted. ``x``/``y``/``width``/``height``
+    are pixel coordinates matching ``DictionaryPage.width``/``height``,
+    same convention as ``Lexeme`` -- ALTO's ``HPOS``/``VPOS``/``WIDTH``/
+    ``HEIGHT`` are already pixel-based against the source image, so no
+    unit conversion happens between OCR output and this type.
+    """
+
+    source_text: str
+    x: float
+    y: float
+    width: float
+    height: float
+    confidence: float
+
+
+@dataclass(frozen=True)
+class OcrSuggestionTaskSnapshot:
+    """Current observable state of a background suggestion task."""
+
+    task_id: str
+    status: OcrSuggestionStatus
+    suggestions: tuple[LexemeSuggestion, ...] | None = None
+    error: str | None = None
+
+
+_ISO_TO_TESSERACT_LANGUAGE: dict[str, str] = {
+    "uk": "ukr",
+    "ru": "rus",
+    "pl": "pol",
+    "en": "eng",
+}
+DEFAULT_TESSERACT_LANGUAGE = "ukr+eng"
+
+
+def resolve_ocr_language(language_codes: Sequence[str]) -> str:
+    """Map a dictionary's configured ISO 639-1 codes to a Tesseract ``-l`` value.
+
+    Falls back to ``DEFAULT_TESSERACT_LANGUAGE`` when the dictionary has no
+    configured languages, or none of them have an installed Tesseract
+    language pack (see ``apps/api/Dockerfile`` for the installed set).
+    """
+    mapped = [
+        _ISO_TO_TESSERACT_LANGUAGE[code]
+        for code in language_codes
+        if code in _ISO_TO_TESSERACT_LANGUAGE
+    ]
+    if not mapped:
+        return DEFAULT_TESSERACT_LANGUAGE
+    # Preserve first-seen order while de-duplicating (dict keys are
+    # insertion-ordered), so ``["uk", "uk", "en"]`` -> ``"ukr+eng"``.
+    return "+".join(dict.fromkeys(mapped))
