@@ -280,6 +280,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/finish-scanning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish the scanning stage once at least one lexeme exists (AC1-AC3) */
+        post: operations["finish_scanning_dictionaries__dictionary_id__finish_scanning_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/lexemes/{lexeme_id}": {
         parameters: {
             query?: never;
@@ -1000,10 +1017,10 @@ export interface components {
         };
         /**
          * DictionaryStatus
-         * @description Configuration-readiness status owned by this Story (and BH-31).
+         * @description Dictionary lifecycle status (BH-27, BH-31, and BH-58).
          * @enum {string}
          */
-        DictionaryStatus: "draft" | "configured";
+        DictionaryStatus: "draft" | "configured" | "scanned";
         /**
          * DuplicateAbbreviationResponse
          * @description Structured duplicate warning for AC4.
@@ -1096,6 +1113,18 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /**
+         * FinishScanningResponse
+         * @description The dictionary's id and its status after finishing scanning (AC3).
+         */
+        FinishScanningResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["DictionaryStatus"];
         };
         /**
          * ForgotPasswordRequest
@@ -2821,6 +2850,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessBlockersResponse"];
+                };
+            };
+        };
+    };
+    finish_scanning_dictionaries__dictionary_id__finish_scanning_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinishScanningResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary has no lexemes yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

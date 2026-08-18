@@ -30,10 +30,11 @@ ISO_639_1_CODES: frozenset[str] = frozenset(
 
 
 class DictionaryStatus(StrEnum):
-    """Configuration-readiness status owned by this Story (and BH-31)."""
+    """Dictionary lifecycle status (BH-27, BH-31, and BH-58)."""
 
     DRAFT = "draft"
     CONFIGURED = "configured"
+    SCANNED = "scanned"
 
 
 class LegalStatus(StrEnum):

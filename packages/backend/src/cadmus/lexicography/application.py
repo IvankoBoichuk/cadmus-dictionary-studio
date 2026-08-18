@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from cadmus.lexicography.domain import (
+    DictionaryNotReadyToScanError,
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
@@ -20,7 +21,13 @@ from cadmus.lexicography.domain import (
     validate_lexeme_fields,
 )
 from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory
-from cadmus.sources import DictionaryAccessError, DictionaryPage
+from cadmus.sources import (
+    Dictionary,
+    DictionaryAccessError,
+    DictionaryPage,
+    DictionaryStatus,
+    MarkDictionaryScannedService,
+)
 from cadmus.sources.application import GetDictionaryService
 
 
@@ -334,3 +341,41 @@ class ScanProgressService:
         return ScanProgress(
             total_pages=len(entries), processed_pages=processed, pages=entries
         )
+
+
+class FinishScanningService:
+    """BH-58: finish the scanning stage once the dictionary has any lexeme.
+
+    An explicit use case, not a hidden side effect: checks the precondition
+    (a ``lexicography`` fact) itself, then delegates the actual status
+    mutation and audit trail to ``sources.MarkDictionaryScannedService``,
+    which owns the ``Dictionary`` aggregate. Idempotent -- an already
+    ``scanned`` dictionary short-circuits without re-checking lexemes, so a
+    later bulk-delete of lexemes never un-finishes a completed stage.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        scanning_service: MarkDictionaryScannedService,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._scanning_service = scanning_service
+
+    def finish(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
+        try:
+            dictionary = self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        if dictionary.status == DictionaryStatus.SCANNED:
+            return dictionary
+
+        with self._unit_of_work_factory() as unit_of_work:
+            has_lexemes = unit_of_work.lexicography.has_any_lexeme(dictionary_id)
+        if not has_lexemes:
+            raise DictionaryNotReadyToScanError(dictionary_id)
+
+        return self._scanning_service.mark_scanned(dictionary_id, actor_id)

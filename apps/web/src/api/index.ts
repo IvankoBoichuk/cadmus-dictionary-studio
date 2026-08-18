@@ -86,6 +86,15 @@ export type ConfigureDictionaryNotReadyResponse =
 type ConfigureDictionaryNotFoundResponse =
   ConfigureDictionaryOperation["responses"][404]["content"]["application/json"];
 
+type FinishScanningOperation =
+  paths["/dictionaries/{dictionary_id}/finish-scanning"]["post"];
+export type FinishScanningResponse =
+  FinishScanningOperation["responses"][200]["content"]["application/json"];
+export type FinishScanningNotReadyResponse =
+  FinishScanningOperation["responses"][422]["content"]["application/json"];
+type FinishScanningNotFoundResponse =
+  FinishScanningOperation["responses"][404]["content"]["application/json"];
+
 type GetPageRangesOperation =
   paths["/dictionaries/{dictionary_id}/page-ranges"]["get"];
 export type PageRangesResponse =
@@ -381,6 +390,10 @@ function dictionaryPath(dictionaryId: string): keyof paths {
 
 function dictionaryConfigurePath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/configure` as keyof paths;
+}
+
+function dictionaryFinishScanningPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/finish-scanning` as keyof paths;
 }
 
 function pageRangesPath(dictionaryId: string): keyof paths {
@@ -687,6 +700,16 @@ export const API = {
         DictionaryResponse,
         ConfigureDictionaryNotReadyResponse | ConfigureDictionaryNotFoundResponse
       >(dictionaryConfigurePath(dictionaryId), options);
+    },
+
+    finishScanning(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<FinishScanningResponse> {
+      return postWithoutBody<
+        FinishScanningResponse,
+        FinishScanningNotReadyResponse | FinishScanningNotFoundResponse
+      >(dictionaryFinishScanningPath(dictionaryId), options);
     },
   },
 

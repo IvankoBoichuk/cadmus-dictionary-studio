@@ -142,6 +142,16 @@ class SqlAlchemyLexicographyRepository:
             )
         )
 
+    def has_any_lexeme(self, dictionary_id: UUID) -> bool:
+        return (
+            self._session.scalar(
+                select(lexemes.c.id)
+                .where(lexemes.c.dictionary_id == dictionary_id)
+                .limit(1)
+            )
+            is not None
+        )
+
 
 class SqlAlchemyLexicographyUnitOfWork:
     """Session-backed lexicography transaction."""

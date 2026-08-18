@@ -25,6 +25,8 @@ class LexicographyRepository(Protocol):
 
     def list_page_ids_with_lexemes(self, dictionary_id: UUID) -> set[UUID]: ...
 
+    def has_any_lexeme(self, dictionary_id: UUID) -> bool: ...
+
 
 class LexicographyUnitOfWork(Protocol):
     """Transaction boundary controlled by a lexicography use case."""

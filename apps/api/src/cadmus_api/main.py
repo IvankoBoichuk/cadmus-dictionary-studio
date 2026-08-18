@@ -31,6 +31,7 @@ from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_clie
 from cadmus.lexicography import (
     CreateLexemeService,
     DeleteLexemeService,
+    FinishScanningService,
     LexemeQueryService,
     ScanProgressService,
     UpdateLexemeService,
@@ -42,6 +43,7 @@ from cadmus.sources import (
     DeleteDictionaryService,
     DictionaryReadinessService,
     GetDictionaryService,
+    MarkDictionaryScannedService,
     ObjectStorage,
     SaveDictionaryMetadataService,
     SavePageRangesService,
@@ -57,6 +59,7 @@ from sqlalchemy import Engine, text
 from cadmus_api.routes.abbreviations import create_abbreviations_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
+from cadmus_api.routes.finish_scanning import create_finish_scanning_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
 from cadmus_api.routes.health import create_health_router
@@ -98,6 +101,8 @@ def create_app(
     update_lexeme_service: UpdateLexemeService | None = None,
     delete_lexeme_service: DeleteLexemeService | None = None,
     scan_progress_service: ScanProgressService | None = None,
+    mark_dictionary_scanned_service: MarkDictionaryScannedService | None = None,
+    finish_scanning_service: FinishScanningService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -230,6 +235,13 @@ def create_app(
             unit_of_work_factory=sources_unit_of_work_factory,
         )
     )
+    app.state.mark_dictionary_scanned_service = (
+        mark_dictionary_scanned_service
+        if mark_dictionary_scanned_service is not None
+        else MarkDictionaryScannedService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
     lexicography_unit_of_work_factory = create_lexicography_unit_of_work_factory(engine)
     app.state.create_lexeme_service = (
         create_lexeme_service
@@ -269,6 +281,15 @@ def create_app(
         else ScanProgressService(
             unit_of_work_factory=lexicography_unit_of_work_factory,
             dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.finish_scanning_service = (
+        finish_scanning_service
+        if finish_scanning_service is not None
+        else FinishScanningService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            scanning_service=app.state.mark_dictionary_scanned_service,
         )
     )
     app.state.abbreviation_crud_service = (
@@ -349,6 +370,12 @@ def create_app(
         create_scan_progress_router(
             app.state.authentication_service,
             app.state.scan_progress_service,
+        )
+    )
+    app.include_router(
+        create_finish_scanning_router(
+            app.state.authentication_service,
+            app.state.finish_scanning_service,
         )
     )
     app.include_router(

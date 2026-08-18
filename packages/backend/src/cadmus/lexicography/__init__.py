@@ -3,6 +3,7 @@
 from cadmus.lexicography.application import (
     CreateLexemeService,
     DeleteLexemeService,
+    FinishScanningService,
     LexemeInput,
     LexemeQueryService,
     PageProgress,
@@ -14,6 +15,7 @@ from cadmus.lexicography.application import (
 from cadmus.lexicography.domain import (
     DUPLICATE_OVERLAP_RATIO,
     MAX_SOURCE_TEXT_LENGTH,
+    DictionaryNotReadyToScanError,
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
@@ -38,7 +40,9 @@ __all__ = [
     "MAX_SOURCE_TEXT_LENGTH",
     "CreateLexemeService",
     "DeleteLexemeService",
+    "DictionaryNotReadyToScanError",
     "DuplicateLexemeError",
+    "FinishScanningService",
     "Lexeme",
     "LexemeAccessError",
     "LexemeEvent",

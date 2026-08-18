@@ -53,7 +53,11 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
           Переглянути сторінки
         </Link>
       </div>
-      <DictionaryReadiness dictionary={dictionary} onConfigured={setOverride} />
+      <DictionaryReadiness
+        dictionary={dictionary}
+        onConfigured={setOverride}
+        onScanned={setOverride}
+      />
       <DictionaryMetadataForm
         initialDictionary={dictionary}
         source={dictionary.source}

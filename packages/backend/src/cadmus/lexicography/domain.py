@@ -74,6 +74,16 @@ class LexemeNotFoundError(LookupError):
         self.lexeme_id = lexeme_id
 
 
+class DictionaryNotReadyToScanError(ValueError):
+    """BH-58: raised when finishing the scanning stage before any lexeme exists."""
+
+    def __init__(self, dictionary_id: UUID) -> None:
+        super().__init__(
+            f"dictionary {dictionary_id} has no lexemes yet; scanning isn't finished"
+        )
+        self.dictionary_id = dictionary_id
+
+
 class LexemeEventType(StrEnum):
     """BH-56 AC: append-only history of who changed a lexeme, and when."""
 

@@ -114,6 +114,11 @@ class MemoryLexicographyRepository:
         if existing is not None and existing.dictionary_id == dictionary_id:
             del self.lexemes[lexeme_id]
 
+    def has_any_lexeme(self, dictionary_id: UUID) -> bool:
+        return any(
+            lexeme.dictionary_id == dictionary_id for lexeme in self.lexemes.values()
+        )
+
     def add_lexeme_event(self, event: LexemeEvent) -> None:
         self.events.append(event)
 
