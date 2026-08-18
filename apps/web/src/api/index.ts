@@ -137,6 +137,14 @@ type DeleteLexemeOperation =
 type DeleteLexemeNotFoundResponse =
   DeleteLexemeOperation["responses"][404]["content"]["application/json"];
 
+type GetScanProgressOperation =
+  paths["/dictionaries/{dictionary_id}/scan-progress"]["get"];
+export type ScanProgressResponse =
+  GetScanProgressOperation["responses"][200]["content"]["application/json"];
+export type PageProgress = ScanProgressResponse["pages"][number];
+type ScanProgressNotFoundResponse =
+  GetScanProgressOperation["responses"][404]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -389,6 +397,10 @@ function lexemesPath(dictionaryId: string, pageNumber: number): keyof paths {
 
 function lexemePath(dictionaryId: string, lexemeId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/lexemes/${lexemeId}` as keyof paths;
+}
+
+function scanProgressPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/scan-progress` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -761,6 +773,18 @@ export const API = {
     ): Promise<void> {
       return del<DeleteLexemeNotFoundResponse>(
         lexemePath(dictionaryId, lexemeId),
+        options,
+      );
+    },
+  },
+
+  scanProgress: {
+    get(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<ScanProgressResponse> {
+      return get<ScanProgressResponse, ScanProgressNotFoundResponse>(
+        scanProgressPath(dictionaryId),
         options,
       );
     },

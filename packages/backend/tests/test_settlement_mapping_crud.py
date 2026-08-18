@@ -96,6 +96,9 @@ class MemorySourcesRepository:
     def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
         raise AssertionError("not used by settlement mapping CRUD")
 
+    def list_pages(self, source_file_id: UUID) -> list[DictionaryPage]:
+        raise AssertionError("not used by settlement mapping CRUD")
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         raise AssertionError("not used by settlement mapping CRUD")
 

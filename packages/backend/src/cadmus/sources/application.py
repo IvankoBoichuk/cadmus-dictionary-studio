@@ -622,6 +622,33 @@ class GetDictionaryService:
                 return None
             return page
 
+    def list_viewable_pages(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> list[DictionaryPage]:
+        """BH-57: every page within the saved ranges, in viewer order.
+
+        Two queries total (``list_page_ranges`` + one bulk ``list_pages``)
+        regardless of page count, so callers computing per-page scan
+        progress never do it with an N+1 page lookup.
+        """
+        dictionary = self.get(dictionary_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            source_file = unit_of_work.sources.get_source_file(dictionary.id)
+            if source_file is None:
+                return []
+            page_numbers = expand_page_ranges(
+                unit_of_work.sources.list_page_ranges(dictionary.id)
+            )
+            pages_by_index = {
+                page.page_index: page
+                for page in unit_of_work.sources.list_pages(source_file.id)
+            }
+        return [
+            pages_by_index[number - 1]
+            for number in page_numbers
+            if (number - 1) in pages_by_index
+        ]
+
 
 class DeleteDictionaryService:
     """Delete a dictionary draft and its underlying stored objects."""

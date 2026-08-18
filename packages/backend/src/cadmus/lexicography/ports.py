@@ -23,6 +23,8 @@ class LexicographyRepository(Protocol):
 
     def add_lexeme_event(self, event: LexemeEvent) -> None: ...
 
+    def list_page_ids_with_lexemes(self, dictionary_id: UUID) -> set[UUID]: ...
+
 
 class LexicographyUnitOfWork(Protocol):
     """Transaction boundary controlled by a lexicography use case."""

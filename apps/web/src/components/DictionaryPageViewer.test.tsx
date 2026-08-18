@@ -14,6 +14,11 @@ function endpointAwareFetch(totalPages: number, lexemes: unknown[]) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/lexemes")) return Promise.resolve(jsonResponse(200, lexemes));
+    if (url.includes("/scan-progress")) {
+      return Promise.resolve(
+        jsonResponse(200, { total_pages: totalPages, processed_pages: 0, pages: [] }),
+      );
+    }
     return Promise.resolve(jsonResponse(200, { total_pages: totalPages }));
   });
 }
@@ -47,10 +52,7 @@ describe("DictionaryPageViewer", () => {
   });
 
   it("shows the requested page and the total page count", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 12 })),
-    );
+    vi.stubGlobal("fetch", endpointAwareFetch(12, []));
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={3} onNavigate={vi.fn()} />,
@@ -58,14 +60,11 @@ describe("DictionaryPageViewer", () => {
 
     const image = await screen.findByAltText("Сторінка 3 з 12");
     expect(image).toHaveAttribute("src", "/api/dictionaries/dict-1/pages/3");
-    expect(screen.getByRole("status")).toHaveTextContent("Сторінка 3 / 12");
+    expect(screen.getByText("Сторінка 3 / 12")).toBeInTheDocument();
   });
 
   it("calls onNavigate with the next and previous page numbers", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 12 })),
-    );
+    vi.stubGlobal("fetch", endpointAwareFetch(12, []));
     const onNavigate = vi.fn();
 
     render(
@@ -85,10 +84,7 @@ describe("DictionaryPageViewer", () => {
   });
 
   it("disables the previous button on the first page and next on the last", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 2 })),
-    );
+    vi.stubGlobal("fetch", endpointAwareFetch(2, []));
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={2} onNavigate={vi.fn()} />,
@@ -100,10 +96,7 @@ describe("DictionaryPageViewer", () => {
   });
 
   it("explains when the dictionary has no configured page ranges yet", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 0 })),
-    );
+    vi.stubGlobal("fetch", endpointAwareFetch(0, []));
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
@@ -115,10 +108,7 @@ describe("DictionaryPageViewer", () => {
   });
 
   it("clamps an out-of-range requested page back onto the viewer", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 5 })),
-    );
+    vi.stubGlobal("fetch", endpointAwareFetch(5, []));
     const onNavigate = vi.fn();
 
     render(
@@ -209,6 +199,11 @@ describe("DictionaryPageViewer", () => {
         );
       }
       if (url.includes("/lexemes")) return Promise.resolve(jsonResponse(200, []));
+      if (url.includes("/scan-progress")) {
+        return Promise.resolve(
+          jsonResponse(200, { total_pages: 1, processed_pages: 0, pages: [] }),
+        );
+      }
       return Promise.resolve(jsonResponse(200, { total_pages: 1 }));
     });
     vi.stubGlobal("fetch", fetchMock);

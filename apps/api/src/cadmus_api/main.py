@@ -32,6 +32,7 @@ from cadmus.lexicography import (
     CreateLexemeService,
     DeleteLexemeService,
     LexemeQueryService,
+    ScanProgressService,
     UpdateLexemeService,
 )
 from cadmus.processing import TaskQueue
@@ -65,6 +66,7 @@ from cadmus_api.routes.lexemes import (
 )
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
+from cadmus_api.routes.scan_progress import create_scan_progress_router
 from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
 
@@ -95,6 +97,7 @@ def create_app(
     lexeme_query_service: LexemeQueryService | None = None,
     update_lexeme_service: UpdateLexemeService | None = None,
     delete_lexeme_service: DeleteLexemeService | None = None,
+    scan_progress_service: ScanProgressService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -260,6 +263,14 @@ def create_app(
             dictionary_pages=app.state.get_dictionary_service,
         )
     )
+    app.state.scan_progress_service = (
+        scan_progress_service
+        if scan_progress_service is not None
+        else ScanProgressService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -332,6 +343,12 @@ def create_app(
             app.state.authentication_service,
             app.state.update_lexeme_service,
             app.state.delete_lexeme_service,
+        )
+    )
+    app.include_router(
+        create_scan_progress_router(
+            app.state.authentication_service,
+            app.state.scan_progress_service,
         )
     )
     app.include_router(
