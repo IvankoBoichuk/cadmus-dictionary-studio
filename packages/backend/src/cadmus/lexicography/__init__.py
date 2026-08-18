@@ -2,8 +2,11 @@
 
 from cadmus.lexicography.application import (
     CreateLexemeService,
+    DeleteLexemeService,
     LexemeInput,
     LexemeQueryService,
+    UpdateLexemeInput,
+    UpdateLexemeService,
 )
 from cadmus.lexicography.domain import (
     DUPLICATE_OVERLAP_RATIO,
@@ -11,9 +14,13 @@ from cadmus.lexicography.domain import (
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
+    LexemeEvent,
+    LexemeEventType,
+    LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeValidationError,
+    changed_lexeme_fields,
     find_overlapping_lexeme,
     validate_lexeme_fields,
 )
@@ -27,10 +34,14 @@ __all__ = [
     "DUPLICATE_OVERLAP_RATIO",
     "MAX_SOURCE_TEXT_LENGTH",
     "CreateLexemeService",
+    "DeleteLexemeService",
     "DuplicateLexemeError",
     "Lexeme",
     "LexemeAccessError",
+    "LexemeEvent",
+    "LexemeEventType",
     "LexemeInput",
+    "LexemeNotFoundError",
     "LexemeOrigin",
     "LexemePageNotFoundError",
     "LexemeQueryService",
@@ -38,6 +49,9 @@ __all__ = [
     "LexicographyRepository",
     "LexicographyUnitOfWork",
     "LexicographyUnitOfWorkFactory",
+    "UpdateLexemeInput",
+    "UpdateLexemeService",
+    "changed_lexeme_fields",
     "find_overlapping_lexeme",
     "validate_lexeme_fields",
 ]

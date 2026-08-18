@@ -86,6 +86,9 @@ class MemorySourcesRepository:
     def get_page(self, source_file_id: UUID, page_index: int) -> DictionaryPage | None:
         raise AssertionError("not used by page-range tests")
 
+    def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
+        raise AssertionError("not used by page-range tests")
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         raise AssertionError("not used by page-range tests")
 

@@ -115,6 +115,9 @@ class MemorySourcesRepository:
     def get_page(self, source_file_id: UUID, page_index: int) -> DictionaryPage | None:
         raise AssertionError("not used by abbreviation import/export")
 
+    def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
+        raise AssertionError("not used by abbreviation import/export")
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         raise AssertionError("not used by abbreviation import/export")
 

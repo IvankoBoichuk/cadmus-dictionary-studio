@@ -8,14 +8,21 @@ from uuid import UUID, uuid4
 import pytest
 from cadmus.lexicography import (
     CreateLexemeService,
+    DeleteLexemeService,
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
+    LexemeEvent,
+    LexemeEventType,
     LexemeInput,
+    LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeQueryService,
     LexemeValidationError,
+    UpdateLexemeInput,
+    UpdateLexemeService,
+    changed_lexeme_fields,
     find_overlapping_lexeme,
     validate_lexeme_fields,
 )
@@ -53,6 +60,9 @@ class MemorySourcesRepository:
     def get_page(self, source_file_id: UUID, page_index: int) -> DictionaryPage | None:
         return self.pages.get((source_file_id, page_index))
 
+    def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
+        return next((p for p in self.pages.values() if p.id == page_id), None)
+
 
 class MemorySourcesUnitOfWork:
     def __init__(self, repository: MemorySourcesRepository) -> None:
@@ -76,12 +86,30 @@ class MemorySourcesUnitOfWork:
 @dataclass
 class MemoryLexicographyRepository:
     lexemes: dict[UUID, Lexeme] = field(default_factory=dict)
+    events: list[LexemeEvent] = field(default_factory=list)
 
     def add_lexeme(self, lexeme: Lexeme) -> None:
         self.lexemes[lexeme.id] = lexeme
 
     def list_lexemes_for_page(self, page_id: UUID) -> list[Lexeme]:
         return [lexeme for lexeme in self.lexemes.values() if lexeme.page_id == page_id]
+
+    def get_lexeme(self, dictionary_id: UUID, lexeme_id: UUID) -> Lexeme | None:
+        lexeme = self.lexemes.get(lexeme_id)
+        if lexeme is None or lexeme.dictionary_id != dictionary_id:
+            return None
+        return lexeme
+
+    def update_lexeme(self, lexeme: Lexeme) -> None:
+        self.lexemes[lexeme.id] = lexeme
+
+    def delete_lexeme(self, dictionary_id: UUID, lexeme_id: UUID) -> None:
+        existing = self.lexemes.get(lexeme_id)
+        if existing is not None and existing.dictionary_id == dictionary_id:
+            del self.lexemes[lexeme_id]
+
+    def add_lexeme_event(self, event: LexemeEvent) -> None:
+        self.events.append(event)
 
 
 class MemoryLexicographyUnitOfWork:
@@ -211,6 +239,34 @@ class Fixture:
                 self.lexicography_repository
             ),
             dictionary_pages=self.dictionary_pages,
+        )
+        self.update_service = UpdateLexemeService(
+            unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
+                self.lexicography_repository
+            ),
+            dictionary_pages=self.dictionary_pages,
+        )
+        self.delete_service = DeleteLexemeService(
+            unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
+                self.lexicography_repository
+            ),
+            dictionary_pages=self.dictionary_pages,
+        )
+
+    def create_lexeme(self, **overrides: object) -> Lexeme:
+        defaults: dict[str, object] = {
+            "page_number": 1,
+            "source_text": "слово",
+            "x": 10,
+            "y": 10,
+            "width": 100,
+            "height": 40,
+        }
+        defaults.update(overrides)
+        return self.create_service.create(
+            self.dictionary.id,
+            self.owner_id,
+            LexemeInput(**defaults),  # type: ignore[arg-type]
         )
 
 
@@ -410,3 +466,160 @@ def test_list_for_page_actor_other_than_owner_raises_access_error() -> None:
 
     with pytest.raises(LexemeAccessError):
         fixture.query_service.list_for_page(fixture.dictionary.id, uuid4(), 1)
+
+
+def test_changed_lexeme_fields_reports_only_the_fields_that_differ() -> None:
+    before = _lexeme(uuid4(), x=10, y=10, width=100, height=40)
+    before.source_text = "старе"
+
+    changed = changed_lexeme_fields(
+        before, source_text="нове", x=10, y=10, width=100, height=40
+    )
+
+    assert changed == ["source_text"]
+
+
+def test_changed_lexeme_fields_is_empty_when_nothing_changed() -> None:
+    before = _lexeme(uuid4(), x=10, y=10, width=100, height=40)
+
+    changed = changed_lexeme_fields(
+        before,
+        source_text=before.source_text,
+        x=before.x,
+        y=before.y,
+        width=before.width,
+        height=before.height,
+    )
+
+    assert changed == []
+
+
+def test_update_lexeme_persists_text_and_box_changes() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    updated = fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(source_text="нове", x=20, y=20, width=120, height=50),
+    )
+
+    assert updated.source_text == "нове"
+    assert (updated.x, updated.y, updated.width, updated.height) == (20, 20, 120, 50)
+    assert updated.updated_by == fixture.owner_id
+    stored = fixture.lexicography_repository.lexemes[lexeme.id]
+    assert stored.source_text == "нове"
+
+
+def test_update_lexeme_records_an_audit_event_with_changed_fields() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme(
+        source_text="старе", x=10, y=10, width=100, height=40
+    )
+
+    fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(source_text="нове", x=10, y=10, width=100, height=40),
+    )
+
+    assert len(fixture.lexicography_repository.events) == 1
+    event = fixture.lexicography_repository.events[0]
+    assert event.event_type is LexemeEventType.UPDATED
+    assert event.lexeme_id == lexeme.id
+    assert event.actor_user_id == fixture.owner_id
+    assert event.changed_fields == ("source_text",)
+
+
+def test_update_lexeme_is_a_no_op_when_nothing_actually_changed() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme(
+        source_text="слово", x=10, y=10, width=100, height=40
+    )
+
+    fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(source_text="слово", x=10, y=10, width=100, height=40),
+    )
+
+    assert fixture.lexicography_repository.events == []
+
+
+def test_update_lexeme_rejects_a_box_exceeding_the_page_bounds() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    with pytest.raises(LexemeValidationError) as error:
+        fixture.update_service.update(
+            fixture.dictionary.id,
+            lexeme.id,
+            fixture.owner_id,
+            UpdateLexemeInput(source_text="слово", x=950, y=10, width=100, height=40),
+        )
+    assert "width" in error.value.errors
+
+
+def test_update_lexeme_missing_lexeme_raises_not_found() -> None:
+    fixture = Fixture()
+
+    with pytest.raises(LexemeNotFoundError):
+        fixture.update_service.update(
+            fixture.dictionary.id,
+            uuid4(),
+            fixture.owner_id,
+            UpdateLexemeInput(source_text="слово", x=10, y=10, width=100, height=40),
+        )
+
+
+def test_update_lexeme_actor_other_than_owner_raises_access_error() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    with pytest.raises(LexemeAccessError):
+        fixture.update_service.update(
+            fixture.dictionary.id,
+            lexeme.id,
+            uuid4(),
+            UpdateLexemeInput(source_text="слово", x=10, y=10, width=100, height=40),
+        )
+
+
+def test_delete_lexeme_removes_it_from_the_repository() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    fixture.delete_service.delete(fixture.dictionary.id, lexeme.id, fixture.owner_id)
+
+    assert lexeme.id not in fixture.lexicography_repository.lexemes
+
+
+def test_delete_lexeme_records_an_audit_event() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    fixture.delete_service.delete(fixture.dictionary.id, lexeme.id, fixture.owner_id)
+
+    assert len(fixture.lexicography_repository.events) == 1
+    event = fixture.lexicography_repository.events[0]
+    assert event.event_type is LexemeEventType.DELETED
+    assert event.lexeme_id == lexeme.id
+    assert event.actor_user_id == fixture.owner_id
+
+
+def test_delete_lexeme_missing_lexeme_raises_not_found() -> None:
+    fixture = Fixture()
+
+    with pytest.raises(LexemeNotFoundError):
+        fixture.delete_service.delete(fixture.dictionary.id, uuid4(), fixture.owner_id)
+
+
+def test_delete_lexeme_actor_other_than_owner_raises_access_error() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    with pytest.raises(LexemeAccessError):
+        fixture.delete_service.delete(fixture.dictionary.id, lexeme.id, uuid4())

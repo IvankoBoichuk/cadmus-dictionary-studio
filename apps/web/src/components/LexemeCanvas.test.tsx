@@ -58,6 +58,13 @@ function renderCanvas(
     onLexemeCreated: (lexeme: LexemeResponse) => void;
     selectedLexemeId: string | null;
     onSelectLexeme: (id: string | null) => void;
+    redrawingLexemeId: string | null;
+    onLexemeRedrawn: (lexeme: LexemeResponse) => void;
+    onCancelRedraw: () => void;
+    onSubmitUpdate: (
+      lexemeId: string,
+      input: { source_text: string; x: number; y: number; width: number; height: number },
+    ) => Promise<LexemeResponse | null>;
   }> = {},
 ) {
   return render(
@@ -70,6 +77,10 @@ function renderCanvas(
       onLexemeCreated={overrides.onLexemeCreated ?? vi.fn()}
       selectedLexemeId={overrides.selectedLexemeId ?? null}
       onSelectLexeme={overrides.onSelectLexeme ?? vi.fn()}
+      redrawingLexemeId={overrides.redrawingLexemeId ?? null}
+      onLexemeRedrawn={overrides.onLexemeRedrawn ?? vi.fn()}
+      onCancelRedraw={overrides.onCancelRedraw ?? vi.fn()}
+      onSubmitUpdate={overrides.onSubmitUpdate ?? vi.fn().mockResolvedValue(null)}
     />,
   );
 }
@@ -222,5 +233,60 @@ describe("LexemeCanvas", () => {
     fireEvent.mouseUp(canvas, { clientX: 52, clientY: 51 });
 
     expect(screen.queryByLabelText("Текст лексеми")).not.toBeInTheDocument();
+  });
+
+  it("redrawing a selected lexeme submits the new box, keeping its text (BH-56)", async () => {
+    stubContainerRect();
+    const existing = lexemeFixture({ id: "lex-1", source_text: "старе" });
+    const onSubmitUpdate = vi.fn().mockResolvedValue(lexemeFixture({ id: "lex-1" }));
+    const onLexemeRedrawn = vi.fn();
+
+    renderCanvas({
+      lexemes: [existing],
+      redrawingLexemeId: "lex-1",
+      onSubmitUpdate,
+      onLexemeRedrawn,
+    });
+    const image = await loadImage();
+    const canvas = image.parentElement as HTMLElement;
+
+    fireEvent.mouseDown(canvas, { clientX: 50, clientY: 50 });
+    fireEvent.mouseMove(canvas, { clientX: 150, clientY: 130 });
+    fireEvent.mouseUp(canvas, { clientX: 150, clientY: 130 });
+
+    // No create form should appear -- redraw skips straight to submitting.
+    expect(screen.queryByLabelText("Текст лексеми")).not.toBeInTheDocument();
+    await vi.waitFor(() => {
+      expect(onSubmitUpdate).toHaveBeenCalledWith("lex-1", {
+        source_text: "старе",
+        x: 100,
+        y: 100,
+        width: 200,
+        height: 160,
+      });
+    });
+    await vi.waitFor(() => {
+      expect(onLexemeRedrawn).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "lex-1" }),
+      );
+    });
+  });
+
+  it("shows a redraw hint with a cancel button while redrawing", async () => {
+    stubContainerRect();
+    const onCancelRedraw = vi.fn();
+
+    renderCanvas({
+      lexemes: [lexemeFixture()],
+      redrawingLexemeId: "lex-1",
+      onCancelRedraw,
+    });
+    await loadImage();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Скасувати перемальовування" }),
+    );
+
+    expect(onCancelRedraw).toHaveBeenCalled();
   });
 });

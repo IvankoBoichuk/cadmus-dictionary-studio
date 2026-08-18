@@ -35,5 +35,29 @@ export function useLexemesForPage(dictionaryId: string, pageNumber: number) {
     );
   }, []);
 
-  return { state, addLexeme };
+  const updateLexeme = useCallback((lexeme: LexemeResponse) => {
+    setState((current) =>
+      current.status === "loaded"
+        ? {
+            status: "loaded",
+            lexemes: current.lexemes.map((existing) =>
+              existing.id === lexeme.id ? lexeme : existing,
+            ),
+          }
+        : current,
+    );
+  }, []);
+
+  const removeLexeme = useCallback((lexemeId: string) => {
+    setState((current) =>
+      current.status === "loaded"
+        ? {
+            status: "loaded",
+            lexemes: current.lexemes.filter((existing) => existing.id !== lexemeId),
+          }
+        : current,
+    );
+  }, []);
+
+  return { state, addLexeme, updateLexeme, removeLexeme };
 }

@@ -12,13 +12,15 @@ from sqlalchemy import (
     String,
     Table,
     Uuid,
+    delete,
     select,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, registry
 
 from cadmus.infrastructure.database import metadata
-from cadmus.lexicography.domain import Lexeme
+from cadmus.lexicography.domain import Lexeme, LexemeEvent
 from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory
 
 lexicography_registry = registry(metadata=metadata)
@@ -65,7 +67,32 @@ lexemes = Table(
     CheckConstraint("width > 0 AND height > 0", name="lexeme_positive_size"),
 )
 
+lexeme_events = Table(
+    "lexeme_events",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column("lexeme_id", Uuid(as_uuid=True), nullable=False, index=True),
+    Column(
+        "dictionary_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("event_type", String(16), nullable=False),
+    Column(
+        "actor_user_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("occurred_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("changed_fields", JSONB, nullable=False, default=list),
+    CheckConstraint("event_type IN ('updated', 'deleted')", name="lexeme_event_type"),
+)
+
 lexicography_registry.map_imperatively(Lexeme, lexemes)
+lexicography_registry.map_imperatively(LexemeEvent, lexeme_events)
 
 
 class SqlAlchemyLexicographyRepository:
@@ -85,6 +112,26 @@ class SqlAlchemyLexicographyRepository:
                 .order_by(lexemes.c.created_at)
             )
         )
+
+    def get_lexeme(self, dictionary_id: UUID, lexeme_id: UUID) -> Lexeme | None:
+        lexeme = self._session.get(Lexeme, lexeme_id)
+        if lexeme is None or lexeme.dictionary_id != dictionary_id:
+            return None
+        return lexeme
+
+    def update_lexeme(self, lexeme: Lexeme) -> None:
+        self._session.add(lexeme)
+
+    def delete_lexeme(self, dictionary_id: UUID, lexeme_id: UUID) -> None:
+        self._session.execute(
+            delete(lexemes).where(
+                lexemes.c.id == lexeme_id,
+                lexemes.c.dictionary_id == dictionary_id,
+            )
+        )
+
+    def add_lexeme_event(self, event: LexemeEvent) -> None:
+        self._session.add(event)
 
 
 class SqlAlchemyLexicographyUnitOfWork:

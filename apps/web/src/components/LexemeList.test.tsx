@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LexemeResponse } from "../api";
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
+import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
 import { LexemeList } from "./LexemeList";
 
 function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse {
@@ -24,59 +25,69 @@ function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse 
   };
 }
 
+const IDLE_UPDATE_STATE: UpdateLexemeState = { status: "idle" };
+
+function renderList(
+  overrides: Partial<{
+    lexemesState: LexemesForPageState;
+    pageNumber: number;
+    selectedLexemeId: string | null;
+    onSelectLexeme: (lexemeId: string) => void;
+    redrawingLexemeId: string | null;
+    onStartRedraw: (lexemeId: string) => void;
+    onCancelRedraw: () => void;
+    onSaveText: (lexemeId: string, text: string) => void;
+    updateState: UpdateLexemeState;
+    onDelete: (lexemeId: string) => void;
+  }> = {},
+) {
+  return render(
+    <LexemeList
+      lexemesState={overrides.lexemesState ?? { status: "loaded", lexemes: [] }}
+      pageNumber={overrides.pageNumber ?? 1}
+      selectedLexemeId={overrides.selectedLexemeId ?? null}
+      onSelectLexeme={overrides.onSelectLexeme ?? vi.fn()}
+      redrawingLexemeId={overrides.redrawingLexemeId ?? null}
+      onStartRedraw={overrides.onStartRedraw ?? vi.fn()}
+      onCancelRedraw={overrides.onCancelRedraw ?? vi.fn()}
+      onSaveText={overrides.onSaveText ?? vi.fn()}
+      updateState={overrides.updateState ?? IDLE_UPDATE_STATE}
+      onDelete={overrides.onDelete ?? vi.fn()}
+    />,
+  );
+}
+
 describe("LexemeList", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("shows a loading indicator", () => {
-    render(
-      <LexemeList
-        lexemesState={{ status: "loading" }}
-        pageNumber={1}
-        selectedLexemeId={null}
-        onSelectLexeme={vi.fn()}
-      />,
-    );
+    renderList({ lexemesState: { status: "loading" } });
     expect(screen.getByRole("status")).toHaveTextContent("Завантажуємо лексеми");
   });
 
   it("shows an error message", () => {
-    const state: LexemesForPageState = { status: "error", message: "Проблема" };
-    render(
-      <LexemeList
-        lexemesState={state}
-        pageNumber={1}
-        selectedLexemeId={null}
-        onSelectLexeme={vi.fn()}
-      />,
-    );
+    renderList({ lexemesState: { status: "error", message: "Проблема" } });
     expect(screen.getByRole("alert")).toHaveTextContent("Проблема");
   });
 
   it("explains an empty page", () => {
-    render(
-      <LexemeList
-        lexemesState={{ status: "loaded", lexemes: [] }}
-        pageNumber={1}
-        selectedLexemeId={null}
-        onSelectLexeme={vi.fn()}
-      />,
-    );
+    renderList({ lexemesState: { status: "loaded", lexemes: [] } });
     expect(screen.getByText(/ще немає виділених лексем/)).toBeInTheDocument();
   });
 
   it("lists each lexeme's text, page number, and bounding box (AC2)", () => {
-    render(
-      <LexemeList
-        lexemesState={{
-          status: "loaded",
-          lexemes: [lexemeFixture({ x: 100.4, y: 120.6, width: 200, height: 80 })],
-        }}
-        pageNumber={3}
-        selectedLexemeId={null}
-        onSelectLexeme={vi.fn()}
-      />,
-    );
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ x: 100.4, y: 120.6, width: 200, height: 80 })],
+      },
+      pageNumber: 3,
+    });
 
     expect(screen.getByText("слово")).toBeInTheDocument();
-    const item = screen.getByRole("button");
+    const item = screen.getByRole("button", { name: /слово/ });
     expect(item).toHaveTextContent("Сторінка 3");
     expect(item).toHaveTextContent("x=100, y=121");
     expect(item).toHaveTextContent("200×80");
@@ -84,30 +95,111 @@ describe("LexemeList", () => {
 
   it("calls onSelectLexeme when a row is clicked (AC3)", () => {
     const onSelectLexeme = vi.fn();
-    render(
-      <LexemeList
-        lexemesState={{ status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] }}
-        pageNumber={1}
-        selectedLexemeId={null}
-        onSelectLexeme={onSelectLexeme}
-      />,
-    );
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onSelectLexeme,
+    });
 
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /слово/ }));
 
     expect(onSelectLexeme).toHaveBeenCalledWith("lex-7");
   });
 
   it("marks the selected lexeme's row (AC3)", () => {
-    render(
-      <LexemeList
-        lexemesState={{ status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] }}
-        pageNumber={1}
-        selectedLexemeId="lex-7"
-        onSelectLexeme={vi.fn()}
-      />,
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      selectedLexemeId: "lex-7",
+    });
+
+    expect(screen.getByRole("button", { name: /слово/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("edits text inline and saves it (BH-56 AC2, AC4)", () => {
+    const onSaveText = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onSaveText,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати текст" }));
+    const input = screen.getByLabelText("Текст лексеми");
+    fireEvent.change(input, { target: { value: "нове слово" } });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    expect(onSaveText).toHaveBeenCalledWith("lex-7", "нове слово");
+    expect(screen.queryByLabelText("Текст лексеми")).not.toBeInTheDocument();
+  });
+
+  it("cancels text editing without saving", () => {
+    const onSaveText = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture()] },
+      onSaveText,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати текст" }));
+    fireEvent.change(screen.getByLabelText("Текст лексеми"), {
+      target: { value: "скасовано" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Скасувати" }));
+
+    expect(onSaveText).not.toHaveBeenCalled();
+    expect(screen.getByText("слово")).toBeInTheDocument();
+  });
+
+  it("starts redraw mode for a lexeme (BH-56 AC3)", () => {
+    const onStartRedraw = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onStartRedraw,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Перемалювати область" }));
+
+    expect(onStartRedraw).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("offers to cancel redraw when already redrawing that lexeme", () => {
+    const onCancelRedraw = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      redrawingLexemeId: "lex-7",
+      onCancelRedraw,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Скасувати перемальовування" }),
     );
 
-    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "true");
+    expect(onCancelRedraw).toHaveBeenCalled();
+  });
+
+  it("deletes a lexeme after confirmation (BH-56 AC1)", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onDelete = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onDelete,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
+
+    expect(onDelete).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("does not delete when the confirmation is declined", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onDelete = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture()] },
+      onDelete,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
+
+    expect(onDelete).not.toHaveBeenCalled();
   });
 });

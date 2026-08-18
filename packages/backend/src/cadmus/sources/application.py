@@ -603,6 +603,25 @@ class GetDictionaryService:
                 source_file.id, page_index=physical_page_number - 1
             )
 
+    def get_page_by_id(
+        self, dictionary_id: UUID, actor_id: UUID, page_id: UUID
+    ) -> DictionaryPage | None:
+        """BH-56: resolve a page already known by ID, scoped to the caller.
+
+        Used by lexeme edit validation, which already has the target
+        lexeme's ``page_id`` and only needs that page's dimensions -- not
+        another viewer-ordinal lookup.
+        """
+        dictionary = self.get(dictionary_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            source_file = unit_of_work.sources.get_source_file(dictionary.id)
+            if source_file is None:
+                return None
+            page = unit_of_work.sources.get_page_by_id(page_id)
+            if page is None or page.source_file_id != source_file.id:
+                return None
+            return page
+
 
 class DeleteDictionaryService:
     """Delete a dictionary draft and its underlying stored objects."""
