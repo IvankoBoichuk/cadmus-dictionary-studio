@@ -22,6 +22,7 @@ from cadmus.lexicography.domain import (
     find_overlapping_lexeme,
     resolve_ocr_language,
     validate_lexeme_fields,
+    validate_second_box_fields,
 )
 from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory, OcrSuggestionQueue
 from cadmus.sources import (
@@ -46,6 +47,10 @@ class LexemeInput:
     height: float
     confirm_duplicate: bool = False
     origin: LexemeOrigin = LexemeOrigin.MANUAL
+    x2: float | None = None
+    y2: float | None = None
+    width2: float | None = None
+    height2: float | None = None
 
 
 def _resolve_page(
@@ -96,6 +101,16 @@ class CreateLexemeService:
             page_width=page.width,
             page_height=page.height,
         )
+        errors.update(
+            validate_second_box_fields(
+                x2=data.x2,
+                y2=data.y2,
+                width2=data.width2,
+                height2=data.height2,
+                page_width=page.width,
+                page_height=page.height,
+            )
+        )
         if errors:
             raise LexemeValidationError(errors)
 
@@ -126,6 +141,10 @@ class CreateLexemeService:
                 created_by=actor_id,
                 updated_at=now,
                 updated_by=actor_id,
+                x2=data.x2,
+                y2=data.y2,
+                width2=data.width2,
+                height2=data.height2,
             )
             unit_of_work.lexicography.add_lexeme(lexeme)
             unit_of_work.commit()
@@ -141,6 +160,10 @@ class UpdateLexemeInput:
     y: float
     width: float
     height: float
+    x2: float | None = None
+    y2: float | None = None
+    width2: float | None = None
+    height2: float | None = None
 
 
 class UpdateLexemeService:
@@ -192,6 +215,16 @@ class UpdateLexemeService:
                 page_width=page.width,
                 page_height=page.height,
             )
+            errors.update(
+                validate_second_box_fields(
+                    x2=data.x2,
+                    y2=data.y2,
+                    width2=data.width2,
+                    height2=data.height2,
+                    page_width=page.width,
+                    page_height=page.height,
+                )
+            )
             if errors:
                 raise LexemeValidationError(errors)
 
@@ -202,6 +235,10 @@ class UpdateLexemeService:
                 y=data.y,
                 width=data.width,
                 height=data.height,
+                x2=data.x2,
+                y2=data.y2,
+                width2=data.width2,
+                height2=data.height2,
             )
             if changed:
                 existing.source_text = data.source_text.strip()
@@ -209,6 +246,10 @@ class UpdateLexemeService:
                 existing.y = data.y
                 existing.width = data.width
                 existing.height = data.height
+                existing.x2 = data.x2
+                existing.y2 = data.y2
+                existing.width2 = data.width2
+                existing.height2 = data.height2
                 existing.updated_at = now
                 existing.updated_by = actor_id
                 unit_of_work.lexicography.update_lexeme(existing)

@@ -8,18 +8,85 @@ import {
 
 import type { LexemeResponse, LexemeSuggestion } from "../api";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
-import type { UpdateLexemeInput } from "../hooks/useUpdateLexeme";
+import { lexemeToUpdateInput, type UpdateLexemeInput } from "../hooks/useUpdateLexeme";
 import {
+  HANDLES,
   isRectLargeEnough,
   normalizeDragRect,
+  resizeRect,
   scaleRect,
+  type HandleId,
   type Point,
   type Rect,
 } from "../lexemeGeometry";
 
 type Size = { width: number; height: number };
 
-/** BH-54/BH-55/BH-56: the page image, lexeme drawing, highlighting, and redrawing. */
+type HandleDragState = {
+  box: 1 | 2;
+  handle: HandleId;
+  start: Point;
+  current: Point;
+  original: Rect;
+};
+
+function box1Rect(lexeme: LexemeResponse): Rect {
+  return { x: lexeme.x, y: lexeme.y, width: lexeme.width, height: lexeme.height };
+}
+
+function box2Rect(lexeme: LexemeResponse): Rect | null {
+  if (
+    lexeme.x2 == null ||
+    lexeme.y2 == null ||
+    lexeme.width2 == null ||
+    lexeme.height2 == null
+  ) {
+    return null;
+  }
+  return { x: lexeme.x2, y: lexeme.y2, width: lexeme.width2, height: lexeme.height2 };
+}
+
+/** One lexeme's box: clickable to select, with resize handles once selected. */
+function LexemeBox({
+  rect,
+  selected,
+  title,
+  showHandles,
+  onSelect,
+  onHandleMouseDown,
+}: {
+  rect: Rect;
+  selected: boolean;
+  title: string;
+  showHandles: boolean;
+  onSelect: () => void;
+  onHandleMouseDown: (handle: HandleId, event: ReactMouseEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      className={
+        selected
+          ? "lexeme-box lexeme-box--selected lexeme-box--clickable"
+          : "lexeme-box lexeme-box--clickable"
+      }
+      title={title}
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={onSelect}
+      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+    >
+      {showHandles &&
+        HANDLES.map((handle) => (
+          <div
+            key={handle}
+            className={`lexeme-resize-handle lexeme-resize-handle--${handle}`}
+            onMouseDown={(event) => onHandleMouseDown(handle, event)}
+          />
+        ))}
+    </div>
+  );
+}
+
+/** BH-54/55/56: the page image, lexeme drawing, highlighting, and editing. */
 export function LexemeCanvas({
   dictionaryId,
   pageNumber,
@@ -35,6 +102,9 @@ export function LexemeCanvas({
   onSubmitUpdate,
   suggestions = [],
   onAcceptSuggestion,
+  secondBoxDraftLexemeId = null,
+  onSecondBoxDrawn,
+  onCancelSecondBoxDraft,
 }: {
   dictionaryId: string;
   pageNumber: number;
@@ -53,6 +123,9 @@ export function LexemeCanvas({
   ) => Promise<LexemeResponse | null>;
   suggestions?: LexemeSuggestion[];
   onAcceptSuggestion?: (suggestion: LexemeSuggestion) => void;
+  secondBoxDraftLexemeId?: string | null;
+  onSecondBoxDrawn?: (lexeme: LexemeResponse) => void;
+  onCancelSecondBoxDraft?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState<Size | null>(null);
@@ -63,6 +136,7 @@ export function LexemeCanvas({
   const [pendingSuggestion, setPendingSuggestion] = useState<LexemeSuggestion | null>(
     null,
   );
+  const [handleDrag, setHandleDrag] = useState<HandleDragState | null>(null);
 
   const { state: createState, submit, reset: resetCreate } = useCreateLexeme(
     dictionaryId,
@@ -94,28 +168,75 @@ export function LexemeCanvas({
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
+  const toNaturalRect = (displayedRect: Rect): Rect | null => {
+    if (!naturalSize || !displayedSize || displayedSize.width === 0) return null;
+    return scaleRect(displayedRect, naturalSize.width / displayedSize.width);
+  };
+
   const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     const point = pointFromEvent(event);
     if (!point) return;
     setPendingBox(null);
     setPendingSuggestion(null);
     resetCreate();
+    if (
+      selectedLexemeId !== null &&
+      redrawingLexemeId === null &&
+      secondBoxDraftLexemeId === null
+    ) {
+      onSelectLexeme(null);
+    }
     setDrag({ start: point, current: point });
   };
 
   const handleMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!drag) return;
     const point = pointFromEvent(event);
     if (!point) return;
+    if (handleDrag) {
+      setHandleDrag({ ...handleDrag, current: point });
+      return;
+    }
+    if (!drag) return;
     setDrag({ start: drag.start, current: point });
   };
 
-  const toNaturalRect = (displayedRect: Rect): Rect | null => {
-    if (!naturalSize || !displayedSize || displayedSize.width === 0) return null;
-    return scaleRect(displayedRect, naturalSize.width / displayedSize.width);
-  };
-
   const handleMouseUp = () => {
+    if (handleDrag) {
+      const lexeme = lexemes.find((candidate) => candidate.id === selectedLexemeId);
+      const finalRect = resizeRect(
+        handleDrag.original,
+        handleDrag.handle,
+        handleDrag.current.x - handleDrag.start.x,
+        handleDrag.current.y - handleDrag.start.y,
+      );
+      const naturalRect = toNaturalRect(finalRect);
+      const { box } = handleDrag;
+      setHandleDrag(null);
+      if (lexeme && naturalRect && selectedLexemeId) {
+        const overrides =
+          box === 1
+            ? {
+                x: naturalRect.x,
+                y: naturalRect.y,
+                width: naturalRect.width,
+                height: naturalRect.height,
+              }
+            : {
+                x2: naturalRect.x,
+                y2: naturalRect.y,
+                width2: naturalRect.width,
+                height2: naturalRect.height,
+              };
+        void onSubmitUpdate(selectedLexemeId, {
+          ...lexemeToUpdateInput(lexeme),
+          ...overrides,
+        }).then((updated) => {
+          if (updated) onLexemeRedrawn(updated);
+        });
+      }
+      return;
+    }
+
     if (!drag) return;
     const rect = normalizeDragRect(drag.start, drag.current);
     setDrag(null);
@@ -126,10 +247,30 @@ export function LexemeCanvas({
       const naturalRect = toNaturalRect(rect);
       if (target && naturalRect) {
         void onSubmitUpdate(redrawingLexemeId, {
-          source_text: target.source_text,
-          ...naturalRect,
+          ...lexemeToUpdateInput(target),
+          x: naturalRect.x,
+          y: naturalRect.y,
+          width: naturalRect.width,
+          height: naturalRect.height,
         }).then((updated) => {
           if (updated) onLexemeRedrawn(updated);
+        });
+      }
+      return;
+    }
+
+    if (secondBoxDraftLexemeId) {
+      const target = lexemes.find((lexeme) => lexeme.id === secondBoxDraftLexemeId);
+      const naturalRect = toNaturalRect(rect);
+      if (target && naturalRect) {
+        void onSubmitUpdate(secondBoxDraftLexemeId, {
+          ...lexemeToUpdateInput(target),
+          x2: naturalRect.x,
+          y2: naturalRect.y,
+          width2: naturalRect.width,
+          height2: naturalRect.height,
+        }).then((updated) => {
+          if (updated) onSecondBoxDrawn?.(updated);
         });
       }
       return;
@@ -196,6 +337,26 @@ export function LexemeCanvas({
     setPendingSuggestion(suggestion);
   };
 
+  const startHandleDrag = (
+    lexeme: LexemeResponse,
+    box: 1 | 2,
+    handle: HandleId,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    event.stopPropagation();
+    const point = pointFromEvent(event);
+    if (!point || !scale) return;
+    const natural = box === 1 ? box1Rect(lexeme) : box2Rect(lexeme);
+    if (!natural) return;
+    setHandleDrag({
+      box,
+      handle,
+      start: point,
+      current: point,
+      original: scaleRect(natural, scale),
+    });
+  };
+
   return (
     <div className="lexeme-canvas-wrap">
       {redrawingLexemeId && (
@@ -203,6 +364,19 @@ export function LexemeCanvas({
           Намалюйте нову область для вибраної лексеми.{" "}
           <button type="button" className="secondary-button" onClick={onCancelRedraw}>
             Скасувати перемальовування
+          </button>
+        </p>
+      )}
+      {secondBoxDraftLexemeId && (
+        <p className="lede" role="status">
+          Намалюйте другу область для вибраної лексеми (наприклад, продовження в іншій
+          колонці).{" "}
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onCancelSecondBoxDraft}
+          >
+            Скасувати
           </button>
         </p>
       )}
@@ -222,23 +396,62 @@ export function LexemeCanvas({
           draggable={false}
         />
         {scale !== null &&
-          lexemes.map((lexeme) => (
-            <div
-              key={lexeme.id}
-              className={
-                lexeme.id === selectedLexemeId
-                  ? "lexeme-box lexeme-box--selected"
-                  : "lexeme-box"
-              }
-              title={lexeme.source_text}
-              style={{
-                left: lexeme.x * scale,
-                top: lexeme.y * scale,
-                width: lexeme.width * scale,
-                height: lexeme.height * scale,
-              }}
-            />
-          ))}
+          lexemes
+            .filter((lexeme) => selectedLexemeId === null || lexeme.id === selectedLexemeId)
+            .map((lexeme) => {
+              const isSelected = lexeme.id === selectedLexemeId;
+              const isFullyRedrawing = lexeme.id === redrawingLexemeId;
+              const isDraftingSecondBox = lexeme.id === secondBoxDraftLexemeId;
+              const box1Displayed =
+                isSelected && handleDrag?.box === 1
+                  ? resizeRect(
+                      handleDrag.original,
+                      handleDrag.handle,
+                      handleDrag.current.x - handleDrag.start.x,
+                      handleDrag.current.y - handleDrag.start.y,
+                    )
+                  : scaleRect(box1Rect(lexeme), scale);
+              const naturalBox2 = box2Rect(lexeme);
+              const box2Displayed =
+                naturalBox2 === null
+                  ? null
+                  : isSelected && handleDrag?.box === 2
+                    ? resizeRect(
+                        handleDrag.original,
+                        handleDrag.handle,
+                        handleDrag.current.x - handleDrag.start.x,
+                        handleDrag.current.y - handleDrag.start.y,
+                      )
+                    : scaleRect(naturalBox2, scale);
+              return (
+                <div key={lexeme.id}>
+                  {!isFullyRedrawing && (
+                    <LexemeBox
+                      rect={box1Displayed}
+                      selected={isSelected}
+                      title={lexeme.source_text}
+                      showHandles={isSelected && !isDraftingSecondBox}
+                      onSelect={() => onSelectLexeme(lexeme.id)}
+                      onHandleMouseDown={(handle, event) =>
+                        startHandleDrag(lexeme, 1, handle, event)
+                      }
+                    />
+                  )}
+                  {box2Displayed && !isDraftingSecondBox && (
+                    <LexemeBox
+                      rect={box2Displayed}
+                      selected={isSelected}
+                      title={lexeme.source_text}
+                      showHandles={isSelected}
+                      onSelect={() => onSelectLexeme(lexeme.id)}
+                      onHandleMouseDown={(handle, event) =>
+                        startHandleDrag(lexeme, 2, handle, event)
+                      }
+                    />
+                  )}
+                </div>
+              );
+            })}
         {scale !== null &&
           suggestions
             .filter((suggestion) => suggestion !== pendingSuggestion)

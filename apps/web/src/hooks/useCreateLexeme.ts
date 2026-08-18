@@ -15,6 +15,10 @@ export type CreateLexemeInput = {
   width: number;
   height: number;
   origin?: "manual" | "ocr";
+  x2?: number | null;
+  y2?: number | null;
+  width2?: number | null;
+  height2?: number | null;
 };
 
 export type CreateLexemeState =

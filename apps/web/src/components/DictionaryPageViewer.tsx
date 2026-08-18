@@ -5,7 +5,7 @@ import { useDeleteLexeme } from "../hooks/useDeleteLexeme";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
 import { useLexemesForPage } from "../hooks/useLexemesForPage";
 import { useOcrSuggestions } from "../hooks/useOcrSuggestions";
-import { useUpdateLexeme } from "../hooks/useUpdateLexeme";
+import { lexemeToUpdateInput, useUpdateLexeme } from "../hooks/useUpdateLexeme";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
 import { ScanProgressBar } from "./ScanProgressBar";
@@ -47,12 +47,16 @@ export function DictionaryPageViewer({
 
   const [selectedLexemeId, setSelectedLexemeId] = useState<string | null>(null);
   const [redrawingLexemeId, setRedrawingLexemeId] = useState<string | null>(null);
+  const [secondBoxDraftLexemeId, setSecondBoxDraftLexemeId] = useState<string | null>(
+    null,
+  );
   const pageKey = `${dictionaryId}:${currentPage}`;
   const [previousPageKey, setPreviousPageKey] = useState(pageKey);
   if (pageKey !== previousPageKey) {
     setPreviousPageKey(pageKey);
     setSelectedLexemeId(null);
     setRedrawingLexemeId(null);
+    setSecondBoxDraftLexemeId(null);
     resetOcrSuggestions();
   }
 
@@ -80,6 +84,7 @@ export function DictionaryPageViewer({
   const handleStartRedraw = (lexemeId: string) => {
     setSelectedLexemeId(lexemeId);
     setRedrawingLexemeId(lexemeId);
+    setSecondBoxDraftLexemeId(null);
   };
 
   const handleLexemeRedrawn = (lexeme: LexemeResponse) => {
@@ -87,18 +92,42 @@ export function DictionaryPageViewer({
     setRedrawingLexemeId(null);
   };
 
+  const findLexeme = (lexemeId: string): LexemeResponse | undefined =>
+    lexemesState.status === "loaded"
+      ? lexemesState.lexemes.find((lexeme) => lexeme.id === lexemeId)
+      : undefined;
+
   const handleSaveText = (lexemeId: string, newText: string) => {
-    const target =
-      lexemesState.status === "loaded"
-        ? lexemesState.lexemes.find((lexeme) => lexeme.id === lexemeId)
-        : undefined;
+    const target = findLexeme(lexemeId);
     if (!target) return;
     void submitUpdate(lexemeId, {
+      ...lexemeToUpdateInput(target),
       source_text: newText,
-      x: target.x,
-      y: target.y,
-      width: target.width,
-      height: target.height,
+    }).then((updated) => {
+      if (updated) updateLexeme(updated);
+    });
+  };
+
+  const handleStartAddSecondBox = (lexemeId: string) => {
+    setSelectedLexemeId(lexemeId);
+    setSecondBoxDraftLexemeId(lexemeId);
+    setRedrawingLexemeId(null);
+  };
+
+  const handleSecondBoxDrawn = (lexeme: LexemeResponse) => {
+    updateLexeme(lexeme);
+    setSecondBoxDraftLexemeId(null);
+  };
+
+  const handleRemoveSecondBox = (lexemeId: string) => {
+    const target = findLexeme(lexemeId);
+    if (!target) return;
+    void submitUpdate(lexemeId, {
+      ...lexemeToUpdateInput(target),
+      x2: null,
+      y2: null,
+      width2: null,
+      height2: null,
     }).then((updated) => {
       if (updated) updateLexeme(updated);
     });
@@ -110,6 +139,7 @@ export function DictionaryPageViewer({
       removeLexeme(lexemeId);
       if (selectedLexemeId === lexemeId) setSelectedLexemeId(null);
       if (redrawingLexemeId === lexemeId) setRedrawingLexemeId(null);
+      if (secondBoxDraftLexemeId === lexemeId) setSecondBoxDraftLexemeId(null);
     });
   };
 
@@ -162,6 +192,9 @@ export function DictionaryPageViewer({
           onSubmitUpdate={submitUpdate}
           suggestions={suggestions}
           onAcceptSuggestion={dismissSuggestion}
+          secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+          onSecondBoxDrawn={handleSecondBoxDrawn}
+          onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
         />
         <aside className="lexeme-sidebar" aria-labelledby="lexeme-list-heading">
           <h3 id="lexeme-list-heading">Лексеми сторінки</h3>
@@ -176,6 +209,10 @@ export function DictionaryPageViewer({
             onSaveText={handleSaveText}
             updateState={updateState}
             onDelete={handleDelete}
+            secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+            onStartAddSecondBox={handleStartAddSecondBox}
+            onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
+            onRemoveSecondBox={handleRemoveSecondBox}
           />
         </aside>
       </div>

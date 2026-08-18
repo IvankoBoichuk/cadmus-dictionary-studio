@@ -44,6 +44,10 @@ class CreateLexemeRequest(BaseModel):
     height: float = Field(gt=0)
     confirm_duplicate: bool = False
     origin: LexemeOrigin = LexemeOrigin.MANUAL
+    x2: float | None = Field(default=None, ge=0)
+    y2: float | None = Field(default=None, ge=0)
+    width2: float | None = Field(default=None, gt=0)
+    height2: float | None = Field(default=None, gt=0)
 
 
 class LexemeResponse(BaseModel):
@@ -64,6 +68,10 @@ class LexemeResponse(BaseModel):
     created_by: UUID
     updated_at: datetime
     updated_by: UUID
+    x2: float | None = None
+    y2: float | None = None
+    width2: float | None = None
+    height2: float | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -93,6 +101,10 @@ class UpdateLexemeRequest(BaseModel):
     y: float = Field(ge=0)
     width: float = Field(gt=0)
     height: float = Field(gt=0)
+    x2: float | None = Field(default=None, ge=0)
+    y2: float | None = Field(default=None, ge=0)
+    width2: float | None = Field(default=None, gt=0)
+    height2: float | None = Field(default=None, gt=0)
 
 
 class DuplicateLexemeResponse(BaseModel):
@@ -142,6 +154,10 @@ def _lexeme_response(lexeme: Lexeme) -> LexemeResponse:
         created_by=lexeme.created_by,
         updated_at=lexeme.updated_at,
         updated_by=lexeme.updated_by,
+        x2=lexeme.x2,
+        y2=lexeme.y2,
+        width2=lexeme.width2,
+        height2=lexeme.height2,
     )
 
 
@@ -232,6 +248,10 @@ def create_lexemes_router(
             height=request.height,
             confirm_duplicate=request.confirm_duplicate,
             origin=request.origin,
+            x2=request.x2,
+            y2=request.y2,
+            width2=request.width2,
+            height2=request.height2,
         )
         try:
             lexeme = create_service.create(dictionary_id, user.id, data)
@@ -315,6 +335,10 @@ def create_lexeme_management_router(
             y=request.y,
             width=request.width,
             height=request.height,
+            x2=request.x2,
+            y2=request.y2,
+            width2=request.width2,
+            height2=request.height2,
         )
         try:
             lexeme = update_service.update(dictionary_id, lexeme_id, user.id, data)

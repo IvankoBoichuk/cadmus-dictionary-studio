@@ -34,6 +34,7 @@ from cadmus.lexicography.domain import (
     find_overlapping_lexeme,
     resolve_ocr_language,
     validate_lexeme_fields,
+    validate_second_box_fields,
 )
 from cadmus.lexicography.ports import (
     SUGGEST_LEXEMES_TASK_NAME,
@@ -82,4 +83,5 @@ __all__ = [
     "find_overlapping_lexeme",
     "resolve_ocr_language",
     "validate_lexeme_fields",
+    "validate_second_box_fields",
 ]

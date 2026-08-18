@@ -982,16 +982,24 @@ export interface components {
             confirm_duplicate: boolean;
             /** Height */
             height: number;
+            /** Height2 */
+            height2?: number | null;
             /** @default manual */
             origin: components["schemas"]["LexemeOrigin"];
             /** Source Text */
             source_text: string;
             /** Width */
             width: number;
+            /** Width2 */
+            width2?: number | null;
             /** X */
             x: number;
+            /** X2 */
+            x2?: number | null;
             /** Y */
             y: number;
+            /** Y2 */
+            y2?: number | null;
         };
         /**
          * DictionaryPagesSummaryResponse
@@ -1260,6 +1268,8 @@ export interface components {
             dictionary_id: string;
             /** Height */
             height: number;
+            /** Height2 */
+            height2?: number | null;
             /**
              * Id
              * Format: uuid
@@ -1285,10 +1295,16 @@ export interface components {
             updated_by: string;
             /** Width */
             width: number;
+            /** Width2 */
+            width2?: number | null;
             /** X */
             x: number;
+            /** X2 */
+            x2?: number | null;
             /** Y */
             y: number;
+            /** Y2 */
+            y2?: number | null;
         };
         /**
          * LexemeSuggestionResponse
@@ -1728,14 +1744,22 @@ export interface components {
         UpdateLexemeRequest: {
             /** Height */
             height: number;
+            /** Height2 */
+            height2?: number | null;
             /** Source Text */
             source_text: string;
             /** Width */
             width: number;
+            /** Width2 */
+            width2?: number | null;
             /** X */
             x: number;
+            /** X2 */
+            x2?: number | null;
             /** Y */
             y: number;
+            /** Y2 */
+            y2?: number | null;
         };
         /** ValidationError */
         ValidationError: {

@@ -102,6 +102,13 @@ class Lexeme:
     A future precursor to a ``headword``/entry; ``x``/``y``/``width``/
     ``height`` are pixel coordinates relative to the page's rendered image
     (top-left origin), matching ``DictionaryPage.width``/``height``.
+
+    ``x2``/``y2``/``width2``/``height2`` are an optional second box on the
+    *same* page, for an entry that visually splits across a column break
+    (the tail of a definition continuing in the next column). Either all
+    four are set, or all four are ``None`` -- enforced by
+    ``validate_second_box_fields`` and the ``lexeme_second_box_all_or_none``
+    check constraint.
     """
 
     id: UUID
@@ -117,6 +124,10 @@ class Lexeme:
     created_by: UUID
     updated_at: datetime
     updated_by: UUID
+    x2: float | None = None
+    y2: float | None = None
+    width2: float | None = None
+    height2: float | None = None
 
 
 @dataclass
@@ -137,7 +148,17 @@ class LexemeEvent:
     changed_fields: tuple[str, ...] = ()
 
 
-_EDITABLE_FIELDS: tuple[str, ...] = ("source_text", "x", "y", "width", "height")
+_EDITABLE_FIELDS: tuple[str, ...] = (
+    "source_text",
+    "x",
+    "y",
+    "width",
+    "height",
+    "x2",
+    "y2",
+    "width2",
+    "height2",
+)
 
 
 def changed_lexeme_fields(
@@ -148,6 +169,10 @@ def changed_lexeme_fields(
     y: float,
     width: float,
     height: float,
+    x2: float | None = None,
+    y2: float | None = None,
+    width2: float | None = None,
+    height2: float | None = None,
 ) -> list[str]:
     """List which editable fields actually differ, for the BH-56 audit trail."""
     after = {
@@ -156,6 +181,10 @@ def changed_lexeme_fields(
         "y": y,
         "width": width,
         "height": height,
+        "x2": x2,
+        "y2": y2,
+        "width2": width2,
+        "height2": height2,
     }
     return [
         field for field in _EDITABLE_FIELDS if getattr(before, field) != after[field]
@@ -191,6 +220,50 @@ def validate_lexeme_fields(
         exceeds_bounds = x + width > page_width or y + height > page_height
         if exceeds_bounds:
             errors["width"] = "Виділена область виходить за межі зображення сторінки."
+
+    return errors
+
+
+def validate_second_box_fields(
+    *,
+    x2: float | None,
+    y2: float | None,
+    width2: float | None,
+    height2: float | None,
+    page_width: int,
+    page_height: int,
+) -> dict[str, str]:
+    """Validate an optional second box: an entry split across a column break.
+
+    All four fields must be provided together, or all omitted -- there is
+    no separate text for the second box, it's the same lexeme continuing
+    elsewhere on the same page.
+    """
+    values = (x2, y2, width2, height2)
+    if all(value is None for value in values):
+        return {}
+    if any(value is None for value in values):
+        return {
+            "x2": (
+                "Другу область потрібно вказати повністю, усіма чотирма "
+                "полями, або не вказувати зовсім."  # noqa: RUF001
+            )
+        }
+
+    assert x2 is not None
+    assert y2 is not None
+    assert width2 is not None
+    assert height2 is not None
+
+    errors: dict[str, str] = {}
+    if width2 <= 0 or height2 <= 0:
+        errors["width2"] = "Друга область має мати додатні ширину та висоту."
+    if x2 < 0 or y2 < 0:
+        errors["x2"] = "Друга область не може виходити за межі сторінки."
+    elif width2 > 0 and height2 > 0:
+        exceeds_bounds = x2 + width2 > page_width or y2 + height2 > page_height
+        if exceeds_bounds:
+            errors["width2"] = "Друга область виходить за межі зображення сторінки."
 
     return errors
 
