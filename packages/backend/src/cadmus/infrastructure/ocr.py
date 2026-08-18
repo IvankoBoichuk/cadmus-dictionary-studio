@@ -36,14 +36,21 @@ class OcrExecutionError(RuntimeError):
     cannot be parsed."""
 
 
-def parse_alto_words(xml_bytes: bytes) -> list[LexemeSuggestion]:
-    """Parse Tesseract's ALTO XML into pixel-coordinate word suggestions.
+def parse_alto_entries(xml_bytes: bytes) -> list[LexemeSuggestion]:
+    """Parse Tesseract's ALTO XML into pixel-coordinate dictionary-entry suggestions.
 
-    Matches elements by local name (stripping any ``{namespace}`` prefix)
-    rather than a hardcoded ALTO namespace URI, since Tesseract's exact
-    ALTO schema version varies by build. ALTO's ``HPOS``/``VPOS``/
-    ``WIDTH``/``HEIGHT`` are already pixel-based against the source image,
-    matching ``Lexeme``'s coordinate convention -- no unit conversion.
+    Groups words by ALTO's ``TextBlock`` element rather than suggesting
+    every individual ``String`` word: a dictionary entry is typographically
+    a paragraph (a bolded headword followed by its definition, separated
+    from the next entry by a blank line), and Tesseract's own layout
+    analysis already segments a page into blocks along those same
+    paragraph breaks -- confirmed empirically against real scanned pages,
+    where each ``TextBlock`` lines up with one dictionary entry. Matches
+    elements by local name (stripping any ``{namespace}`` prefix) rather
+    than a hardcoded ALTO namespace URI, since Tesseract's exact ALTO
+    schema version varies by build. ALTO's ``HPOS``/``VPOS``/``WIDTH``/
+    ``HEIGHT`` are already pixel-based against the source image, matching
+    ``Lexeme``'s coordinate convention -- no unit conversion.
     """
     try:
         root = ElementTree.fromstring(xml_bytes)
@@ -51,30 +58,43 @@ def parse_alto_words(xml_bytes: bytes) -> list[LexemeSuggestion]:
         raise OcrExecutionError(f"could not parse ALTO output: {error}") from error
 
     suggestions: list[LexemeSuggestion] = []
-    for element in root.iter():
-        if _local_name(element.tag) != "String":
-            continue
-        content = element.get("CONTENT", "").strip()
-        if not content:
+    for block in root.iter():
+        if _local_name(block.tag) != "TextBlock":
             continue
         try:
-            x = float(element.get("HPOS", ""))
-            y = float(element.get("VPOS", ""))
-            width = float(element.get("WIDTH", ""))
-            height = float(element.get("HEIGHT", ""))
+            x = float(block.get("HPOS", ""))
+            y = float(block.get("VPOS", ""))
+            width = float(block.get("WIDTH", ""))
+            height = float(block.get("HEIGHT", ""))
         except ValueError:
             continue
         if width <= 0 or height <= 0:
             continue
-        confidence = _parse_confidence(element.get("WC"))
+
+        words: list[str] = []
+        confidences: list[float] = []
+        for line in block:
+            if _local_name(line.tag) != "TextLine":
+                continue
+            for string in line:
+                if _local_name(string.tag) != "String":
+                    continue
+                content = string.get("CONTENT", "").strip()
+                if not content:
+                    continue
+                words.append(content)
+                confidences.append(_parse_confidence(string.get("WC")))
+        if not words:
+            continue
+
         suggestions.append(
             LexemeSuggestion(
-                source_text=content,
+                source_text=" ".join(words),
                 x=x,
                 y=y,
                 width=width,
                 height=height,
-                confidence=confidence,
+                confidence=sum(confidences) / len(confidences),
             )
         )
     return suggestions
@@ -138,7 +158,7 @@ class TesseractAltoOcrProvider:
                 raise OcrExecutionError(
                     "tesseract did not produce ALTO output"
                 ) from error
-            return parse_alto_words(xml_bytes)
+            return parse_alto_entries(xml_bytes)
 
 
 class CeleryOcrSuggestionQueue:
