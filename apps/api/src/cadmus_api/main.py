@@ -17,6 +17,7 @@ from cadmus.infrastructure.email import SmtpEmailSender
 from cadmus.infrastructure.geography import create_geography_unit_of_work_factory
 from cadmus.infrastructure.google_oauth import AuthlibGoogleOAuthClient
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
+from cadmus.infrastructure.lexicography import create_lexicography_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
@@ -27,6 +28,7 @@ from cadmus.infrastructure.security import (
 from cadmus.infrastructure.source_inspection_queue import CeleryInspectionQueue
 from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
+from cadmus.lexicography import CreateLexemeService, LexemeQueryService
 from cadmus.processing import TaskQueue
 from cadmus.sources import (
     AbbreviationCrudService,
@@ -52,6 +54,7 @@ from cadmus_api.routes.dictionaries import create_dictionaries_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
 from cadmus_api.routes.health import create_health_router
+from cadmus_api.routes.lexemes import create_lexemes_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
 from cadmus_api.routes.settlements import create_settlements_router
@@ -80,6 +83,8 @@ def create_app(
     settlement_search_service: SettlementSearchService | None = None,
     settlement_confirmation_service: SettlementConfirmationService | None = None,
     settlement_mapping_import_service: SettlementMappingImportService | None = None,
+    create_lexeme_service: CreateLexemeService | None = None,
+    lexeme_query_service: LexemeQueryService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -212,6 +217,23 @@ def create_app(
             unit_of_work_factory=sources_unit_of_work_factory,
         )
     )
+    lexicography_unit_of_work_factory = create_lexicography_unit_of_work_factory(engine)
+    app.state.create_lexeme_service = (
+        create_lexeme_service
+        if create_lexeme_service is not None
+        else CreateLexemeService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.lexeme_query_service = (
+        lexeme_query_service
+        if lexeme_query_service is not None
+        else LexemeQueryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -270,6 +292,13 @@ def create_app(
             app.state.authentication_service,
             app.state.get_dictionary_service,
             app.state.object_storage,
+        )
+    )
+    app.include_router(
+        create_lexemes_router(
+            app.state.authentication_service,
+            app.state.create_lexeme_service,
+            app.state.lexeme_query_service,
         )
     )
     app.include_router(

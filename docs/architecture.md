@@ -127,13 +127,15 @@ projects -> identity
 sources -> projects, geography
 processing -> sources
 document -> sources
-lexicography -> document
+lexicography -> document, sources
 review -> lexicography, identity
 exports -> lexicography, review
 quality -> processing, document, lexicography, review
 ```
 
 Зворотні імпорти заборонені. Наприклад, `document` не знає про `lexicography`, а `lexicography` не запускає `processing`. Взаємодія між модулями відбувається через application services, IDs, DTO та доменні події після commit.
+
+`lexicography -> sources` (BH-54): лексема — ручне, доOCR-виділення (bounding box + текст) на зображенні сторінки, тобто майбутній прекурсор `headword`/`entry`. Вона посилається на `sources.Dictionary`/`sources.DictionaryPage` напряму, а не через `document`, бо `document` (нормалізована геометрія, отримана з OCR) на цьому етапі pipeline ще не існує й не має існувати — лексема створюється до запуску OCR. Коли реальний OCR/`document`-шар з'явиться, він продовжить використовувати `document -> sources`; ручний шлях лексем через `sources` лишається окремим і не є обхідним шляхом навколо `document`.
 
 `geography` — незалежний leaf-модуль без залежностей на будь-який інший предметний модуль: це спільний, tenant-independent кеш довідкових даних (areas/regions/communities/settlements), синхронізований окремим CLI-процесом. `sources` імпортує з нього лише для пошуку/зіставлення населених пунктів (`SettlementSearchService`, `SettlementMappingCrudService`, `SettlementConfirmationService`); зворотного імпорту `geography -> sources` немає.
 

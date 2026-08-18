@@ -332,6 +332,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/pages/{page_number}/lexemes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the lexemes manually selected on one page (AC7) */
+        get: operations["list_lexemes_dictionaries__dictionary_id__pages__page_number__lexemes_get"];
+        put?: never;
+        /** Manually select a lexeme on a page (AC1-AC6) */
+        post: operations["create_lexeme_dictionaries__dictionary_id__pages__page_number__lexemes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/settlements": {
         parameters: {
             query?: never;
@@ -863,6 +881,27 @@ export interface components {
          */
         ContributorRole: "author" | "compiler";
         /**
+         * CreateLexemeRequest
+         * @description One BH-54 lexeme submission (AC1, AC2, AC3).
+         */
+        CreateLexemeRequest: {
+            /**
+             * Confirm Duplicate
+             * @default false
+             */
+            confirm_duplicate: boolean;
+            /** Height */
+            height: number;
+            /** Source Text */
+            source_text: string;
+            /** Width */
+            width: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /**
          * DictionaryPagesSummaryResponse
          * @description AC2: how many pages fall within the dictionary's saved ranges.
          */
@@ -945,6 +984,24 @@ export interface components {
              * @default duplicate_abbreviation
              */
             code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * DuplicateLexemeResponse
+         * @description AC6: a heavily overlapping lexeme already exists; resubmit to confirm.
+         */
+        DuplicateLexemeResponse: {
+            /**
+             * Code
+             * @default duplicate_lexeme
+             */
+            code: string;
+            /**
+             * Existing Lexeme Id
+             * Format: uuid
+             */
+            existing_lexeme_id: string;
             /** Message */
             message: string;
         };
@@ -1054,6 +1111,68 @@ export interface components {
          * @enum {string}
          */
         LegalStatus: "public_domain" | "licensed" | "permission_granted" | "restricted" | "unknown";
+        /**
+         * LexemeOrigin
+         * @description How a lexeme's text and bounding box came to exist (ADR-0004 §9).
+         *
+         *     Only ``MANUAL`` exists yet: BH-54 lexemes are drawn by hand before OCR
+         *     runs. ``ocr``/``rule``/``model`` are reserved for later Stories that
+         *     derive lexemes from automated recognition, per the provenance model.
+         * @enum {string}
+         */
+        LexemeOrigin: "manual";
+        /**
+         * LexemeResponse
+         * @description One persisted BH-54 lexeme.
+         */
+        LexemeResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Dictionary Id
+             * Format: uuid
+             */
+            dictionary_id: string;
+            /** Height */
+            height: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            origin: components["schemas"]["LexemeOrigin"];
+            /**
+             * Page Id
+             * Format: uuid
+             */
+            page_id: string;
+            /** Source Text */
+            source_text: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Updated By
+             * Format: uuid
+             */
+            updated_by: string;
+            /** Width */
+            width: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /**
          * LoginRequest
          * @description Bounded login input carried only in a POST body.
@@ -1548,6 +1667,16 @@ export interface components {
          * @description Validation errors addressable by form field.
          */
         cadmus_api__routes__dictionaries__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field (AC1, AC2, AC3).
+         */
+        cadmus_api__routes__lexemes__FieldErrorsResponse: {
             /** Errors */
             errors: {
                 [key: string]: string;
@@ -2828,6 +2957,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_lexemes_dictionaries__dictionary_id__pages__page_number__lexemes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                page_number: number;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LexemeResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the requested page within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_lexeme_dictionaries__dictionary_id__pages__page_number__lexemes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                page_number: number;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLexemeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LexemeResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the requested page within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A heavily overlapping lexeme already exists on this page */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateLexemeResponse"];
+                };
+            };
+            /** @description The text or bounding box failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
                 };
             };
         };

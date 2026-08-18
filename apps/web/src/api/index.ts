@@ -107,6 +107,22 @@ export type DictionaryPagesSummaryResponse =
 type PagesSummaryNotFoundResponse =
   GetPagesSummaryOperation["responses"][404]["content"]["application/json"];
 
+export type LexemeOrigin = components["schemas"]["LexemeOrigin"];
+export type LexemeResponse = components["schemas"]["LexemeResponse"];
+export type DuplicateLexemeResponse = components["schemas"]["DuplicateLexemeResponse"];
+
+type ListLexemesOperation =
+  paths["/dictionaries/{dictionary_id}/pages/{page_number}/lexemes"]["get"];
+type LexemesNotFoundResponse =
+  ListLexemesOperation["responses"][404]["content"]["application/json"];
+
+type CreateLexemeOperation =
+  paths["/dictionaries/{dictionary_id}/pages/{page_number}/lexemes"]["post"];
+export type CreateLexemeRequest =
+  CreateLexemeOperation["requestBody"]["content"]["application/json"];
+type CreateLexemeFieldErrorsResponse =
+  CreateLexemeOperation["responses"][422]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -351,6 +367,10 @@ function pageRangesPath(dictionaryId: string): keyof paths {
 
 function pagesPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/pages` as keyof paths;
+}
+
+function lexemesPath(dictionaryId: string, pageNumber: number): keyof paths {
+  return `/dictionaries/${dictionaryId}/pages/${pageNumber}/lexemes` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -676,6 +696,34 @@ export const API = {
     },
   },
 
+  lexemes: {
+    list(
+      dictionaryId: string,
+      pageNumber: number,
+      options?: RequestOptions,
+    ): Promise<LexemeResponse[]> {
+      return get<LexemeResponse[], LexemesNotFoundResponse>(
+        lexemesPath(dictionaryId, pageNumber),
+        options,
+      );
+    },
+
+    create(
+      dictionaryId: string,
+      pageNumber: number,
+      body: CreateLexemeRequest,
+      options?: RequestOptions,
+    ): Promise<LexemeResponse> {
+      return post<
+        CreateLexemeRequest,
+        LexemeResponse,
+        | CreateLexemeFieldErrorsResponse
+        | DuplicateLexemeResponse
+        | LexemesNotFoundResponse
+      >(lexemesPath(dictionaryId, pageNumber), body, options);
+    },
+  },
+
   abbreviations: {
     list(
       dictionaryId: string,
@@ -979,6 +1027,18 @@ export function duplicateSettlementMappingFrom(
   }
   const payload = error.payload as DuplicateSettlementMappingResponse | undefined;
   return payload && typeof payload === "object" && "mapping_id" in payload
+    ? payload
+    : undefined;
+}
+
+export function duplicateLexemeFrom(
+  error: unknown,
+): DuplicateLexemeResponse | undefined {
+  if (!(error instanceof ApiError) || error.kind !== "http" || error.status !== 409) {
+    return undefined;
+  }
+  const payload = error.payload as DuplicateLexemeResponse | undefined;
+  return payload && typeof payload === "object" && "existing_lexeme_id" in payload
     ? payload
     : undefined;
 }
