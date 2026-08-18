@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { LexemeResponse } from "../api";
 import { LexemeCanvas } from "./LexemeCanvas";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -32,6 +33,47 @@ async function loadImage() {
   return image;
 }
 
+function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse {
+  return {
+    id: "lex-1",
+    dictionary_id: "dict-1",
+    page_id: "page-1",
+    source_text: "слово",
+    x: 100,
+    y: 100,
+    width: 200,
+    height: 80,
+    origin: "manual",
+    created_at: "2026-08-18T00:00:00Z",
+    created_by: "user-1",
+    updated_at: "2026-08-18T00:00:00Z",
+    updated_by: "user-1",
+    ...overrides,
+  };
+}
+
+function renderCanvas(
+  overrides: Partial<{
+    lexemes: LexemeResponse[];
+    onLexemeCreated: (lexeme: LexemeResponse) => void;
+    selectedLexemeId: string | null;
+    onSelectLexeme: (id: string | null) => void;
+  }> = {},
+) {
+  return render(
+    <LexemeCanvas
+      dictionaryId="dict-1"
+      pageNumber={1}
+      imageUrl="/api/dictionaries/dict-1/pages/1"
+      imageAlt="Сторінка 1 з 1"
+      lexemes={overrides.lexemes ?? []}
+      onLexemeCreated={overrides.onLexemeCreated ?? vi.fn()}
+      selectedLexemeId={overrides.selectedLexemeId ?? null}
+      onSelectLexeme={overrides.onSelectLexeme ?? vi.fn()}
+    />,
+  );
+}
+
 describe("LexemeCanvas", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -39,55 +81,29 @@ describe("LexemeCanvas", () => {
   });
 
   it("highlights the already-saved lexemes on the page (AC7)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse(200, [
-          {
-            id: "lex-1",
-            dictionary_id: "dict-1",
-            page_id: "page-1",
-            source_text: "слово",
-            x: 100,
-            y: 100,
-            width: 200,
-            height: 80,
-            origin: "manual",
-            created_at: "2026-08-18T00:00:00Z",
-            created_by: "user-1",
-            updated_at: "2026-08-18T00:00:00Z",
-            updated_by: "user-1",
-          },
-        ]),
-      ),
-    );
     stubContainerRect();
 
-    render(
-      <LexemeCanvas
-        dictionaryId="dict-1"
-        pageNumber={1}
-        imageUrl="/api/dictionaries/dict-1/pages/1"
-        imageAlt="Сторінка 1 з 1"
-      />,
-    );
+    renderCanvas({ lexemes: [lexemeFixture()] });
     await loadImage();
 
     expect(await screen.findByTitle("слово")).toBeInTheDocument();
   });
 
-  it("draws a box and opens the text form on mouse up (AC1, AC2, AC3)", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, [])));
+  it("marks the selected lexeme's box distinctly (BH-55)", async () => {
     stubContainerRect();
 
-    render(
-      <LexemeCanvas
-        dictionaryId="dict-1"
-        pageNumber={1}
-        imageUrl="/api/dictionaries/dict-1/pages/1"
-        imageAlt="Сторінка 1 з 1"
-      />,
+    renderCanvas({ lexemes: [lexemeFixture()], selectedLexemeId: "lex-1" });
+    await loadImage();
+
+    expect((await screen.findByTitle("слово")).className).toContain(
+      "lexeme-box--selected",
     );
+  });
+
+  it("draws a box and opens the text form on mouse up (AC1, AC2, AC3)", async () => {
+    stubContainerRect();
+
+    renderCanvas();
     const image = await loadImage();
 
     const canvas = image.parentElement as HTMLElement;
@@ -99,37 +115,25 @@ describe("LexemeCanvas", () => {
   });
 
   it("submits the drawn box converted into natural page coordinates", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, []))
-      .mockResolvedValueOnce(
-        jsonResponse(201, {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        201,
+        lexemeFixture({
           id: "lex-new",
-          dictionary_id: "dict-1",
-          page_id: "page-1",
           source_text: "нове",
           x: 100,
           y: 100,
           width: 200,
           height: 160,
-          origin: "manual",
-          created_at: "2026-08-18T00:00:00Z",
-          created_by: "user-1",
-          updated_at: "2026-08-18T00:00:00Z",
-          updated_by: "user-1",
         }),
-      );
+      ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     stubContainerRect();
+    const onLexemeCreated = vi.fn();
+    const onSelectLexeme = vi.fn();
 
-    render(
-      <LexemeCanvas
-        dictionaryId="dict-1"
-        pageNumber={1}
-        imageUrl="/api/dictionaries/dict-1/pages/1"
-        imageAlt="Сторінка 1 з 1"
-      />,
-    );
+    renderCanvas({ onLexemeCreated, onSelectLexeme });
     const image = await loadImage();
     const canvas = image.parentElement as HTMLElement;
 
@@ -143,9 +147,11 @@ describe("LexemeCanvas", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Зберегти лексему" }));
 
-    await screen.findByTitle("нове");
-    const createCall = fetchMock.mock.calls[1];
-    if (!createCall) throw new Error("expected a second fetch call");
+    const createCall = await vi.waitFor(() => {
+      const call = fetchMock.mock.calls[0];
+      if (!call) throw new Error("expected a fetch call");
+      return call;
+    });
     const body = JSON.parse((createCall[1] as RequestInit).body as string);
     expect(body).toEqual({
       source_text: "нове",
@@ -155,12 +161,17 @@ describe("LexemeCanvas", () => {
       height: 160,
       confirm_duplicate: false,
     });
+    await vi.waitFor(() => {
+      expect(onLexemeCreated).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "lex-new" }),
+      );
+    });
+    expect(onSelectLexeme).toHaveBeenCalledWith("lex-new");
   });
 
   it("offers to confirm and resubmit when the server reports a duplicate", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse(200, []))
       .mockResolvedValueOnce(
         jsonResponse(409, {
           code: "duplicate_lexeme",
@@ -169,33 +180,12 @@ describe("LexemeCanvas", () => {
         }),
       )
       .mockResolvedValueOnce(
-        jsonResponse(201, {
-          id: "lex-confirmed",
-          dictionary_id: "dict-1",
-          page_id: "page-1",
-          source_text: "нове",
-          x: 100,
-          y: 100,
-          width: 200,
-          height: 160,
-          origin: "manual",
-          created_at: "2026-08-18T00:00:00Z",
-          created_by: "user-1",
-          updated_at: "2026-08-18T00:00:00Z",
-          updated_by: "user-1",
-        }),
+        jsonResponse(201, lexemeFixture({ id: "lex-confirmed", source_text: "нове" })),
       );
     vi.stubGlobal("fetch", fetchMock);
     stubContainerRect();
 
-    render(
-      <LexemeCanvas
-        dictionaryId="dict-1"
-        pageNumber={1}
-        imageUrl="/api/dictionaries/dict-1/pages/1"
-        imageAlt="Сторінка 1 з 1"
-      />,
-    );
+    renderCanvas();
     const image = await loadImage();
     const canvas = image.parentElement as HTMLElement;
 
@@ -212,25 +202,18 @@ describe("LexemeCanvas", () => {
     });
     fireEvent.click(confirmButton);
 
-    await screen.findByTitle("нове");
-    const confirmCall = fetchMock.mock.calls[2];
-    if (!confirmCall) throw new Error("expected a third fetch call");
-    const body = JSON.parse((confirmCall[1] as RequestInit).body as string);
-    expect(body.confirm_duplicate).toBe(true);
+    await vi.waitFor(() => {
+      const confirmCall = fetchMock.mock.calls[1];
+      if (!confirmCall) throw new Error("expected a second fetch call");
+      const body = JSON.parse((confirmCall[1] as RequestInit).body as string);
+      expect(body.confirm_duplicate).toBe(true);
+    });
   });
 
   it("discards a drag smaller than the minimum selection size", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, [])));
     stubContainerRect();
 
-    render(
-      <LexemeCanvas
-        dictionaryId="dict-1"
-        pageNumber={1}
-        imageUrl="/api/dictionaries/dict-1/pages/1"
-        imageAlt="Сторінка 1 з 1"
-      />,
-    );
+    renderCanvas();
     const image = await loadImage();
     const canvas = image.parentElement as HTMLElement;
 
