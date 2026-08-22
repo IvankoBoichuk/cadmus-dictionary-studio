@@ -727,6 +727,22 @@ def validate_page_ranges(
     return errors
 
 
+def expand_page_ranges(ranges: Sequence[DictionaryPageRange]) -> list[int]:
+    """Flatten saved page ranges into their ordered physical page numbers.
+
+    ``ranges`` are expected pre-merged and position-ordered, which
+    ``normalize_page_ranges`` already guarantees at save time, so this only
+    expands and concatenates them. Used by BH-53's page viewer to scope
+    navigation to "лише сторінки з заданого діапазону" (AC4) without
+    exposing pages outside the configured ranges.
+    """
+    ordered = sorted(ranges, key=lambda r: r.position)
+    numbers: list[int] = []
+    for page_range in ordered:
+        numbers.extend(range(page_range.start_page, page_range.end_page + 1))
+    return numbers
+
+
 def normalize_page_ranges(
     ranges: Sequence[PageRangeInput],
 ) -> tuple[list[PageRangeInput], bool]:

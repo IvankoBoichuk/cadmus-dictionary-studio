@@ -491,6 +491,32 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.page-viewer {
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+}
+
+.page-viewer-image {
+  max-width: 100%;
+  max-height: 80vh;
+  border: 1px solid #d6dbd2;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.page-viewer-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-viewer-counter {
+  min-width: 10rem;
+  font-weight: 650;
+  text-align: center;
+}
+
 .language-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));

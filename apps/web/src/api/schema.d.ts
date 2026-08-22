@@ -298,6 +298,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the total number of viewable pages (AC2, AC4) */
+        get: operations["get_summary_dictionaries__dictionary_id__pages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/pages/{page_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream one rendered page image by its 1-based position (AC1, AC4) */
+        get: operations["get_page_dictionaries__dictionary_id__pages__page_number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/settlements": {
         parameters: {
             query?: never;
@@ -828,6 +862,14 @@ export interface components {
          * @enum {string}
          */
         ContributorRole: "author" | "compiler";
+        /**
+         * DictionaryPagesSummaryResponse
+         * @description AC2: how many pages fall within the dictionary's saved ranges.
+         */
+        DictionaryPagesSummaryResponse: {
+            /** Total Pages */
+            total_pages: number;
+        };
         /**
          * DictionaryResponse
          * @description The dictionary draft, its structured metadata, and readiness gaps.
@@ -2683,6 +2725,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["cadmus_api__routes__page_ranges__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    get_summary_dictionaries__dictionary_id__pages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryPagesSummaryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the requested page within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_page_dictionaries__dictionary_id__pages__page_number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                page_number: number;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the requested page within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

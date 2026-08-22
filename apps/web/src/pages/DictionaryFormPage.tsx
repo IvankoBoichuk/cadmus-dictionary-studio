@@ -49,6 +49,9 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
         <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/settlements`}>
           Зіставити географічні мітки словника
         </Link>
+        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/view`}>
+          Переглянути сторінки
+        </Link>
       </div>
       <DictionaryReadiness dictionary={dictionary} onConfigured={setOverride} />
       <DictionaryMetadataForm

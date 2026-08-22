@@ -47,6 +47,7 @@ from cadmus.sources.domain import (
     SourceFile,
     UploadTooLargeError,
     apply_status_after_edit,
+    expand_page_ranges,
     missing_required_fields,
     normalize_page_ranges,
     readiness_blockers,
@@ -568,6 +569,39 @@ class GetDictionaryService:
             if source_file is None:
                 return None
             return unit_of_work.sources.get_page(source_file.id, page_index=0)
+
+    def count_viewable_pages(self, dictionary_id: UUID, actor_id: UUID) -> int:
+        """BH-53 AC2/AC4: total pages within the dictionary's saved ranges."""
+        dictionary = self.get(dictionary_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            ranges = unit_of_work.sources.list_page_ranges(dictionary.id)
+        return len(expand_page_ranges(ranges))
+
+    def get_viewable_page(
+        self, dictionary_id: UUID, actor_id: UUID, ordinal: int
+    ) -> DictionaryPage | None:
+        """BH-53: the ``ordinal``-th (1-based) page within the saved ranges.
+
+        ``ordinal`` addresses position within the configured page ranges,
+        not the PDF's raw physical page index -- this is what keeps the
+        viewer scoped to AC4 ("лише сторінки з заданого діапазону") and
+        makes an out-of-range or unconfigured request simply miss rather
+        than leak pages outside the dictionary's declared scope.
+        """
+        dictionary = self.get(dictionary_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            source_file = unit_of_work.sources.get_source_file(dictionary.id)
+            if source_file is None:
+                return None
+            page_numbers = expand_page_ranges(
+                unit_of_work.sources.list_page_ranges(dictionary.id)
+            )
+            if ordinal < 1 or ordinal > len(page_numbers):
+                return None
+            physical_page_number = page_numbers[ordinal - 1]
+            return unit_of_work.sources.get_page(
+                source_file.id, page_index=physical_page_number - 1
+            )
 
 
 class DeleteDictionaryService:

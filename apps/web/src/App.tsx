@@ -7,6 +7,7 @@ import { AbbreviationsPage } from "./pages/AbbreviationsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DictionariesList } from "./pages/DictionariesList";
 import { DictionaryFormPage } from "./pages/DictionaryFormPage";
+import { DictionaryViewerPage } from "./pages/DictionaryViewerPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PageRangesPage } from "./pages/PageRangesPage";
@@ -78,6 +79,10 @@ export function App() {
             <Route
               path="/dictionaries/:dictionaryId/page-ranges"
               element={<PageRangesPage />}
+            />
+            <Route
+              path="/dictionaries/:dictionaryId/view"
+              element={<DictionaryViewerPage />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />

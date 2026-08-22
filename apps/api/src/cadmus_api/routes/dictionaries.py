@@ -55,6 +55,24 @@ _DOWNLOAD_SPOOL_MAX_BYTES = 64 * 1024 * 1024
 _THUMBNAIL_SPOOL_MAX_BYTES = 8 * 1024 * 1024
 _UNSAFE_FILENAME_CHARS = re.compile(r'[\r\n"]')
 
+_PAGE_IMAGE_CONTENT_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+}
+
+
+def page_image_content_type(storage_key: str) -> str:
+    """Derive a rendered page's media type from its stored file extension.
+
+    Pages are currently rendered as PNG (ADR-0006's pipeline), but BH-53's
+    Acceptance Criteria describe them as ``.jpg``; staying extension-driven
+    here serves either without a route change or forcing a re-render of
+    already-processed pages.
+    """
+    extension = storage_key.rsplit(".", 1)[-1].lower() if "." in storage_key else ""
+    return _PAGE_IMAGE_CONTENT_TYPES.get(extension, "image/png")
+
 
 class ContributorRequest(BaseModel):
     """One ordered contributor entry as submitted by the client."""
@@ -270,7 +288,7 @@ def _sanitize_filename(filename: str) -> str:
     return _UNSAFE_FILENAME_CHARS.sub("", filename) or "dictionary.pdf"
 
 
-def _iter_and_close(
+def iter_and_close(
     buffer: "SpooledTemporaryFile[bytes]",
 ) -> Generator[bytes, None, None]:
     try:
@@ -574,7 +592,7 @@ def create_dictionaries_router(
 
         filename = _sanitize_filename(source_file.original_filename)
         return StreamingResponse(
-            _iter_and_close(buffer),
+            iter_and_close(buffer),
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
@@ -607,8 +625,8 @@ def create_dictionaries_router(
         buffer.seek(0)
 
         return StreamingResponse(
-            _iter_and_close(buffer),
-            media_type="image/png",
+            iter_and_close(buffer),
+            media_type=page_image_content_type(page.processed_asset_key),
             headers={"Cache-Control": "private, max-age=86400"},
         )
 

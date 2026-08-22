@@ -53,6 +53,7 @@ from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
 from cadmus_api.routes.health import create_health_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
+from cadmus_api.routes.pages import create_pages_router
 from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
 
@@ -262,6 +263,13 @@ def create_app(
             app.state.authentication_service,
             app.state.get_dictionary_service,
             app.state.save_page_ranges_service,
+        )
+    )
+    app.include_router(
+        create_pages_router(
+            app.state.authentication_service,
+            app.state.get_dictionary_service,
+            app.state.object_storage,
         )
     )
     app.include_router(

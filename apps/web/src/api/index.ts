@@ -101,6 +101,12 @@ export type SavePageRangesRequest =
 export type SavePageRangesFieldErrorsResponse =
   SavePageRangesOperation["responses"][422]["content"]["application/json"];
 
+type GetPagesSummaryOperation = paths["/dictionaries/{dictionary_id}/pages"]["get"];
+export type DictionaryPagesSummaryResponse =
+  GetPagesSummaryOperation["responses"][200]["content"]["application/json"];
+type PagesSummaryNotFoundResponse =
+  GetPagesSummaryOperation["responses"][404]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -341,6 +347,10 @@ function dictionaryConfigurePath(dictionaryId: string): keyof paths {
 
 function pageRangesPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/page-ranges` as keyof paths;
+}
+
+function pagesPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/pages` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -654,6 +664,18 @@ export const API = {
     },
   },
 
+  pages: {
+    summary(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<DictionaryPagesSummaryResponse> {
+      return get<DictionaryPagesSummaryResponse, PagesSummaryNotFoundResponse>(
+        pagesPath(dictionaryId),
+        options,
+      );
+    },
+  },
+
   abbreviations: {
     list(
       dictionaryId: string,
@@ -895,6 +917,13 @@ export function settlementsExportUrl(
 
 export function dictionaryThumbnailUrl(dictionaryId: string): string {
   return `${API_BASE_URL}/dictionaries/${dictionaryId}/thumbnail`;
+}
+
+export function dictionaryPageImageUrl(
+  dictionaryId: string,
+  pageNumber: number,
+): string {
+  return `${API_BASE_URL}/dictionaries/${dictionaryId}/pages/${pageNumber}`;
 }
 
 export function fieldErrorsFrom(error: unknown): FieldErrorsResponse["errors"] | undefined {
