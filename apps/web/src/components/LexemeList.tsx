@@ -15,6 +15,10 @@ export function LexemeList({
   onSaveText,
   updateState,
   onDelete,
+  secondBoxDraftLexemeId = null,
+  onStartAddSecondBox,
+  onCancelSecondBoxDraft,
+  onRemoveSecondBox,
 }: {
   lexemesState: LexemesForPageState;
   pageNumber: number;
@@ -26,6 +30,10 @@ export function LexemeList({
   onSaveText: (lexemeId: string, text: string) => void;
   updateState: UpdateLexemeState;
   onDelete: (lexemeId: string) => void;
+  secondBoxDraftLexemeId?: string | null;
+  onStartAddSecondBox?: (lexemeId: string) => void;
+  onCancelSecondBoxDraft?: () => void;
+  onRemoveSecondBox?: (lexemeId: string) => void;
 }) {
   const [editingLexemeId, setEditingLexemeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
@@ -66,6 +74,8 @@ export function LexemeList({
       {lexemesState.lexemes.map((lexeme) => {
         const isEditing = editingLexemeId === lexeme.id;
         const isRedrawing = redrawingLexemeId === lexeme.id;
+        const isDraftingSecondBox = secondBoxDraftLexemeId === lexeme.id;
+        const hasSecondBox = lexeme.x2 != null;
         return (
           <li key={lexeme.id} className="lexeme-list-row">
             <button
@@ -151,6 +161,31 @@ export function LexemeList({
                       onClick={() => onStartRedraw(lexeme.id)}
                     >
                       Перемалювати область
+                    </button>
+                  )}
+                  {isDraftingSecondBox ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={onCancelSecondBoxDraft}
+                    >
+                      Скасувати другу область
+                    </button>
+                  ) : hasSecondBox ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => onRemoveSecondBox?.(lexeme.id)}
+                    >
+                      Видалити другу область
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => onStartAddSecondBox?.(lexeme.id)}
+                    >
+                      Додати другу область
                     </button>
                   )}
                   <button

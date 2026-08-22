@@ -20,7 +20,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         "cadmus-worker",
         broker=app_settings.celery_broker_url(),
         backend=app_settings.celery_result_backend_url(),
-        include=["cadmus_worker.tasks"],
+        include=["cadmus_worker.tasks", "cadmus_worker.ocr_tasks"],
     )
     app.conf.update(
         accept_content=["json"],

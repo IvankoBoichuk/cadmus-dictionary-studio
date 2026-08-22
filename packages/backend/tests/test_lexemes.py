@@ -25,6 +25,7 @@ from cadmus.lexicography import (
     changed_lexeme_fields,
     find_overlapping_lexeme,
     validate_lexeme_fields,
+    validate_second_box_fields,
 )
 from cadmus.sources import (
     Dictionary,
@@ -320,6 +321,34 @@ def test_validate_lexeme_fields_rejects_a_box_exceeding_the_page_bounds() -> Non
     assert "width" in errors
 
 
+def test_validate_second_box_fields_accepts_no_second_box() -> None:
+    errors = validate_second_box_fields(
+        x2=None, y2=None, width2=None, height2=None, page_width=1000, page_height=1400
+    )
+    assert errors == {}
+
+
+def test_validate_second_box_fields_accepts_a_box_within_the_page() -> None:
+    errors = validate_second_box_fields(
+        x2=600, y2=10, width2=100, height2=40, page_width=1000, page_height=1400
+    )
+    assert errors == {}
+
+
+def test_validate_second_box_fields_rejects_a_partial_box() -> None:
+    errors = validate_second_box_fields(
+        x2=600, y2=10, width2=None, height2=None, page_width=1000, page_height=1400
+    )
+    assert "x2" in errors
+
+
+def test_validate_second_box_fields_rejects_a_box_exceeding_the_page_bounds() -> None:
+    errors = validate_second_box_fields(
+        x2=950, y2=10, width2=100, height2=40, page_width=1000, page_height=1400
+    )
+    assert "width2" in errors
+
+
 def test_find_overlapping_lexeme_detects_a_heavily_overlapping_box() -> None:
     page_id = uuid4()
     existing = [_lexeme(page_id, x=10, y=10, width=100, height=40)]
@@ -359,6 +388,74 @@ def test_create_lexeme_persists_a_manual_origin_lexeme() -> None:
     assert lexeme.created_by == fixture.owner_id
     stored = fixture.lexicography_repository.lexemes[lexeme.id]
     assert stored.source_text == "слово"
+
+
+def test_create_lexeme_accepts_an_explicit_ocr_origin() -> None:
+    fixture = Fixture()
+
+    lexeme = fixture.create_service.create(
+        fixture.dictionary.id,
+        fixture.owner_id,
+        LexemeInput(
+            page_number=1,
+            source_text="слово",
+            x=10,
+            y=10,
+            width=100,
+            height=40,
+            origin=LexemeOrigin.OCR,
+        ),
+    )
+
+    assert lexeme.origin is LexemeOrigin.OCR
+    stored = fixture.lexicography_repository.lexemes[lexeme.id]
+    assert stored.origin is LexemeOrigin.OCR
+
+
+def test_create_lexeme_accepts_a_second_box_split_across_a_column() -> None:
+    fixture = Fixture()
+
+    lexeme = fixture.create_service.create(
+        fixture.dictionary.id,
+        fixture.owner_id,
+        LexemeInput(
+            page_number=1,
+            source_text="слово",
+            x=10,
+            y=10,
+            width=100,
+            height=40,
+            x2=600,
+            y2=10,
+            width2=90,
+            height2=40,
+        ),
+    )
+
+    assert (lexeme.x2, lexeme.y2, lexeme.width2, lexeme.height2) == (600, 10, 90, 40)
+
+
+def test_create_lexeme_rejects_a_partial_second_box() -> None:
+    fixture = Fixture()
+
+    with pytest.raises(LexemeValidationError) as excinfo:
+        fixture.create_service.create(
+            fixture.dictionary.id,
+            fixture.owner_id,
+            LexemeInput(
+                page_number=1,
+                source_text="слово",
+                x=10,
+                y=10,
+                width=100,
+                height=40,
+                x2=600,
+                y2=None,
+                width2=90,
+                height2=40,
+            ),
+        )
+    assert "x2" in excinfo.value.errors
 
 
 def test_create_lexeme_rejects_invalid_fields() -> None:
@@ -521,6 +618,80 @@ def test_update_lexeme_persists_text_and_box_changes() -> None:
     assert updated.updated_by == fixture.owner_id
     stored = fixture.lexicography_repository.lexemes[lexeme.id]
     assert stored.source_text == "нове"
+
+
+def test_update_lexeme_can_add_a_second_box() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    updated = fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(
+            source_text="слово",
+            x=10,
+            y=10,
+            width=100,
+            height=40,
+            x2=600,
+            y2=10,
+            width2=90,
+            height2=40,
+        ),
+    )
+
+    assert (updated.x2, updated.y2, updated.width2, updated.height2) == (
+        600,
+        10,
+        90,
+        40,
+    )
+    event = fixture.lexicography_repository.events[0]
+    assert set(event.changed_fields) == {"x2", "y2", "width2", "height2"}
+
+
+def test_update_lexeme_can_remove_an_existing_second_box() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme(x2=600, y2=10, width2=90, height2=40)
+
+    updated = fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(source_text="слово", x=10, y=10, width=100, height=40),
+    )
+
+    assert (updated.x2, updated.y2, updated.width2, updated.height2) == (
+        None,
+        None,
+        None,
+        None,
+    )
+
+
+def test_update_lexeme_rejects_a_partial_second_box() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    with pytest.raises(LexemeValidationError) as excinfo:
+        fixture.update_service.update(
+            fixture.dictionary.id,
+            lexeme.id,
+            fixture.owner_id,
+            UpdateLexemeInput(
+                source_text="слово",
+                x=10,
+                y=10,
+                width=100,
+                height=40,
+                x2=600,
+                y2=10,
+                width2=None,
+                height2=40,
+            ),
+        )
+    assert "x2" in excinfo.value.errors
 
 
 def test_update_lexeme_records_an_audit_event_with_changed_fields() -> None:

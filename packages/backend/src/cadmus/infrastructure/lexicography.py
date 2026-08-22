@@ -48,6 +48,10 @@ lexemes = Table(
     Column("y", Float, nullable=False),
     Column("width", Float, nullable=False),
     Column("height", Float, nullable=False),
+    Column("x2", Float, nullable=True),
+    Column("y2", Float, nullable=True),
+    Column("width2", Float, nullable=True),
+    Column("height2", Float, nullable=True),
     Column("origin", String(16), nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column(
@@ -63,8 +67,17 @@ lexemes = Table(
         ForeignKey("cadmus.users.id", ondelete="CASCADE"),
         nullable=False,
     ),
-    CheckConstraint("origin IN ('manual')", name="lexeme_origin"),
+    CheckConstraint("origin IN ('manual', 'ocr')", name="lexeme_origin"),
     CheckConstraint("width > 0 AND height > 0", name="lexeme_positive_size"),
+    CheckConstraint(
+        "(x2 IS NULL) = (y2 IS NULL) AND (y2 IS NULL) = (width2 IS NULL) "
+        "AND (width2 IS NULL) = (height2 IS NULL)",
+        name="lexeme_second_box_all_or_none",
+    ),
+    CheckConstraint(
+        "width2 IS NULL OR (width2 > 0 AND height2 > 0)",
+        name="lexeme_second_box_positive_size",
+    ),
 )
 
 lexeme_events = Table(

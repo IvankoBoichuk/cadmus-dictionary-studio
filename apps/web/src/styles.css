@@ -558,6 +558,92 @@ h1 {
   background: rgb(185 28 28 / 18%);
 }
 
+.lexeme-box--suggestion {
+  border-color: #2563eb;
+  border-style: dashed;
+  background: rgb(37 99 235 / 10%);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.lexeme-box--suggestion:hover {
+  background: rgb(37 99 235 / 22%);
+}
+
+.lexeme-box--clickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.lexeme-resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #b91c1c;
+  border: 1px solid white;
+  border-radius: 2px;
+  pointer-events: auto;
+}
+
+.lexeme-resize-handle--nw {
+  left: -5px;
+  top: -5px;
+  cursor: nwse-resize;
+}
+
+.lexeme-resize-handle--n {
+  left: 50%;
+  top: -5px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.lexeme-resize-handle--ne {
+  right: -5px;
+  top: -5px;
+  cursor: nesw-resize;
+}
+
+.lexeme-resize-handle--w {
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.lexeme-resize-handle--e {
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.lexeme-resize-handle--sw {
+  left: -5px;
+  bottom: -5px;
+  cursor: nesw-resize;
+}
+
+.lexeme-resize-handle--s {
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.lexeme-resize-handle--se {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
+}
+
+.ocr-suggestions-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .page-viewer-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);

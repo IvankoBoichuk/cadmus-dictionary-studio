@@ -385,6 +385,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/pages/{page_number}/ocr-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue OCR word suggestions for one page */
+        post: operations["enqueue_suggestions_dictionaries__dictionary_id__pages__page_number__ocr_suggestions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/pages/{page_number}/ocr-suggestions/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll an OCR suggestion task's status and result */
+        get: operations["get_suggestions_task_dictionaries__dictionary_id__pages__page_number__ocr_suggestions__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/scan-progress": {
         parameters: {
             query?: never;
@@ -935,6 +969,10 @@ export interface components {
         /**
          * CreateLexemeRequest
          * @description One BH-54 lexeme submission (AC1, AC2, AC3).
+         *
+         *     ``origin`` defaults to ``manual`` (BH-54's hand-drawn flow); accepting
+         *     an OCR suggestion sends ``origin="ocr"`` instead, so the resulting
+         *     ``Lexeme`` records where its text and box actually came from.
          */
         CreateLexemeRequest: {
             /**
@@ -944,14 +982,24 @@ export interface components {
             confirm_duplicate: boolean;
             /** Height */
             height: number;
+            /** Height2 */
+            height2?: number | null;
+            /** @default manual */
+            origin: components["schemas"]["LexemeOrigin"];
             /** Source Text */
             source_text: string;
             /** Width */
             width: number;
+            /** Width2 */
+            width2?: number | null;
             /** X */
             x: number;
+            /** X2 */
+            x2?: number | null;
             /** Y */
             y: number;
+            /** Y2 */
+            y2?: number | null;
         };
         /**
          * DictionaryPagesSummaryResponse
@@ -1096,6 +1144,16 @@ export interface components {
             title: string | null;
         };
         /**
+         * EnqueueSuggestionsResponse
+         * @description AC: accepted response for a newly queued OCR suggestion job.
+         */
+        EnqueueSuggestionsResponse: {
+            /** @default queued */
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
+        };
+        /**
          * EnqueuedTaskResponse
          * @description Stable response returned after a task is accepted.
          */
@@ -1179,12 +1237,15 @@ export interface components {
          * LexemeOrigin
          * @description How a lexeme's text and bounding box came to exist (ADR-0004 §9).
          *
-         *     Only ``MANUAL`` exists yet: BH-54 lexemes are drawn by hand before OCR
-         *     runs. ``ocr``/``rule``/``model`` are reserved for later Stories that
-         *     derive lexemes from automated recognition, per the provenance model.
+         *     ``MANUAL`` is a lexeme drawn and typed entirely by hand (BH-54).
+         *     ``OCR`` is a Tesseract/ALTO suggestion the user reviewed and accepted
+         *     (see ``LexemeSuggestion``/``SuggestLexemesService``) -- the box and
+         *     text both come from the recognizer, not from the user typing them.
+         *     ``rule``/``model`` are reserved for later Stories, per the provenance
+         *     model.
          * @enum {string}
          */
-        LexemeOrigin: "manual";
+        LexemeOrigin: "manual" | "ocr";
         /**
          * LexemeResponse
          * @description One persisted BH-54 lexeme.
@@ -1207,6 +1268,8 @@ export interface components {
             dictionary_id: string;
             /** Height */
             height: number;
+            /** Height2 */
+            height2?: number | null;
             /**
              * Id
              * Format: uuid
@@ -1232,6 +1295,30 @@ export interface components {
             updated_by: string;
             /** Width */
             width: number;
+            /** Width2 */
+            width2?: number | null;
+            /** X */
+            x: number;
+            /** X2 */
+            x2?: number | null;
+            /** Y */
+            y: number;
+            /** Y2 */
+            y2?: number | null;
+        };
+        /**
+         * LexemeSuggestionResponse
+         * @description One OCR word candidate, not yet a lexeme.
+         */
+        LexemeSuggestionResponse: {
+            /** Confidence */
+            confidence: number;
+            /** Height */
+            height: number;
+            /** Source Text */
+            source_text: string;
+            /** Width */
+            width: number;
             /** X */
             x: number;
             /** Y */
@@ -1255,6 +1342,12 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * OcrSuggestionStatus
+         * @description Transport-neutral state of an in-flight OCR word-suggestion task.
+         * @enum {string}
+         */
+        OcrSuggestionStatus: "queued" | "running" | "succeeded" | "failed";
         /**
          * PageProgressResponse
          * @description One page's scan status: does it have at least one lexeme (AC1).
@@ -1603,6 +1696,19 @@ export interface components {
             uploaded_at: string;
         };
         /**
+         * SuggestionsTaskResponse
+         * @description Poll response: task status plus suggestions once succeeded.
+         */
+        SuggestionsTaskResponse: {
+            /** Error */
+            error?: string | null;
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Suggestions */
+            suggestions?: components["schemas"]["LexemeSuggestionResponse"][] | null;
+            /** Task Id */
+            task_id: string;
+        };
+        /**
          * TaskStatus
          * @description Transport-neutral task states exposed to API clients.
          * @enum {string}
@@ -1638,14 +1744,22 @@ export interface components {
         UpdateLexemeRequest: {
             /** Height */
             height: number;
+            /** Height2 */
+            height2?: number | null;
             /** Source Text */
             source_text: string;
             /** Width */
             width: number;
+            /** Width2 */
+            width2?: number | null;
             /** X */
             x: number;
+            /** X2 */
+            x2?: number | null;
             /** Y */
             y: number;
+            /** Y2 */
+            y2?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -3333,6 +3447,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    enqueue_suggestions_dictionaries__dictionary_id__pages__page_number__ocr_suggestions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                page_number: number;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueSuggestionsResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the requested page within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_suggestions_task_dictionaries__dictionary_id__pages__page_number__ocr_suggestions__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                page_number: number;
+                task_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionsTaskResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the requested page within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

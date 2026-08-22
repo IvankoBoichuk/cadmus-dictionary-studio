@@ -14,6 +14,11 @@ export type CreateLexemeInput = {
   y: number;
   width: number;
   height: number;
+  origin?: "manual" | "ocr";
+  x2?: number | null;
+  y2?: number | null;
+  width2?: number | null;
+  height2?: number | null;
 };
 
 export type CreateLexemeState =
@@ -35,6 +40,7 @@ export function useCreateLexeme(dictionaryId: string, pageNumber: number) {
       try {
         const lexeme = await API.lexemes.create(dictionaryId, pageNumber, {
           ...input,
+          origin: input.origin ?? "manual",
           confirm_duplicate: confirmDuplicate,
         });
         setState({ status: "idle" });

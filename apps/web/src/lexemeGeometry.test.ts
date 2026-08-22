@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isRectLargeEnough, normalizeDragRect, scaleRect } from "./lexemeGeometry";
+import {
+  isRectLargeEnough,
+  normalizeDragRect,
+  resizeRect,
+  scaleRect,
+} from "./lexemeGeometry";
 
 describe("normalizeDragRect", () => {
   it("normalizes a drag drawn top-left to bottom-right", () => {
@@ -40,5 +45,49 @@ describe("isRectLargeEnough", () => {
 
   it("accepts a rectangle at or above the minimum drag size", () => {
     expect(isRectLargeEnough({ x: 0, y: 0, width: 10, height: 10 })).toBe(true);
+  });
+});
+
+describe("resizeRect", () => {
+  const rect = { x: 100, y: 100, width: 50, height: 40 };
+
+  it("se handle grows width and height without moving the origin", () => {
+    expect(resizeRect(rect, "se", 10, 5)).toEqual({
+      x: 100,
+      y: 100,
+      width: 60,
+      height: 45,
+    });
+  });
+
+  it("nw handle moves the origin and shrinks width/height inversely", () => {
+    expect(resizeRect(rect, "nw", 10, 5)).toEqual({
+      x: 110,
+      y: 105,
+      width: 40,
+      height: 35,
+    });
+  });
+
+  it("e handle only changes width", () => {
+    expect(resizeRect(rect, "e", 10, 999)).toEqual({
+      x: 100,
+      y: 100,
+      width: 60,
+      height: 40,
+    });
+  });
+
+  it("n handle only changes the top edge and height", () => {
+    expect(resizeRect(rect, "n", 999, 5)).toEqual({
+      x: 100,
+      y: 105,
+      width: 50,
+      height: 35,
+    });
+  });
+
+  it("refuses to shrink a dimension past the minimum drag size", () => {
+    expect(resizeRect(rect, "se", -100, -100)).toEqual(rect);
   });
 });
