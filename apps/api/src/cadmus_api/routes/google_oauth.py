@@ -11,7 +11,10 @@ from cadmus_api.routes.auth import set_session_cookie
 STATE_COOKIE_NAME = "cadmus_g_state"
 NONCE_COOKIE_NAME = "cadmus_g_nonce"
 VERIFIER_COOKIE_NAME = "cadmus_g_verifier"
-OAUTH_COOKIE_PATH = "/auth/google"
+# Must match the browser-visible path, not this router's own prefix: nginx's
+# web container strips "/api" before forwarding here, so a cookie scoped to
+# "/auth/google" would never come back on a request to "/api/auth/google/*".
+OAUTH_COOKIE_PATH = "/api/auth/google"
 OAUTH_COOKIE_MAX_AGE_SECONDS = 600
 LOGIN_FAILURE_REDIRECT_QUERY = "?error=google_auth_failed"
 
