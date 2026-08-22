@@ -278,3 +278,59 @@ class LexemeQueryService:
 
         with self._unit_of_work_factory() as unit_of_work:
             return unit_of_work.lexicography.list_lexemes_for_page(page.id)
+
+
+@dataclass(frozen=True)
+class PageProgress:
+    """BH-57: one viewer page's scan status."""
+
+    page_number: int
+    has_lexemes: bool
+
+
+@dataclass(frozen=True)
+class ScanProgress:
+    """BH-57 AC1/AC2: how much of a dictionary's pages have been scanned."""
+
+    total_pages: int
+    processed_pages: int
+    pages: tuple[PageProgress, ...]
+
+
+class ScanProgressService:
+    """Report per-page and aggregate scan progress (BH-57).
+
+    "Processed" means "has at least one lexeme" (the Story's own
+    definition) -- a page is never marked processed by any other signal.
+    Combines ``sources`` (page ordering) and ``lexicography`` (lexeme
+    presence) with exactly two extra queries beyond the viewable-page
+    lookup, regardless of how many pages the dictionary has.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+
+    def get_progress(self, dictionary_id: UUID, actor_id: UUID) -> ScanProgress:
+        try:
+            pages = self._dictionary_pages.list_viewable_pages(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        with self._unit_of_work_factory() as unit_of_work:
+            pages_with_lexemes = unit_of_work.lexicography.list_page_ids_with_lexemes(
+                dictionary_id
+            )
+
+        entries = tuple(
+            PageProgress(page_number=index, has_lexemes=page.id in pages_with_lexemes)
+            for index, page in enumerate(pages, start=1)
+        )
+        processed = sum(1 for entry in entries if entry.has_lexemes)
+        return ScanProgress(
+            total_pages=len(entries), processed_pages=processed, pages=entries
+        )

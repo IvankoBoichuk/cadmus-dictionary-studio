@@ -368,6 +368,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/scan-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a dictionary's scan progress (AC1, AC2) */
+        get: operations["get_scan_progress_dictionaries__dictionary_id__scan_progress_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/settlements": {
         parameters: {
             query?: never;
@@ -1210,6 +1227,16 @@ export interface components {
             message: string;
         };
         /**
+         * PageProgressResponse
+         * @description One page's scan status: does it have at least one lexeme (AC1).
+         */
+        PageProgressResponse: {
+            /** Has Lexemes */
+            has_lexemes: boolean;
+            /** Page Number */
+            page_number: number;
+        };
+        /**
          * PageRangeRequest
          * @description One BH-28 page range as submitted by the client (AC2).
          */
@@ -1392,6 +1419,18 @@ export interface components {
         SavePageRangesRequest: {
             /** Ranges */
             ranges?: components["schemas"]["PageRangeRequest"][];
+        };
+        /**
+         * ScanProgressResponse
+         * @description AC2: aggregate scan progress alongside each page's status.
+         */
+        ScanProgressResponse: {
+            /** Pages */
+            pages: components["schemas"]["PageProgressResponse"][];
+            /** Processed Pages */
+            processed_pages: number;
+            /** Total Pages */
+            total_pages: number;
         };
         /**
          * SettlementMappingRequest
@@ -3214,6 +3253,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    get_scan_progress_dictionaries__dictionary_id__scan_progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanProgressResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

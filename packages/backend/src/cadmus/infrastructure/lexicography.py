@@ -133,6 +133,15 @@ class SqlAlchemyLexicographyRepository:
     def add_lexeme_event(self, event: LexemeEvent) -> None:
         self._session.add(event)
 
+    def list_page_ids_with_lexemes(self, dictionary_id: UUID) -> set[UUID]:
+        return set(
+            self._session.scalars(
+                select(lexemes.c.page_id)
+                .where(lexemes.c.dictionary_id == dictionary_id)
+                .distinct()
+            )
+        )
+
 
 class SqlAlchemyLexicographyUnitOfWork:
     """Session-backed lexicography transaction."""

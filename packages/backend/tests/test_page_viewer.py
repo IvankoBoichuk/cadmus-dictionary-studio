@@ -88,6 +88,9 @@ class MemorySourcesRepository:
     def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
         return next((p for p in self.pages.values() if p.id == page_id), None)
 
+    def list_pages(self, source_file_id: UUID) -> list[DictionaryPage]:
+        return [p for (sfid, _), p in self.pages.items() if sfid == source_file_id]
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         raise AssertionError("not used by page-viewer tests")
 

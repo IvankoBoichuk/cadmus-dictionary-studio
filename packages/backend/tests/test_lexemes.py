@@ -63,6 +63,12 @@ class MemorySourcesRepository:
     def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
         return next((p for p in self.pages.values() if p.id == page_id), None)
 
+    def list_pages(self, source_file_id: UUID) -> list[DictionaryPage]:
+        return sorted(
+            (p for (sfid, _), p in self.pages.items() if sfid == source_file_id),
+            key=lambda p: p.page_index,
+        )
+
 
 class MemorySourcesUnitOfWork:
     def __init__(self, repository: MemorySourcesRepository) -> None:

@@ -551,6 +551,15 @@ class SqlAlchemySourcesRepository:
     def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
         return self._session.get(DictionaryPage, page_id)
 
+    def list_pages(self, source_file_id: UUID) -> list[DictionaryPage]:
+        return list(
+            self._session.scalars(
+                select(DictionaryPage)
+                .where(dictionary_pages.c.source_file_id == source_file_id)
+                .order_by(dictionary_pages.c.page_index)
+            )
+        )
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         dictionary_ids = self._session.scalars(
             select(dictionaries.c.id)

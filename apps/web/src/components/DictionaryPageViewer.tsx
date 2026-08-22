@@ -7,6 +7,7 @@ import { useLexemesForPage } from "../hooks/useLexemesForPage";
 import { useUpdateLexeme } from "../hooks/useUpdateLexeme";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
+import { ScanProgressBar } from "./ScanProgressBar";
 
 /** BH-53: paginated viewer over a dictionary's rendered, in-range pages. */
 export function DictionaryPageViewer({
@@ -137,6 +138,14 @@ export function DictionaryPageViewer({
           />
         </aside>
       </div>
+      <ScanProgressBar
+        dictionaryId={dictionaryId}
+        currentPage={currentPage}
+        refreshToken={
+          lexemesState.status === "loaded" ? lexemesState.lexemes.length : 0
+        }
+        onNavigate={onNavigate}
+      />
       <div className="page-viewer-nav">
         <button
           type="button"
