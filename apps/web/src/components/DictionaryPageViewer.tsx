@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { dictionaryPageImageUrl } from "../api";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
+import { LexemeCanvas } from "./LexemeCanvas";
 
 /** BH-53: paginated viewer over a dictionary's rendered, in-range pages. */
 export function DictionaryPageViewer({
@@ -47,10 +48,11 @@ export function DictionaryPageViewer({
       <h2 id="page-viewer-heading" className="visually-hidden">
         Перегляд сторінки словника
       </h2>
-      <img
-        className="page-viewer-image"
-        src={dictionaryPageImageUrl(dictionaryId, currentPage)}
-        alt={`Сторінка ${currentPage} з ${summary.totalPages}`}
+      <LexemeCanvas
+        dictionaryId={dictionaryId}
+        pageNumber={currentPage}
+        imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
+        imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
       />
       <div className="page-viewer-nav">
         <button

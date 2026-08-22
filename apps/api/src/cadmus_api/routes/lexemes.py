@@ -1,0 +1,229 @@
+"""Thin HTTP adapters for the BH-54 manual lexeme-selection use cases."""
+
+from datetime import datetime
+from typing import Annotated
+from uuid import UUID
+
+from cadmus.identity import AuthenticationError, AuthenticationService, User
+from cadmus.lexicography import (
+    CreateLexemeService,
+    DuplicateLexemeError,
+    Lexeme,
+    LexemeAccessError,
+    LexemeInput,
+    LexemeOrigin,
+    LexemePageNotFoundError,
+    LexemeQueryService,
+    LexemeValidationError,
+)
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
+
+SESSION_COOKIE_NAME = "cadmus_session"
+
+
+class CreateLexemeRequest(BaseModel):
+    """One BH-54 lexeme submission (AC1, AC2, AC3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_text: str = Field(min_length=1, max_length=500)
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    confirm_duplicate: bool = False
+
+
+class LexemeResponse(BaseModel):
+    """One persisted BH-54 lexeme."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    dictionary_id: UUID
+    page_id: UUID
+    source_text: str
+    x: float
+    y: float
+    width: float
+    height: float
+    origin: LexemeOrigin
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+
+
+class ErrorResponse(BaseModel):
+    """Stable, non-sensitive error contract for a single failure reason."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: str
+    message: str
+
+
+class FieldErrorsResponse(BaseModel):
+    """Validation errors addressable by form field (AC1, AC2, AC3)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    errors: dict[str, str]
+
+
+class DuplicateLexemeResponse(BaseModel):
+    """AC6: a heavily overlapping lexeme already exists; resubmit to confirm."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: str = "duplicate_lexeme"
+    existing_lexeme_id: UUID
+    message: str
+
+
+UNAUTHORIZED_RESPONSE: dict[int | str, dict[str, object]] = {
+    status.HTTP_401_UNAUTHORIZED: {
+        "model": ErrorResponse,
+        "description": "The browser has no valid session",
+    }
+}
+NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
+    status.HTTP_404_NOT_FOUND: {
+        "model": ErrorResponse,
+        "description": (
+            "The dictionary, or the requested page within it, does not exist"
+        ),
+    }
+}
+
+
+def _lexeme_response(lexeme: Lexeme) -> LexemeResponse:
+    return LexemeResponse(
+        id=lexeme.id,
+        dictionary_id=lexeme.dictionary_id,
+        page_id=lexeme.page_id,
+        source_text=lexeme.source_text,
+        x=lexeme.x,
+        y=lexeme.y,
+        width=lexeme.width,
+        height=lexeme.height,
+        origin=lexeme.origin,
+        created_at=lexeme.created_at,
+        created_by=lexeme.created_by,
+        updated_at=lexeme.updated_at,
+        updated_by=lexeme.updated_by,
+    )
+
+
+def create_lexemes_router(
+    authentication_service: AuthenticationService,
+    create_service: CreateLexemeService,
+    query_service: LexemeQueryService,
+) -> APIRouter:
+    """Create BH-54 lexeme routes bound to application use cases."""
+    router = APIRouter(
+        prefix="/dictionaries/{dictionary_id}/pages/{page_number}/lexemes",
+        tags=["lexemes"],
+    )
+
+    def current_user(
+        session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    ) -> User:
+        if session_token is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "invalid_session", "message": "Потрібна авторизація."},
+            )
+        try:
+            return authentication_service.authenticate(session_token)
+        except AuthenticationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": error.reason, "message": "Потрібна авторизація."},
+            ) from error
+
+    AuthenticatedUser = Annotated[User, Depends(current_user)]
+
+    def _not_found() -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"code": "not_found", "message": "Сторінку не знайдено."},
+        )
+
+    @router.get(
+        "",
+        response_model=list[LexemeResponse],
+        responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
+        summary="List the lexemes manually selected on one page (AC7)",
+    )
+    def list_lexemes(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+        page_number: Annotated[int, Path(ge=1)],
+    ) -> list[LexemeResponse] | JSONResponse:
+        try:
+            lexemes = query_service.list_for_page(dictionary_id, user.id, page_number)
+        except (LexemeAccessError, LexemePageNotFoundError):
+            return _not_found()
+        return [_lexeme_response(lexeme) for lexeme in lexemes]
+
+    @router.post(
+        "",
+        response_model=LexemeResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **NOT_FOUND_RESPONSE,
+            status.HTTP_409_CONFLICT: {
+                "model": DuplicateLexemeResponse,
+                "description": (
+                    "A heavily overlapping lexeme already exists on this page"
+                ),
+            },
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": FieldErrorsResponse,
+                "description": "The text or bounding box failed validation",
+            },
+        },
+        summary="Manually select a lexeme on a page (AC1-AC6)",
+    )
+    def create_lexeme(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+        page_number: Annotated[int, Path(ge=1)],
+        request: CreateLexemeRequest,
+    ) -> LexemeResponse | JSONResponse:
+        data = LexemeInput(
+            page_number=page_number,
+            source_text=request.source_text,
+            x=request.x,
+            y=request.y,
+            width=request.width,
+            height=request.height,
+            confirm_duplicate=request.confirm_duplicate,
+        )
+        try:
+            lexeme = create_service.create(dictionary_id, user.id, data)
+        except (LexemeAccessError, LexemePageNotFoundError):
+            return _not_found()
+        except LexemeValidationError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"errors": error.errors},
+            )
+        except DuplicateLexemeError as error:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content=DuplicateLexemeResponse(
+                    existing_lexeme_id=error.existing_id,
+                    message=(
+                        "Схожа лексема вже виділена на цій сторінці. "
+                        "Підтвердіть, щоб зберегти все одно."
+                    ),
+                ).model_dump(mode="json"),
+            )
+        return _lexeme_response(lexeme)
+
+    return router
