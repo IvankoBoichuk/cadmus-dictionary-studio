@@ -6,8 +6,8 @@ import {
   type SyntheticEvent,
 } from "react";
 
+import type { LexemeResponse } from "../api";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
-import { useLexemesForPage } from "../hooks/useLexemesForPage";
 import {
   isRectLargeEnough,
   normalizeDragRect,
@@ -18,17 +18,25 @@ import {
 
 type Size = { width: number; height: number };
 
-/** BH-54: the page image plus manual lexeme drawing and highlighting (AC1-AC7). */
+/** BH-54/BH-55: the page image plus manual lexeme drawing and highlighting. */
 export function LexemeCanvas({
   dictionaryId,
   pageNumber,
   imageUrl,
   imageAlt,
+  lexemes,
+  onLexemeCreated,
+  selectedLexemeId,
+  onSelectLexeme,
 }: {
   dictionaryId: string;
   pageNumber: number;
   imageUrl: string;
   imageAlt: string;
+  lexemes: LexemeResponse[];
+  onLexemeCreated: (lexeme: LexemeResponse) => void;
+  selectedLexemeId: string | null;
+  onSelectLexeme: (lexemeId: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState<Size | null>(null);
@@ -37,7 +45,6 @@ export function LexemeCanvas({
   const [pendingBox, setPendingBox] = useState<Rect | null>(null);
   const [text, setText] = useState("");
 
-  const { state: lexemesState, addLexeme } = useLexemesForPage(dictionaryId, pageNumber);
   const { state: createState, submit, reset: resetCreate } = useCreateLexeme(
     dictionaryId,
     pageNumber,
@@ -117,7 +124,8 @@ export function LexemeCanvas({
       confirmDuplicate,
     );
     if (created) {
-      addLexeme(created);
+      onLexemeCreated(created);
+      onSelectLexeme(created.id);
       setPendingBox(null);
       setText("");
     }
@@ -146,11 +154,14 @@ export function LexemeCanvas({
           draggable={false}
         />
         {scale !== null &&
-          lexemesState.status === "loaded" &&
-          lexemesState.lexemes.map((lexeme) => (
+          lexemes.map((lexeme) => (
             <div
               key={lexeme.id}
-              className="lexeme-box"
+              className={
+                lexeme.id === selectedLexemeId
+                  ? "lexeme-box lexeme-box--selected"
+                  : "lexeme-box"
+              }
               title={lexeme.source_text}
               style={{
                 left: lexeme.x * scale,
@@ -183,12 +194,6 @@ export function LexemeCanvas({
           />
         )}
       </div>
-
-      {lexemesState.status === "error" && (
-        <p className="form-error" role="alert">
-          {lexemesState.message}
-        </p>
-      )}
 
       {pendingBox && (
         <form className="lexeme-form" onSubmit={handleSubmit}>

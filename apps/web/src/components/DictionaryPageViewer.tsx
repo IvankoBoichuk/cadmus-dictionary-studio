@@ -1,8 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { dictionaryPageImageUrl } from "../api";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
+import { useLexemesForPage } from "../hooks/useLexemesForPage";
 import { LexemeCanvas } from "./LexemeCanvas";
+import { LexemeList } from "./LexemeList";
 
 /** BH-53: paginated viewer over a dictionary's rendered, in-range pages. */
 export function DictionaryPageViewer({
@@ -23,6 +25,19 @@ export function DictionaryPageViewer({
     if (clamped !== pageNumber) onNavigate(clamped);
   }, [totalPages, pageNumber, onNavigate]);
 
+  const currentPage = Math.min(Math.max(pageNumber, 1), totalPages ?? pageNumber);
+  const { state: lexemesState, addLexeme } = useLexemesForPage(
+    dictionaryId,
+    currentPage,
+  );
+  const [selectedLexemeId, setSelectedLexemeId] = useState<string | null>(null);
+  const pageKey = `${dictionaryId}:${currentPage}`;
+  const [previousPageKey, setPreviousPageKey] = useState(pageKey);
+  if (pageKey !== previousPageKey) {
+    setPreviousPageKey(pageKey);
+    setSelectedLexemeId(null);
+  }
+
   if (summary.status === "loading") {
     return <p role="status">Завантажуємо сторінки…</p>;
   }
@@ -41,19 +56,32 @@ export function DictionaryPageViewer({
     );
   }
 
-  const currentPage = Math.min(Math.max(pageNumber, 1), summary.totalPages);
-
   return (
     <div className="page-viewer" aria-labelledby="page-viewer-heading">
       <h2 id="page-viewer-heading" className="visually-hidden">
         Перегляд сторінки словника
       </h2>
-      <LexemeCanvas
-        dictionaryId={dictionaryId}
-        pageNumber={currentPage}
-        imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
-        imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
-      />
+      <div className="page-viewer-body">
+        <LexemeCanvas
+          dictionaryId={dictionaryId}
+          pageNumber={currentPage}
+          imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
+          imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
+          lexemes={lexemesState.status === "loaded" ? lexemesState.lexemes : []}
+          onLexemeCreated={addLexeme}
+          selectedLexemeId={selectedLexemeId}
+          onSelectLexeme={setSelectedLexemeId}
+        />
+        <aside className="lexeme-sidebar" aria-labelledby="lexeme-list-heading">
+          <h3 id="lexeme-list-heading">Лексеми сторінки</h3>
+          <LexemeList
+            lexemesState={lexemesState}
+            pageNumber={currentPage}
+            selectedLexemeId={selectedLexemeId}
+            onSelectLexeme={setSelectedLexemeId}
+          />
+        </aside>
+      </div>
       <div className="page-viewer-nav">
         <button
           type="button"
