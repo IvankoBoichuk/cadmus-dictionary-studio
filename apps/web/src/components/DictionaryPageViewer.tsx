@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { dictionaryPageImageUrl, type LexemeResponse } from "../api";
+import { dictionaryPageImageUrl, type LexemeResponse, type LexemeSuggestion } from "../api";
 import { useDeleteLexeme } from "../hooks/useDeleteLexeme";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
 import { useLexemesForPage } from "../hooks/useLexemesForPage";
-import { useUpdateLexeme } from "../hooks/useUpdateLexeme";
+import { useOcrSuggestions } from "../hooks/useOcrSuggestions";
+import { lexemeToUpdateInput, useUpdateLexeme } from "../hooks/useUpdateLexeme";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
 import { ScanProgressBar } from "./ScanProgressBar";
@@ -37,16 +38,30 @@ export function DictionaryPageViewer({
   } = useLexemesForPage(dictionaryId, currentPage);
   const { state: updateState, submit: submitUpdate } = useUpdateLexeme(dictionaryId);
   const { remove: deleteLexeme } = useDeleteLexeme(dictionaryId);
+  const {
+    state: ocrState,
+    trigger: triggerOcrSuggestions,
+    dismissSuggestion,
+    reset: resetOcrSuggestions,
+  } = useOcrSuggestions(dictionaryId, currentPage);
 
   const [selectedLexemeId, setSelectedLexemeId] = useState<string | null>(null);
   const [redrawingLexemeId, setRedrawingLexemeId] = useState<string | null>(null);
+  const [secondBoxDraftLexemeId, setSecondBoxDraftLexemeId] = useState<string | null>(
+    null,
+  );
   const pageKey = `${dictionaryId}:${currentPage}`;
   const [previousPageKey, setPreviousPageKey] = useState(pageKey);
   if (pageKey !== previousPageKey) {
     setPreviousPageKey(pageKey);
     setSelectedLexemeId(null);
     setRedrawingLexemeId(null);
+    setSecondBoxDraftLexemeId(null);
+    resetOcrSuggestions();
   }
+
+  const suggestions: LexemeSuggestion[] =
+    ocrState.status === "succeeded" ? ocrState.suggestions : [];
 
   if (summary.status === "loading") {
     return <p role="status">Завантажуємо сторінки…</p>;
@@ -69,6 +84,7 @@ export function DictionaryPageViewer({
   const handleStartRedraw = (lexemeId: string) => {
     setSelectedLexemeId(lexemeId);
     setRedrawingLexemeId(lexemeId);
+    setSecondBoxDraftLexemeId(null);
   };
 
   const handleLexemeRedrawn = (lexeme: LexemeResponse) => {
@@ -76,18 +92,42 @@ export function DictionaryPageViewer({
     setRedrawingLexemeId(null);
   };
 
+  const findLexeme = (lexemeId: string): LexemeResponse | undefined =>
+    lexemesState.status === "loaded"
+      ? lexemesState.lexemes.find((lexeme) => lexeme.id === lexemeId)
+      : undefined;
+
   const handleSaveText = (lexemeId: string, newText: string) => {
-    const target =
-      lexemesState.status === "loaded"
-        ? lexemesState.lexemes.find((lexeme) => lexeme.id === lexemeId)
-        : undefined;
+    const target = findLexeme(lexemeId);
     if (!target) return;
     void submitUpdate(lexemeId, {
+      ...lexemeToUpdateInput(target),
       source_text: newText,
-      x: target.x,
-      y: target.y,
-      width: target.width,
-      height: target.height,
+    }).then((updated) => {
+      if (updated) updateLexeme(updated);
+    });
+  };
+
+  const handleStartAddSecondBox = (lexemeId: string) => {
+    setSelectedLexemeId(lexemeId);
+    setSecondBoxDraftLexemeId(lexemeId);
+    setRedrawingLexemeId(null);
+  };
+
+  const handleSecondBoxDrawn = (lexeme: LexemeResponse) => {
+    updateLexeme(lexeme);
+    setSecondBoxDraftLexemeId(null);
+  };
+
+  const handleRemoveSecondBox = (lexemeId: string) => {
+    const target = findLexeme(lexemeId);
+    if (!target) return;
+    void submitUpdate(lexemeId, {
+      ...lexemeToUpdateInput(target),
+      x2: null,
+      y2: null,
+      width2: null,
+      height2: null,
     }).then((updated) => {
       if (updated) updateLexeme(updated);
     });
@@ -99,6 +139,7 @@ export function DictionaryPageViewer({
       removeLexeme(lexemeId);
       if (selectedLexemeId === lexemeId) setSelectedLexemeId(null);
       if (redrawingLexemeId === lexemeId) setRedrawingLexemeId(null);
+      if (secondBoxDraftLexemeId === lexemeId) setSecondBoxDraftLexemeId(null);
     });
   };
 
@@ -107,6 +148,34 @@ export function DictionaryPageViewer({
       <h2 id="page-viewer-heading" className="visually-hidden">
         Перегляд сторінки словника
       </h2>
+      <div className="ocr-suggestions-controls">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => void triggerOcrSuggestions()}
+          disabled={
+            ocrState.status === "starting" ||
+            ocrState.status === "queued" ||
+            ocrState.status === "running"
+          }
+        >
+          {ocrState.status === "starting" ||
+          ocrState.status === "queued" ||
+          ocrState.status === "running"
+            ? "Розпізнаємо слова…"
+            : "Автоматично знайти слова (OCR)"}
+        </button>
+        {ocrState.status === "succeeded" && (
+          <span className="lede" role="status">
+            Знайдено пропозицій: {ocrState.suggestions.length}
+          </span>
+        )}
+        {ocrState.status === "failed" && (
+          <span className="form-error" role="alert">
+            {ocrState.message}
+          </span>
+        )}
+      </div>
       <div className="page-viewer-body">
         <LexemeCanvas
           dictionaryId={dictionaryId}
@@ -121,6 +190,11 @@ export function DictionaryPageViewer({
           onLexemeRedrawn={handleLexemeRedrawn}
           onCancelRedraw={() => setRedrawingLexemeId(null)}
           onSubmitUpdate={submitUpdate}
+          suggestions={suggestions}
+          onAcceptSuggestion={dismissSuggestion}
+          secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+          onSecondBoxDrawn={handleSecondBoxDrawn}
+          onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
         />
         <aside className="lexeme-sidebar" aria-labelledby="lexeme-list-heading">
           <h3 id="lexeme-list-heading">Лексеми сторінки</h3>
@@ -135,6 +209,10 @@ export function DictionaryPageViewer({
             onSaveText={handleSaveText}
             updateState={updateState}
             onDelete={handleDelete}
+            secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+            onStartAddSecondBox={handleStartAddSecondBox}
+            onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
+            onRemoveSecondBox={handleRemoveSecondBox}
           />
         </aside>
       </div>

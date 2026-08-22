@@ -739,6 +739,55 @@ class DictionaryReadinessService:
         return dictionary
 
 
+class MarkDictionaryScannedService:
+    """BH-58: perform the already-authorized ``configured`` -> ``scanned`` move.
+
+    This service only performs the mutation and its audit event -- the
+    "does the dictionary have at least one lexeme" precondition is a
+    ``lexicography`` concern (cross-module) and is checked by the caller
+    (``lexicography.FinishScanningService``) before this runs. Idempotent:
+    calling this on an already-``scanned`` dictionary is a no-op, matching
+    BH-58's "повторний виклик" requirement.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock
+
+    def mark_scanned(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            if dictionary is None or dictionary.owner_id != actor_id:
+                raise DictionaryAccessError(dictionary_id)
+
+            if dictionary.status == DictionaryStatus.SCANNED:
+                return dictionary
+
+            previous_status = DictionaryStatus(dictionary.status)
+            dictionary.status = DictionaryStatus.SCANNED
+            dictionary.updated_at = now
+            dictionary.updated_by = actor_id
+            unit_of_work.sources.update_dictionary(dictionary)
+            unit_of_work.sources.add_event(
+                DictionaryEvent(
+                    id=uuid4(),
+                    dictionary_id=dictionary_id,
+                    event_type=DictionaryEventType.STATUS_CHANGED,
+                    actor_user_id=actor_id,
+                    occurred_at=now,
+                    previous_status=previous_status,
+                    new_status=DictionaryStatus.SCANNED,
+                )
+            )
+            unit_of_work.commit()
+        return dictionary
+
+
 @dataclass(frozen=True)
 class PageRangeSaveOutcome:
     """Result of a BH-28 page-range save: the stored ranges and merge flag."""

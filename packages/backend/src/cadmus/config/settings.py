@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     google_oauth_client_secret: SecretStr | None = None
     google_oauth_redirect_url: str | None = None
     google_oauth_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    ocr_task_timeout_seconds: float = Field(default=25.0, gt=0, le=60)
 
     def sqlalchemy_database_url(self) -> URL:
         """Return the single effective database URL without logging credentials."""

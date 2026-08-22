@@ -19,6 +19,7 @@ from cadmus.infrastructure.google_oauth import AuthlibGoogleOAuthClient
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.lexicography import create_lexicography_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
+from cadmus.infrastructure.ocr import CeleryOcrSuggestionQueue
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
     SecurePasswordResetTokenProvider,
@@ -31,8 +32,10 @@ from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_clie
 from cadmus.lexicography import (
     CreateLexemeService,
     DeleteLexemeService,
+    FinishScanningService,
     LexemeQueryService,
     ScanProgressService,
+    SuggestLexemesService,
     UpdateLexemeService,
 )
 from cadmus.processing import TaskQueue
@@ -42,6 +45,7 @@ from cadmus.sources import (
     DeleteDictionaryService,
     DictionaryReadinessService,
     GetDictionaryService,
+    MarkDictionaryScannedService,
     ObjectStorage,
     SaveDictionaryMetadataService,
     SavePageRangesService,
@@ -57,6 +61,7 @@ from sqlalchemy import Engine, text
 from cadmus_api.routes.abbreviations import create_abbreviations_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
+from cadmus_api.routes.finish_scanning import create_finish_scanning_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
 from cadmus_api.routes.health import create_health_router
@@ -64,6 +69,7 @@ from cadmus_api.routes.lexemes import (
     create_lexeme_management_router,
     create_lexemes_router,
 )
+from cadmus_api.routes.ocr_suggestions import create_ocr_suggestions_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
 from cadmus_api.routes.scan_progress import create_scan_progress_router
@@ -98,6 +104,9 @@ def create_app(
     update_lexeme_service: UpdateLexemeService | None = None,
     delete_lexeme_service: DeleteLexemeService | None = None,
     scan_progress_service: ScanProgressService | None = None,
+    mark_dictionary_scanned_service: MarkDictionaryScannedService | None = None,
+    finish_scanning_service: FinishScanningService | None = None,
+    suggest_lexemes_service: SuggestLexemesService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -230,6 +239,13 @@ def create_app(
             unit_of_work_factory=sources_unit_of_work_factory,
         )
     )
+    app.state.mark_dictionary_scanned_service = (
+        mark_dictionary_scanned_service
+        if mark_dictionary_scanned_service is not None
+        else MarkDictionaryScannedService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
     lexicography_unit_of_work_factory = create_lexicography_unit_of_work_factory(engine)
     app.state.create_lexeme_service = (
         create_lexeme_service
@@ -269,6 +285,24 @@ def create_app(
         else ScanProgressService(
             unit_of_work_factory=lexicography_unit_of_work_factory,
             dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.finish_scanning_service = (
+        finish_scanning_service
+        if finish_scanning_service is not None
+        else FinishScanningService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            scanning_service=app.state.mark_dictionary_scanned_service,
+        )
+    )
+    app.state.suggest_lexemes_service = (
+        suggest_lexemes_service
+        if suggest_lexemes_service is not None
+        else SuggestLexemesService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            queue=CeleryOcrSuggestionQueue(create_celery_client(app_settings)),
         )
     )
     app.state.abbreviation_crud_service = (
@@ -349,6 +383,18 @@ def create_app(
         create_scan_progress_router(
             app.state.authentication_service,
             app.state.scan_progress_service,
+        )
+    )
+    app.include_router(
+        create_finish_scanning_router(
+            app.state.authentication_service,
+            app.state.finish_scanning_service,
+        )
+    )
+    app.include_router(
+        create_ocr_suggestions_router(
+            app.state.authentication_service,
+            app.state.suggest_lexemes_service,
         )
     )
     app.include_router(

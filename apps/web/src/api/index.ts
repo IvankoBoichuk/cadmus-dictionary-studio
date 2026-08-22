@@ -86,6 +86,15 @@ export type ConfigureDictionaryNotReadyResponse =
 type ConfigureDictionaryNotFoundResponse =
   ConfigureDictionaryOperation["responses"][404]["content"]["application/json"];
 
+type FinishScanningOperation =
+  paths["/dictionaries/{dictionary_id}/finish-scanning"]["post"];
+export type FinishScanningResponse =
+  FinishScanningOperation["responses"][200]["content"]["application/json"];
+export type FinishScanningNotReadyResponse =
+  FinishScanningOperation["responses"][422]["content"]["application/json"];
+type FinishScanningNotFoundResponse =
+  FinishScanningOperation["responses"][404]["content"]["application/json"];
+
 type GetPageRangesOperation =
   paths["/dictionaries/{dictionary_id}/page-ranges"]["get"];
 export type PageRangesResponse =
@@ -136,6 +145,20 @@ type DeleteLexemeOperation =
   paths["/dictionaries/{dictionary_id}/lexemes/{lexeme_id}"]["delete"];
 type DeleteLexemeNotFoundResponse =
   DeleteLexemeOperation["responses"][404]["content"]["application/json"];
+
+export type OcrSuggestionStatus = components["schemas"]["OcrSuggestionStatus"];
+export type LexemeSuggestion = components["schemas"]["LexemeSuggestionResponse"];
+type OcrSuggestionsErrorResponse = components["schemas"]["ErrorResponse"];
+
+type EnqueueSuggestionsOperation =
+  paths["/dictionaries/{dictionary_id}/pages/{page_number}/ocr-suggestions"]["post"];
+export type EnqueueSuggestionsResponse =
+  EnqueueSuggestionsOperation["responses"][202]["content"]["application/json"];
+
+type GetSuggestionsTaskOperation =
+  paths["/dictionaries/{dictionary_id}/pages/{page_number}/ocr-suggestions/{task_id}"]["get"];
+export type SuggestionsTaskResponse =
+  GetSuggestionsTaskOperation["responses"][200]["content"]["application/json"];
 
 type GetScanProgressOperation =
   paths["/dictionaries/{dictionary_id}/scan-progress"]["get"];
@@ -383,6 +406,10 @@ function dictionaryConfigurePath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/configure` as keyof paths;
 }
 
+function dictionaryFinishScanningPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/finish-scanning` as keyof paths;
+}
+
 function pageRangesPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/page-ranges` as keyof paths;
 }
@@ -397,6 +424,18 @@ function lexemesPath(dictionaryId: string, pageNumber: number): keyof paths {
 
 function lexemePath(dictionaryId: string, lexemeId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/lexemes/${lexemeId}` as keyof paths;
+}
+
+function ocrSuggestionsPath(dictionaryId: string, pageNumber: number): keyof paths {
+  return `/dictionaries/${dictionaryId}/pages/${pageNumber}/ocr-suggestions` as keyof paths;
+}
+
+function ocrSuggestionsTaskPath(
+  dictionaryId: string,
+  pageNumber: number,
+  taskId: string,
+): keyof paths {
+  return `/dictionaries/${dictionaryId}/pages/${pageNumber}/ocr-suggestions/${taskId}` as keyof paths;
 }
 
 function scanProgressPath(dictionaryId: string): keyof paths {
@@ -688,6 +727,16 @@ export const API = {
         ConfigureDictionaryNotReadyResponse | ConfigureDictionaryNotFoundResponse
       >(dictionaryConfigurePath(dictionaryId), options);
     },
+
+    finishScanning(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<FinishScanningResponse> {
+      return postWithoutBody<
+        FinishScanningResponse,
+        FinishScanningNotReadyResponse | FinishScanningNotFoundResponse
+      >(dictionaryFinishScanningPath(dictionaryId), options);
+    },
   },
 
   pageRanges: {
@@ -773,6 +822,31 @@ export const API = {
     ): Promise<void> {
       return del<DeleteLexemeNotFoundResponse>(
         lexemePath(dictionaryId, lexemeId),
+        options,
+      );
+    },
+  },
+
+  ocrSuggestions: {
+    enqueue(
+      dictionaryId: string,
+      pageNumber: number,
+      options?: RequestOptions,
+    ): Promise<EnqueueSuggestionsResponse> {
+      return postWithoutBody<EnqueueSuggestionsResponse, OcrSuggestionsErrorResponse>(
+        ocrSuggestionsPath(dictionaryId, pageNumber),
+        options,
+      );
+    },
+
+    getTask(
+      dictionaryId: string,
+      pageNumber: number,
+      taskId: string,
+      options?: RequestOptions,
+    ): Promise<SuggestionsTaskResponse> {
+      return get<SuggestionsTaskResponse, OcrSuggestionsErrorResponse>(
+        ocrSuggestionsTaskPath(dictionaryId, pageNumber, taskId),
         options,
       );
     },

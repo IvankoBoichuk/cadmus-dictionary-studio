@@ -31,3 +31,50 @@ export function scaleRect(rect: Rect, factor: number): Rect {
 export function isRectLargeEnough(rect: Rect): boolean {
   return rect.width >= MIN_DRAG_SIZE && rect.height >= MIN_DRAG_SIZE;
 }
+
+/** One of the 8 corner/edge resize handles on a selected lexeme box. */
+export type HandleId = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+export const HANDLES: readonly HandleId[] = [
+  "nw",
+  "n",
+  "ne",
+  "w",
+  "e",
+  "sw",
+  "s",
+  "se",
+];
+
+/**
+ * Apply a handle drag delta to a rectangle, resizing from the edge(s) that
+ * handle represents ("n"/"s" move only the top/bottom edge, "e"/"w" only
+ * the left/right edge, corners move both). Refuses to shrink past
+ * ``MIN_DRAG_SIZE`` rather than flipping the box inside out.
+ */
+export function resizeRect(rect: Rect, handle: HandleId, dx: number, dy: number): Rect {
+  let { x, y, width, height } = rect;
+  if (handle.includes("w")) {
+    const newWidth = width - dx;
+    if (newWidth >= MIN_DRAG_SIZE) {
+      x += dx;
+      width = newWidth;
+    }
+  }
+  if (handle.includes("e")) {
+    const newWidth = width + dx;
+    if (newWidth >= MIN_DRAG_SIZE) width = newWidth;
+  }
+  if (handle.includes("n")) {
+    const newHeight = height - dy;
+    if (newHeight >= MIN_DRAG_SIZE) {
+      y += dy;
+      height = newHeight;
+    }
+  }
+  if (handle.includes("s")) {
+    const newHeight = height + dy;
+    if (newHeight >= MIN_DRAG_SIZE) height = newHeight;
+  }
+  return { x, y, width, height };
+}

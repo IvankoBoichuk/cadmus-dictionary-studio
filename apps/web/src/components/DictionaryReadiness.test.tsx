@@ -55,6 +55,7 @@ describe("DictionaryReadiness", () => {
           ],
         })}
         onConfigured={vi.fn()}
+        onScanned={vi.fn()}
       />,
     );
 
@@ -74,7 +75,11 @@ describe("DictionaryReadiness", () => {
     const onConfigured = vi.fn();
 
     render(
-      <DictionaryReadiness dictionary={baseDictionary()} onConfigured={onConfigured} />,
+      <DictionaryReadiness
+        dictionary={baseDictionary()}
+        onConfigured={onConfigured}
+        onScanned={vi.fn()}
+      />,
     );
 
     const button = screen.getByRole("button", {
@@ -96,7 +101,13 @@ describe("DictionaryReadiness", () => {
       ),
     );
 
-    render(<DictionaryReadiness dictionary={baseDictionary()} onConfigured={vi.fn()} />);
+    render(
+      <DictionaryReadiness
+        dictionary={baseDictionary()}
+        onConfigured={vi.fn()}
+        onScanned={vi.fn()}
+      />,
+    );
     fireEvent.click(
       screen.getByRole("button", { name: "Позначити як готовий до обробки" }),
     );
@@ -111,12 +122,78 @@ describe("DictionaryReadiness", () => {
       <DictionaryReadiness
         dictionary={baseDictionary({ status: "configured" })}
         onConfigured={vi.fn()}
+        onScanned={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("Готовий до обробки");
     expect(
       screen.queryByRole("button", { name: "Позначити як готовий до обробки" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a finish-scanning button once configured and reports success (BH-58)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, { id: "11111111-1111-1111-1111-111111111111", status: "scanned" }),
+      ),
+    );
+    const onScanned = vi.fn();
+
+    render(
+      <DictionaryReadiness
+        dictionary={baseDictionary({ status: "configured" })}
+        onConfigured={vi.fn()}
+        onScanned={onScanned}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Завершити сканування" }));
+
+    await waitFor(() =>
+      expect(onScanned).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "scanned" }),
+      ),
+    );
+  });
+
+  it("shows the server's error when finishing scanning without lexemes (BH-58)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(422, {
+          code: "no_lexemes",
+          message: "Словник ще не має жодної виділеної лексеми.",
+        }),
+      ),
+    );
+
+    render(
+      <DictionaryReadiness
+        dictionary={baseDictionary({ status: "configured" })}
+        onConfigured={vi.fn()}
+        onScanned={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Завершити сканування" }));
+
+    expect(
+      await screen.findByText("Словник ще не має жодної виділеної лексеми."),
+    ).toBeInTheDocument();
+  });
+
+  it("hides both transition buttons once scanning is finished (BH-58)", () => {
+    render(
+      <DictionaryReadiness
+        dictionary={baseDictionary({ status: "scanned" })}
+        onConfigured={vi.fn()}
+        onScanned={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Сканування завершено");
+    expect(
+      screen.queryByRole("button", { name: "Завершити сканування" }),
     ).not.toBeInTheDocument();
   });
 });

@@ -20,12 +20,16 @@ proxy for "the user boxed essentially the same word again" (BH-54 AC6).
 class LexemeOrigin(StrEnum):
     """How a lexeme's text and bounding box came to exist (ADR-0004 §9).
 
-    Only ``MANUAL`` exists yet: BH-54 lexemes are drawn by hand before OCR
-    runs. ``ocr``/``rule``/``model`` are reserved for later Stories that
-    derive lexemes from automated recognition, per the provenance model.
+    ``MANUAL`` is a lexeme drawn and typed entirely by hand (BH-54).
+    ``OCR`` is a Tesseract/ALTO suggestion the user reviewed and accepted
+    (see ``LexemeSuggestion``/``SuggestLexemesService``) -- the box and
+    text both come from the recognizer, not from the user typing them.
+    ``rule``/``model`` are reserved for later Stories, per the provenance
+    model.
     """
 
     MANUAL = "manual"
+    OCR = "ocr"
 
 
 class LexemeValidationError(ValueError):
@@ -74,6 +78,16 @@ class LexemeNotFoundError(LookupError):
         self.lexeme_id = lexeme_id
 
 
+class DictionaryNotReadyToScanError(ValueError):
+    """BH-58: raised when finishing the scanning stage before any lexeme exists."""
+
+    def __init__(self, dictionary_id: UUID) -> None:
+        super().__init__(
+            f"dictionary {dictionary_id} has no lexemes yet; scanning isn't finished"
+        )
+        self.dictionary_id = dictionary_id
+
+
 class LexemeEventType(StrEnum):
     """BH-56 AC: append-only history of who changed a lexeme, and when."""
 
@@ -88,6 +102,13 @@ class Lexeme:
     A future precursor to a ``headword``/entry; ``x``/``y``/``width``/
     ``height`` are pixel coordinates relative to the page's rendered image
     (top-left origin), matching ``DictionaryPage.width``/``height``.
+
+    ``x2``/``y2``/``width2``/``height2`` are an optional second box on the
+    *same* page, for an entry that visually splits across a column break
+    (the tail of a definition continuing in the next column). Either all
+    four are set, or all four are ``None`` -- enforced by
+    ``validate_second_box_fields`` and the ``lexeme_second_box_all_or_none``
+    check constraint.
     """
 
     id: UUID
@@ -103,6 +124,10 @@ class Lexeme:
     created_by: UUID
     updated_at: datetime
     updated_by: UUID
+    x2: float | None = None
+    y2: float | None = None
+    width2: float | None = None
+    height2: float | None = None
 
 
 @dataclass
@@ -123,7 +148,17 @@ class LexemeEvent:
     changed_fields: tuple[str, ...] = ()
 
 
-_EDITABLE_FIELDS: tuple[str, ...] = ("source_text", "x", "y", "width", "height")
+_EDITABLE_FIELDS: tuple[str, ...] = (
+    "source_text",
+    "x",
+    "y",
+    "width",
+    "height",
+    "x2",
+    "y2",
+    "width2",
+    "height2",
+)
 
 
 def changed_lexeme_fields(
@@ -134,6 +169,10 @@ def changed_lexeme_fields(
     y: float,
     width: float,
     height: float,
+    x2: float | None = None,
+    y2: float | None = None,
+    width2: float | None = None,
+    height2: float | None = None,
 ) -> list[str]:
     """List which editable fields actually differ, for the BH-56 audit trail."""
     after = {
@@ -142,6 +181,10 @@ def changed_lexeme_fields(
         "y": y,
         "width": width,
         "height": height,
+        "x2": x2,
+        "y2": y2,
+        "width2": width2,
+        "height2": height2,
     }
     return [
         field for field in _EDITABLE_FIELDS if getattr(before, field) != after[field]
@@ -177,6 +220,50 @@ def validate_lexeme_fields(
         exceeds_bounds = x + width > page_width or y + height > page_height
         if exceeds_bounds:
             errors["width"] = "Виділена область виходить за межі зображення сторінки."
+
+    return errors
+
+
+def validate_second_box_fields(
+    *,
+    x2: float | None,
+    y2: float | None,
+    width2: float | None,
+    height2: float | None,
+    page_width: int,
+    page_height: int,
+) -> dict[str, str]:
+    """Validate an optional second box: an entry split across a column break.
+
+    All four fields must be provided together, or all omitted -- there is
+    no separate text for the second box, it's the same lexeme continuing
+    elsewhere on the same page.
+    """
+    values = (x2, y2, width2, height2)
+    if all(value is None for value in values):
+        return {}
+    if any(value is None for value in values):
+        return {
+            "x2": (
+                "Другу область потрібно вказати повністю, усіма чотирма "
+                "полями, або не вказувати зовсім."  # noqa: RUF001
+            )
+        }
+
+    assert x2 is not None
+    assert y2 is not None
+    assert width2 is not None
+    assert height2 is not None
+
+    errors: dict[str, str] = {}
+    if width2 <= 0 or height2 <= 0:
+        errors["width2"] = "Друга область має мати додатні ширину та висоту."
+    if x2 < 0 or y2 < 0:
+        errors["x2"] = "Друга область не може виходити за межі сторінки."
+    elif width2 > 0 and height2 > 0:
+        exceeds_bounds = x2 + width2 > page_width or y2 + height2 > page_height
+        if exceeds_bounds:
+            errors["width2"] = "Друга область виходить за межі зображення сторінки."
 
     return errors
 
@@ -220,3 +307,69 @@ def find_overlapping_lexeme(
         if ratio >= DUPLICATE_OVERLAP_RATIO:
             return lexeme
     return None
+
+
+class OcrSuggestionStatus(StrEnum):
+    """Transport-neutral state of an in-flight OCR word-suggestion task."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class LexemeSuggestion:
+    """One Tesseract/ALTO word candidate for a page, not yet a ``Lexeme``.
+
+    Ephemeral by design: never persisted. ``x``/``y``/``width``/``height``
+    are pixel coordinates matching ``DictionaryPage.width``/``height``,
+    same convention as ``Lexeme`` -- ALTO's ``HPOS``/``VPOS``/``WIDTH``/
+    ``HEIGHT`` are already pixel-based against the source image, so no
+    unit conversion happens between OCR output and this type.
+    """
+
+    source_text: str
+    x: float
+    y: float
+    width: float
+    height: float
+    confidence: float
+
+
+@dataclass(frozen=True)
+class OcrSuggestionTaskSnapshot:
+    """Current observable state of a background suggestion task."""
+
+    task_id: str
+    status: OcrSuggestionStatus
+    suggestions: tuple[LexemeSuggestion, ...] | None = None
+    error: str | None = None
+
+
+_ISO_TO_TESSERACT_LANGUAGE: dict[str, str] = {
+    "uk": "ukr",
+    "ru": "rus",
+    "pl": "pol",
+    "en": "eng",
+}
+DEFAULT_TESSERACT_LANGUAGE = "ukr+eng"
+
+
+def resolve_ocr_language(language_codes: Sequence[str]) -> str:
+    """Map a dictionary's configured ISO 639-1 codes to a Tesseract ``-l`` value.
+
+    Falls back to ``DEFAULT_TESSERACT_LANGUAGE`` when the dictionary has no
+    configured languages, or none of them have an installed Tesseract
+    language pack (see ``apps/api/Dockerfile`` for the installed set).
+    """
+    mapped = [
+        _ISO_TO_TESSERACT_LANGUAGE[code]
+        for code in language_codes
+        if code in _ISO_TO_TESSERACT_LANGUAGE
+    ]
+    if not mapped:
+        return DEFAULT_TESSERACT_LANGUAGE
+    # Preserve first-seen order while de-duplicating (dict keys are
+    # insertion-ordered), so ``["uk", "uk", "en"]`` -> ``"ukr+eng"``.
+    return "+".join(dict.fromkeys(mapped))

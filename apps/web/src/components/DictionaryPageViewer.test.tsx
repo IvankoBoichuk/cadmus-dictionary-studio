@@ -229,4 +229,91 @@ describe("DictionaryPageViewer", () => {
       screen.queryByText(/ще немає виділених лексем/),
     ).not.toBeInTheDocument();
   });
+
+  it("saving edited text preserves an existing second box (regression)", async () => {
+    stubContainerRect();
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/lexemes/lex-1") && init?.method === "PATCH") {
+        const body = JSON.parse(init.body as string) as Record<string, unknown>;
+        return Promise.resolve(
+          jsonResponse(200, {
+            id: "lex-1",
+            dictionary_id: "dict-1",
+            page_id: "page-1",
+            origin: "manual",
+            created_at: "2026-08-18T00:00:00Z",
+            created_by: "user-1",
+            updated_at: "2026-08-18T00:00:00Z",
+            updated_by: "user-1",
+            ...body,
+          }),
+        );
+      }
+      if (url.includes("/lexemes")) {
+        return Promise.resolve(
+          jsonResponse(200, [
+            {
+              id: "lex-1",
+              dictionary_id: "dict-1",
+              page_id: "page-1",
+              source_text: "старе",
+              x: 10,
+              y: 10,
+              width: 100,
+              height: 40,
+              x2: 600,
+              y2: 10,
+              width2: 90,
+              height2: 40,
+              origin: "manual",
+              created_at: "2026-08-18T00:00:00Z",
+              created_by: "user-1",
+              updated_at: "2026-08-18T00:00:00Z",
+              updated_by: "user-1",
+            },
+          ]),
+        );
+      }
+      if (url.includes("/scan-progress")) {
+        return Promise.resolve(
+          jsonResponse(200, { total_pages: 1, processed_pages: 0, pages: [] }),
+        );
+      }
+      return Promise.resolve(jsonResponse(200, { total_pages: 1 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+    );
+    loadPageImage(await screen.findByAltText("Сторінка 1 з 1"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Редагувати текст" }));
+    fireEvent.change(screen.getByLabelText("Текст лексеми"), {
+      target: { value: "нове" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await vi.waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        (call) =>
+          String(call[0]).includes("/lexemes/lex-1") &&
+          (call[1] as RequestInit | undefined)?.method === "PATCH",
+      );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse((patchCall?.[1] as RequestInit).body as string);
+      expect(body).toEqual({
+        source_text: "нове",
+        x: 10,
+        y: 10,
+        width: 100,
+        height: 40,
+        x2: 600,
+        y2: 10,
+        width2: 90,
+        height2: 40,
+      });
+    });
+  });
 });

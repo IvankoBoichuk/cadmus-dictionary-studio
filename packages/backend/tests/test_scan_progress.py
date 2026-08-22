@@ -85,6 +85,11 @@ class MemoryLexicographyRepository:
             if lexeme.dictionary_id == dictionary_id
         }
 
+    def has_any_lexeme(self, dictionary_id: UUID) -> bool:
+        return any(
+            lexeme.dictionary_id == dictionary_id for lexeme in self.lexemes.values()
+        )
+
 
 class MemoryLexicographyUnitOfWork:
     def __init__(self, repository: MemoryLexicographyRepository) -> None:

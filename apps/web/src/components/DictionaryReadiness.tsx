@@ -5,15 +5,18 @@ import { API, apiMessageFrom, type DictionaryResponse } from "../api";
 const STATUS_LABELS: Record<DictionaryResponse["status"], string> = {
   draft: "Чернетка",
   configured: "Готовий до обробки",
+  scanned: "Сканування завершено",
 };
 
-/** BH-31 completion indicators: current status, missing gaps, and confirmation. */
+/** BH-31/BH-58 completion indicators: current status, blockers, and confirmation. */
 export function DictionaryReadiness({
   dictionary,
   onConfigured,
+  onScanned,
 }: {
   dictionary: DictionaryResponse;
   onConfigured: (dictionary: DictionaryResponse) => void;
+  onScanned: (dictionary: DictionaryResponse) => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +34,22 @@ export function DictionaryReadiness({
       setError(
         apiMessageFrom(submitError) ??
           "Не вдалося підтвердити готовність. Спробуйте ще раз.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFinishScanning = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await API.dictionaries.finishScanning(dictionary.id);
+      onScanned({ ...dictionary, status: result.status });
+    } catch (submitError) {
+      setError(
+        apiMessageFrom(submitError) ??
+          "Не вдалося завершити сканування. Спробуйте ще раз.",
       );
     } finally {
       setSubmitting(false);
@@ -62,6 +81,15 @@ export function DictionaryReadiness({
           onClick={() => void handleConfigure()}
         >
           {submitting ? "Підтверджуємо…" : "Позначити як готовий до обробки"}
+        </button>
+      )}
+      {dictionary.status === "configured" && (
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => void handleFinishScanning()}
+        >
+          {submitting ? "Завершуємо…" : "Завершити сканування"}
         </button>
       )}
     </div>

@@ -4,6 +4,11 @@ FROM python:3.12-slim-bookworm AS base
 
 COPY --from=uv /uv /uvx /bin/
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       tesseract-ocr tesseract-ocr-ukr tesseract-ocr-rus tesseract-ocr-pol \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 ENV PATH="/opt/cadmus-venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -29,6 +34,11 @@ RUN uv sync --all-packages --locked --no-dev \
 FROM python:3.12-slim-bookworm AS test
 
 COPY --from=uv /uv /uvx /bin/
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       tesseract-ocr tesseract-ocr-ukr tesseract-ocr-rus tesseract-ocr-pol \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/cadmus-venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \

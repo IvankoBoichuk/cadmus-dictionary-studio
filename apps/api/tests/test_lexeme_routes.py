@@ -183,6 +183,69 @@ def test_create_lexeme_returns_the_persisted_lexeme() -> None:
     assert service.received is not None
     assert service.received.page_number == 1
     assert service.received.confirm_duplicate is False
+    assert service.received.origin == LexemeOrigin.MANUAL
+
+
+def test_create_lexeme_passes_through_an_explicit_ocr_origin() -> None:
+    lexeme = _lexeme(source_text="слово", origin=LexemeOrigin.OCR)
+    service = StubCreateLexemeService(lexeme=lexeme)
+
+    with client_for(create_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(
+            f"/dictionaries/{uuid4()}/pages/1/lexemes",
+            json={
+                "source_text": "слово",
+                "x": 10,
+                "y": 10,
+                "width": 100,
+                "height": 40,
+                "origin": "ocr",
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["origin"] == "ocr"
+    assert service.received is not None
+    assert service.received.origin == LexemeOrigin.OCR
+
+
+def test_create_lexeme_passes_through_a_second_box() -> None:
+    lexeme = _lexeme(source_text="слово", x2=600, y2=10, width2=90, height2=40)
+    service = StubCreateLexemeService(lexeme=lexeme)
+
+    with client_for(create_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(
+            f"/dictionaries/{uuid4()}/pages/1/lexemes",
+            json={
+                "source_text": "слово",
+                "x": 10,
+                "y": 10,
+                "width": 100,
+                "height": 40,
+                "x2": 600,
+                "y2": 10,
+                "width2": 90,
+                "height2": 40,
+            },
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert (body["x2"], body["y2"], body["width2"], body["height2"]) == (
+        600,
+        10,
+        90,
+        40,
+    )
+    assert service.received is not None
+    assert (
+        service.received.x2,
+        service.received.y2,
+        service.received.width2,
+        service.received.height2,
+    ) == (600, 10, 90, 40)
 
 
 def test_create_lexeme_rejects_a_non_positive_bounding_box() -> None:
@@ -323,6 +386,37 @@ def test_update_lexeme_returns_the_updated_lexeme() -> None:
     assert body["source_text"] == "нове"
     assert service.received is not None
     assert service.received.source_text == "нове"
+
+
+def test_update_lexeme_passes_through_a_second_box() -> None:
+    lexeme = _lexeme(source_text="слово", x2=600, y2=10, width2=90, height2=40)
+    service = StubUpdateLexemeService(lexeme=lexeme)
+
+    with client_for(update_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.patch(
+            f"/dictionaries/{uuid4()}/lexemes/{lexeme.id}",
+            json={
+                "source_text": "слово",
+                "x": 10,
+                "y": 10,
+                "width": 100,
+                "height": 40,
+                "x2": 600,
+                "y2": 10,
+                "width2": 90,
+                "height2": 40,
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.received is not None
+    assert (
+        service.received.x2,
+        service.received.y2,
+        service.received.width2,
+        service.received.height2,
+    ) == (600, 10, 90, 40)
 
 
 def test_update_lexeme_rejects_a_non_positive_bounding_box() -> None:

@@ -39,6 +39,10 @@ function renderList(
     onSaveText: (lexemeId: string, text: string) => void;
     updateState: UpdateLexemeState;
     onDelete: (lexemeId: string) => void;
+    secondBoxDraftLexemeId: string | null;
+    onStartAddSecondBox: (lexemeId: string) => void;
+    onCancelSecondBoxDraft: () => void;
+    onRemoveSecondBox: (lexemeId: string) => void;
   }> = {},
 ) {
   return render(
@@ -53,6 +57,10 @@ function renderList(
       onSaveText={overrides.onSaveText ?? vi.fn()}
       updateState={overrides.updateState ?? IDLE_UPDATE_STATE}
       onDelete={overrides.onDelete ?? vi.fn()}
+      secondBoxDraftLexemeId={overrides.secondBoxDraftLexemeId ?? null}
+      onStartAddSecondBox={overrides.onStartAddSecondBox ?? vi.fn()}
+      onCancelSecondBoxDraft={overrides.onCancelSecondBoxDraft ?? vi.fn()}
+      onRemoveSecondBox={overrides.onRemoveSecondBox ?? vi.fn()}
     />,
   );
 }
@@ -175,6 +183,49 @@ describe("LexemeList", () => {
     );
 
     expect(onCancelRedraw).toHaveBeenCalled();
+  });
+
+  it("starts adding a second box for a lexeme without one", () => {
+    const onStartAddSecondBox = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onStartAddSecondBox,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати другу область" }));
+
+    expect(onStartAddSecondBox).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("offers to remove an existing second box instead of adding one", () => {
+    const onRemoveSecondBox = vi.fn();
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", x2: 600, y2: 10, width2: 90, height2: 40 })],
+      },
+      onRemoveSecondBox,
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Додати другу область" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Видалити другу область" }));
+
+    expect(onRemoveSecondBox).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("offers to cancel when already drafting a second box for that lexeme", () => {
+    const onCancelSecondBoxDraft = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      secondBoxDraftLexemeId: "lex-7",
+      onCancelSecondBoxDraft,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Скасувати другу область" }));
+
+    expect(onCancelSecondBoxDraft).toHaveBeenCalled();
   });
 
   it("deletes a lexeme after confirmation (BH-56 AC1)", () => {
