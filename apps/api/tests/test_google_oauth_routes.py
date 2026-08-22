@@ -106,7 +106,7 @@ def test_start_redirects_to_google_and_sets_oauth_cookies() -> None:
     )
     assert all("HttpOnly" in cookie for cookie in cookies)
     assert all("SameSite=lax" in cookie for cookie in cookies)
-    assert all("Path=/auth/google" in cookie for cookie in cookies)
+    assert all("Path=/api/auth/google" in cookie for cookie in cookies)
 
 
 def test_start_uses_secure_cookies_in_production() -> None:
