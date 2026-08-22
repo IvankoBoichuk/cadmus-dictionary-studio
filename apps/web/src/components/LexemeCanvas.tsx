@@ -8,6 +8,7 @@ import {
 
 import type { LexemeResponse } from "../api";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
+import type { UpdateLexemeInput } from "../hooks/useUpdateLexeme";
 import {
   isRectLargeEnough,
   normalizeDragRect,
@@ -18,7 +19,7 @@ import {
 
 type Size = { width: number; height: number };
 
-/** BH-54/BH-55: the page image plus manual lexeme drawing and highlighting. */
+/** BH-54/BH-55/BH-56: the page image, lexeme drawing, highlighting, and redrawing. */
 export function LexemeCanvas({
   dictionaryId,
   pageNumber,
@@ -28,6 +29,10 @@ export function LexemeCanvas({
   onLexemeCreated,
   selectedLexemeId,
   onSelectLexeme,
+  redrawingLexemeId,
+  onLexemeRedrawn,
+  onCancelRedraw,
+  onSubmitUpdate,
 }: {
   dictionaryId: string;
   pageNumber: number;
@@ -37,6 +42,13 @@ export function LexemeCanvas({
   onLexemeCreated: (lexeme: LexemeResponse) => void;
   selectedLexemeId: string | null;
   onSelectLexeme: (lexemeId: string | null) => void;
+  redrawingLexemeId: string | null;
+  onLexemeRedrawn: (lexeme: LexemeResponse) => void;
+  onCancelRedraw: () => void;
+  onSubmitUpdate: (
+    lexemeId: string,
+    input: UpdateLexemeInput,
+  ) => Promise<LexemeResponse | null>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState<Size | null>(null);
@@ -90,25 +102,39 @@ export function LexemeCanvas({
     setDrag({ start: drag.start, current: point });
   };
 
+  const toNaturalRect = (displayedRect: Rect): Rect | null => {
+    if (!naturalSize || !displayedSize || displayedSize.width === 0) return null;
+    return scaleRect(displayedRect, naturalSize.width / displayedSize.width);
+  };
+
   const handleMouseUp = () => {
     if (!drag) return;
     const rect = normalizeDragRect(drag.start, drag.current);
     setDrag(null);
-    if (isRectLargeEnough(rect)) {
-      setPendingBox(rect);
-      setText("");
+    if (!isRectLargeEnough(rect)) return;
+
+    if (redrawingLexemeId) {
+      const target = lexemes.find((lexeme) => lexeme.id === redrawingLexemeId);
+      const naturalRect = toNaturalRect(rect);
+      if (target && naturalRect) {
+        void onSubmitUpdate(redrawingLexemeId, {
+          source_text: target.source_text,
+          ...naturalRect,
+        }).then((updated) => {
+          if (updated) onLexemeRedrawn(updated);
+        });
+      }
+      return;
     }
+
+    setPendingBox(rect);
+    setText("");
   };
 
   const cancelPending = () => {
     setPendingBox(null);
     setText("");
     resetCreate();
-  };
-
-  const toNaturalRect = (displayedRect: Rect): Rect | null => {
-    if (!naturalSize || !displayedSize || displayedSize.width === 0) return null;
-    return scaleRect(displayedRect, naturalSize.width / displayedSize.width);
   };
 
   const handleSubmit = async (
@@ -138,6 +164,14 @@ export function LexemeCanvas({
 
   return (
     <div className="lexeme-canvas-wrap">
+      {redrawingLexemeId && (
+        <p className="lede" role="status">
+          Намалюйте нову область для вибраної лексеми.{" "}
+          <button type="button" className="secondary-button" onClick={onCancelRedraw}>
+            Скасувати перемальовування
+          </button>
+        </p>
+      )}
       <div
         ref={containerRef}
         className="lexeme-canvas"
@@ -203,7 +237,9 @@ export function LexemeCanvas({
             value={text}
             onChange={(event) => setText(event.target.value)}
             autoFocus
-            aria-invalid={Boolean(createState.status === "error" && createState.fieldErrors?.source_text)}
+            aria-invalid={Boolean(
+              createState.status === "error" && createState.fieldErrors?.source_text,
+            )}
           />
           {createState.status === "error" && createState.fieldErrors?.source_text && (
             <p className="field-error" role="alert">

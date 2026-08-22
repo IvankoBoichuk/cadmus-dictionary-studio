@@ -618,6 +618,31 @@ h1 {
   font-size: 0.85rem;
 }
 
+.lexeme-list-item input {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #9aa7a1;
+  border-radius: 0.4rem;
+  font: inherit;
+  font-weight: 650;
+}
+
+.lexeme-list-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.lexeme-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lexeme-list-actions button {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
 .lexeme-form {
   display: grid;
   gap: 0.5rem;

@@ -280,6 +280,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/lexemes/{lexeme_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a lexeme (BH-56) */
+        delete: operations["delete_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edit a lexeme's text and/or bounding box (BH-56) */
+        patch: operations["update_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__patch"];
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/page-ranges": {
         parameters: {
             query?: never;
@@ -1545,6 +1563,22 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * UpdateLexemeRequest
+         * @description One BH-56 lexeme edit submission: full replacement text and box.
+         */
+        UpdateLexemeRequest: {
+            /** Height */
+            height: number;
+            /** Source Text */
+            source_text: string;
+            /** Width */
+            width: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -2748,6 +2782,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessBlockersResponse"];
+                };
+            };
+        };
+    };
+    delete_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                lexeme_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the lexeme within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                lexeme_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLexemeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LexemeResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, or the lexeme within it, does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The text or bounding box failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
                 };
             };
         };

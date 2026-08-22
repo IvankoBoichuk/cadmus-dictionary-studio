@@ -9,9 +9,13 @@ from cadmus.lexicography.domain import (
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
+    LexemeEvent,
+    LexemeEventType,
+    LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeValidationError,
+    changed_lexeme_fields,
     find_overlapping_lexeme,
     validate_lexeme_fields,
 )
@@ -115,6 +119,140 @@ class CreateLexemeService:
             unit_of_work.lexicography.add_lexeme(lexeme)
             unit_of_work.commit()
         return lexeme
+
+
+@dataclass(frozen=True)
+class UpdateLexemeInput:
+    """One BH-56 lexeme edit submission: full replacement text and box."""
+
+    source_text: str
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+class UpdateLexemeService:
+    """Validate and persist an edit to a lexeme's text or bounding box (BH-56)."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._clock = clock
+
+    def update(
+        self,
+        dictionary_id: UUID,
+        lexeme_id: UUID,
+        actor_id: UUID,
+        data: UpdateLexemeInput,
+    ) -> Lexeme:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            existing = unit_of_work.lexicography.get_lexeme(dictionary_id, lexeme_id)
+            if existing is None:
+                raise LexemeNotFoundError(dictionary_id, lexeme_id)
+
+            page = self._dictionary_pages.get_page_by_id(
+                dictionary_id, actor_id, existing.page_id
+            )
+            if page is None:
+                # The lexeme's own page vanished (e.g. a concurrent source
+                # re-split) -- practically unreachable given ADR-0006's page
+                # FKs, but if it ever happens the lexeme is effectively gone.
+                raise LexemeNotFoundError(dictionary_id, lexeme_id)
+
+            errors = validate_lexeme_fields(
+                source_text=data.source_text,
+                x=data.x,
+                y=data.y,
+                width=data.width,
+                height=data.height,
+                page_width=page.width,
+                page_height=page.height,
+            )
+            if errors:
+                raise LexemeValidationError(errors)
+
+            changed = changed_lexeme_fields(
+                existing,
+                source_text=data.source_text.strip(),
+                x=data.x,
+                y=data.y,
+                width=data.width,
+                height=data.height,
+            )
+            if changed:
+                existing.source_text = data.source_text.strip()
+                existing.x = data.x
+                existing.y = data.y
+                existing.width = data.width
+                existing.height = data.height
+                existing.updated_at = now
+                existing.updated_by = actor_id
+                unit_of_work.lexicography.update_lexeme(existing)
+                unit_of_work.lexicography.add_lexeme_event(
+                    LexemeEvent(
+                        id=uuid4(),
+                        lexeme_id=lexeme_id,
+                        dictionary_id=dictionary_id,
+                        event_type=LexemeEventType.UPDATED,
+                        actor_user_id=actor_id,
+                        occurred_at=now,
+                        changed_fields=tuple(changed),
+                    )
+                )
+                unit_of_work.commit()
+        return existing
+
+
+class DeleteLexemeService:
+    """Delete a lexeme and record who removed it, and when (BH-56)."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._clock = clock
+
+    def delete(self, dictionary_id: UUID, lexeme_id: UUID, actor_id: UUID) -> None:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            existing = unit_of_work.lexicography.get_lexeme(dictionary_id, lexeme_id)
+            if existing is None:
+                raise LexemeNotFoundError(dictionary_id, lexeme_id)
+
+            unit_of_work.lexicography.delete_lexeme(dictionary_id, lexeme_id)
+            unit_of_work.lexicography.add_lexeme_event(
+                LexemeEvent(
+                    id=uuid4(),
+                    lexeme_id=lexeme_id,
+                    dictionary_id=dictionary_id,
+                    event_type=LexemeEventType.DELETED,
+                    actor_user_id=actor_id,
+                    occurred_at=now,
+                )
+            )
+            unit_of_work.commit()
 
 
 class LexemeQueryService:

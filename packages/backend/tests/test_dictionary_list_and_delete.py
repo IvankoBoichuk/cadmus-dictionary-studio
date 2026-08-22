@@ -138,6 +138,9 @@ class MemorySourcesRepository:
             None,
         )
 
+    def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
+        raise AssertionError("not used by list/delete tests")
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         return sorted(
             (d for d in self.dictionaries.values() if d.owner_id == owner_id),

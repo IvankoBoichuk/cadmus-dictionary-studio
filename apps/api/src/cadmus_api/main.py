@@ -28,7 +28,12 @@ from cadmus.infrastructure.security import (
 from cadmus.infrastructure.source_inspection_queue import CeleryInspectionQueue
 from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
-from cadmus.lexicography import CreateLexemeService, LexemeQueryService
+from cadmus.lexicography import (
+    CreateLexemeService,
+    DeleteLexemeService,
+    LexemeQueryService,
+    UpdateLexemeService,
+)
 from cadmus.processing import TaskQueue
 from cadmus.sources import (
     AbbreviationCrudService,
@@ -54,7 +59,10 @@ from cadmus_api.routes.dictionaries import create_dictionaries_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
 from cadmus_api.routes.health import create_health_router
-from cadmus_api.routes.lexemes import create_lexemes_router
+from cadmus_api.routes.lexemes import (
+    create_lexeme_management_router,
+    create_lexemes_router,
+)
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
 from cadmus_api.routes.settlements import create_settlements_router
@@ -85,6 +93,8 @@ def create_app(
     settlement_mapping_import_service: SettlementMappingImportService | None = None,
     create_lexeme_service: CreateLexemeService | None = None,
     lexeme_query_service: LexemeQueryService | None = None,
+    update_lexeme_service: UpdateLexemeService | None = None,
+    delete_lexeme_service: DeleteLexemeService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -234,6 +244,22 @@ def create_app(
             dictionary_pages=app.state.get_dictionary_service,
         )
     )
+    app.state.update_lexeme_service = (
+        update_lexeme_service
+        if update_lexeme_service is not None
+        else UpdateLexemeService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.delete_lexeme_service = (
+        delete_lexeme_service
+        if delete_lexeme_service is not None
+        else DeleteLexemeService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -299,6 +325,13 @@ def create_app(
             app.state.authentication_service,
             app.state.create_lexeme_service,
             app.state.lexeme_query_service,
+        )
+    )
+    app.include_router(
+        create_lexeme_management_router(
+            app.state.authentication_service,
+            app.state.update_lexeme_service,
+            app.state.delete_lexeme_service,
         )
     )
     app.include_router(

@@ -123,6 +123,20 @@ export type CreateLexemeRequest =
 type CreateLexemeFieldErrorsResponse =
   CreateLexemeOperation["responses"][422]["content"]["application/json"];
 
+type UpdateLexemeOperation =
+  paths["/dictionaries/{dictionary_id}/lexemes/{lexeme_id}"]["patch"];
+export type UpdateLexemeRequest =
+  UpdateLexemeOperation["requestBody"]["content"]["application/json"];
+type UpdateLexemeFieldErrorsResponse =
+  UpdateLexemeOperation["responses"][422]["content"]["application/json"];
+type LexemeNotFoundResponse =
+  UpdateLexemeOperation["responses"][404]["content"]["application/json"];
+
+type DeleteLexemeOperation =
+  paths["/dictionaries/{dictionary_id}/lexemes/{lexeme_id}"]["delete"];
+type DeleteLexemeNotFoundResponse =
+  DeleteLexemeOperation["responses"][404]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -371,6 +385,10 @@ function pagesPath(dictionaryId: string): keyof paths {
 
 function lexemesPath(dictionaryId: string, pageNumber: number): keyof paths {
   return `/dictionaries/${dictionaryId}/pages/${pageNumber}/lexemes` as keyof paths;
+}
+
+function lexemePath(dictionaryId: string, lexemeId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/lexemes/${lexemeId}` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -721,6 +739,30 @@ export const API = {
         | DuplicateLexemeResponse
         | LexemesNotFoundResponse
       >(lexemesPath(dictionaryId, pageNumber), body, options);
+    },
+
+    update(
+      dictionaryId: string,
+      lexemeId: string,
+      body: UpdateLexemeRequest,
+      options?: RequestOptions,
+    ): Promise<LexemeResponse> {
+      return patch<
+        UpdateLexemeRequest,
+        LexemeResponse,
+        UpdateLexemeFieldErrorsResponse | LexemeNotFoundResponse
+      >(lexemePath(dictionaryId, lexemeId), body, options);
+    },
+
+    delete(
+      dictionaryId: string,
+      lexemeId: string,
+      options?: RequestOptions,
+    ): Promise<void> {
+      return del<DeleteLexemeNotFoundResponse>(
+        lexemePath(dictionaryId, lexemeId),
+        options,
+      );
     },
   },
 

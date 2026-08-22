@@ -548,6 +548,9 @@ class SqlAlchemySourcesRepository:
             )
         )
 
+    def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
+        return self._session.get(DictionaryPage, page_id)
+
     def list_dictionaries_for_owner(self, owner_id: UUID) -> list[Dictionary]:
         dictionary_ids = self._session.scalars(
             select(dictionaries.c.id)

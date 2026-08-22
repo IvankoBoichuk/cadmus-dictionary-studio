@@ -8,14 +8,18 @@ from uuid import UUID, uuid4
 from cadmus.identity import AccountStatus, AuthenticationService, User
 from cadmus.lexicography import (
     CreateLexemeService,
+    DeleteLexemeService,
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
     LexemeInput,
+    LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeQueryService,
     LexemeValidationError,
+    UpdateLexemeInput,
+    UpdateLexemeService,
 )
 from cadmus_api.main import create_app
 from fastapi.testclient import TestClient
@@ -91,9 +95,42 @@ class StubLexemeQueryService:
         return self.lexemes or []
 
 
+@dataclass
+class StubUpdateLexemeService:
+    lexeme: Lexeme | None = None
+    error: Exception | None = None
+    received: UpdateLexemeInput | None = None
+
+    def update(
+        self,
+        dictionary_id: UUID,
+        lexeme_id: UUID,
+        actor_id: UUID,
+        data: UpdateLexemeInput,
+    ) -> Lexeme:
+        self.received = data
+        if self.error is not None:
+            raise self.error
+        assert self.lexeme is not None
+        return self.lexeme
+
+
+@dataclass
+class StubDeleteLexemeService:
+    error: Exception | None = None
+    deleted: tuple[UUID, UUID, UUID] | None = None
+
+    def delete(self, dictionary_id: UUID, lexeme_id: UUID, actor_id: UUID) -> None:
+        self.deleted = (dictionary_id, lexeme_id, actor_id)
+        if self.error is not None:
+            raise self.error
+
+
 def client_for(
     create_service: StubCreateLexemeService | None = None,
     query_service: StubLexemeQueryService | None = None,
+    update_service: StubUpdateLexemeService | None = None,
+    delete_service: StubDeleteLexemeService | None = None,
     authentication: StubAuthenticationService | None = None,
 ) -> TestClient:
     engine = create_engine("sqlite+pysqlite:///:memory:")
@@ -108,6 +145,12 @@ def client_for(
             ),
             lexeme_query_service=cast(
                 LexemeQueryService, query_service or StubLexemeQueryService()
+            ),
+            update_lexeme_service=cast(
+                UpdateLexemeService, update_service or StubUpdateLexemeService()
+            ),
+            delete_lexeme_service=cast(
+                DeleteLexemeService, delete_service or StubDeleteLexemeService()
             ),
         )
     )
@@ -252,4 +295,106 @@ def test_list_lexemes_not_owned_or_page_missing_returns_404() -> None:
         with client_for(query_service=service) as client:
             client.cookies.set("cadmus_session", "token")
             response = client.get(f"/dictionaries/{uuid4()}/pages/1/lexemes")
+        assert response.status_code == 404
+
+
+def test_update_lexeme_requires_authentication() -> None:
+    with client_for() as client:
+        response = client.patch(
+            f"/dictionaries/{uuid4()}/lexemes/{uuid4()}",
+            json={"source_text": "слово", "x": 0, "y": 0, "width": 10, "height": 10},
+        )
+    assert response.status_code == 401
+
+
+def test_update_lexeme_returns_the_updated_lexeme() -> None:
+    lexeme = _lexeme(source_text="нове")
+    service = StubUpdateLexemeService(lexeme=lexeme)
+
+    with client_for(update_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.patch(
+            f"/dictionaries/{uuid4()}/lexemes/{lexeme.id}",
+            json={"source_text": "нове", "x": 20, "y": 20, "width": 120, "height": 50},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source_text"] == "нове"
+    assert service.received is not None
+    assert service.received.source_text == "нове"
+
+
+def test_update_lexeme_rejects_a_non_positive_bounding_box() -> None:
+    with client_for() as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.patch(
+            f"/dictionaries/{uuid4()}/lexemes/{uuid4()}",
+            json={"source_text": "слово", "x": 0, "y": 0, "width": 0, "height": 10},
+        )
+
+    assert response.status_code == 422
+
+
+def test_update_lexeme_returns_field_errors_for_invalid_bounds() -> None:
+    service = StubUpdateLexemeService(
+        error=LexemeValidationError({"width": "Виділена область виходить за межі."})
+    )
+
+    with client_for(update_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.patch(
+            f"/dictionaries/{uuid4()}/lexemes/{uuid4()}",
+            json={"source_text": "слово", "x": 0, "y": 0, "width": 10, "height": 10},
+        )
+
+    assert response.status_code == 422
+    assert "width" in response.json()["errors"]
+
+
+def test_update_lexeme_not_owned_or_missing_returns_404() -> None:
+    for error in (LexemeAccessError(uuid4()), LexemeNotFoundError(uuid4(), uuid4())):
+        service = StubUpdateLexemeService(error=error)
+        with client_for(update_service=service) as client:
+            client.cookies.set("cadmus_session", "token")
+            response = client.patch(
+                f"/dictionaries/{uuid4()}/lexemes/{uuid4()}",
+                json={
+                    "source_text": "слово",
+                    "x": 0,
+                    "y": 0,
+                    "width": 10,
+                    "height": 10,
+                },
+            )
+        assert response.status_code == 404
+
+
+def test_delete_lexeme_requires_authentication() -> None:
+    with client_for() as client:
+        response = client.delete(f"/dictionaries/{uuid4()}/lexemes/{uuid4()}")
+    assert response.status_code == 401
+
+
+def test_delete_lexeme_returns_204() -> None:
+    dictionary_id = uuid4()
+    lexeme_id = uuid4()
+    service = StubDeleteLexemeService()
+
+    with client_for(delete_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.delete(f"/dictionaries/{dictionary_id}/lexemes/{lexeme_id}")
+
+    assert response.status_code == 204
+    assert service.deleted is not None
+    assert service.deleted[0] == dictionary_id
+    assert service.deleted[1] == lexeme_id
+
+
+def test_delete_lexeme_not_owned_or_missing_returns_404() -> None:
+    for error in (LexemeAccessError(uuid4()), LexemeNotFoundError(uuid4(), uuid4())):
+        service = StubDeleteLexemeService(error=error)
+        with client_for(delete_service=service) as client:
+            client.cookies.set("cadmus_session", "token")
+            response = client.delete(f"/dictionaries/{uuid4()}/lexemes/{uuid4()}")
         assert response.status_code == 404

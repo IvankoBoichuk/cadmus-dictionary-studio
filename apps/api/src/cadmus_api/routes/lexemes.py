@@ -7,16 +7,20 @@ from uuid import UUID
 from cadmus.identity import AuthenticationError, AuthenticationService, User
 from cadmus.lexicography import (
     CreateLexemeService,
+    DeleteLexemeService,
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
     LexemeInput,
+    LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeQueryService,
     LexemeValidationError,
+    UpdateLexemeInput,
+    UpdateLexemeService,
 )
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -73,6 +77,18 @@ class FieldErrorsResponse(BaseModel):
     errors: dict[str, str]
 
 
+class UpdateLexemeRequest(BaseModel):
+    """One BH-56 lexeme edit submission: full replacement text and box."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_text: str = Field(min_length=1, max_length=500)
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+
+
 class DuplicateLexemeResponse(BaseModel):
     """AC6: a heavily overlapping lexeme already exists; resubmit to confirm."""
 
@@ -95,6 +111,12 @@ NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
         "description": (
             "The dictionary, or the requested page within it, does not exist"
         ),
+    }
+}
+LEXEME_NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
+    status.HTTP_404_NOT_FOUND: {
+        "model": ErrorResponse,
+        "description": "The dictionary, or the lexeme within it, does not exist",
     }
 }
 
@@ -225,5 +247,95 @@ def create_lexemes_router(
                 ).model_dump(mode="json"),
             )
         return _lexeme_response(lexeme)
+
+    return router
+
+
+def create_lexeme_management_router(
+    authentication_service: AuthenticationService,
+    update_service: UpdateLexemeService,
+    delete_service: DeleteLexemeService,
+) -> APIRouter:
+    """Create BH-56 lexeme edit/delete routes bound to application use cases."""
+    router = APIRouter(prefix="/dictionaries/{dictionary_id}/lexemes", tags=["lexemes"])
+
+    def current_user(
+        session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+    ) -> User:
+        if session_token is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "invalid_session", "message": "Потрібна авторизація."},
+            )
+        try:
+            return authentication_service.authenticate(session_token)
+        except AuthenticationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": error.reason, "message": "Потрібна авторизація."},
+            ) from error
+
+    AuthenticatedUser = Annotated[User, Depends(current_user)]
+
+    def _not_found() -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"code": "not_found", "message": "Лексему не знайдено."},
+        )
+
+    @router.patch(
+        "/{lexeme_id}",
+        response_model=LexemeResponse,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **LEXEME_NOT_FOUND_RESPONSE,
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": FieldErrorsResponse,
+                "description": "The text or bounding box failed validation",
+            },
+        },
+        summary="Edit a lexeme's text and/or bounding box (BH-56)",
+    )
+    def update_lexeme(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+        lexeme_id: Annotated[UUID, Path()],
+        request: UpdateLexemeRequest,
+    ) -> LexemeResponse | JSONResponse:
+        data = UpdateLexemeInput(
+            source_text=request.source_text,
+            x=request.x,
+            y=request.y,
+            width=request.width,
+            height=request.height,
+        )
+        try:
+            lexeme = update_service.update(dictionary_id, lexeme_id, user.id, data)
+        except (LexemeAccessError, LexemeNotFoundError, LexemePageNotFoundError):
+            return _not_found()
+        except LexemeValidationError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"errors": error.errors},
+            )
+        return _lexeme_response(lexeme)
+
+    @router.delete(
+        "/{lexeme_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        response_model=None,
+        responses={**UNAUTHORIZED_RESPONSE, **LEXEME_NOT_FOUND_RESPONSE},
+        summary="Delete a lexeme (BH-56)",
+    )
+    def delete_lexeme(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+        lexeme_id: Annotated[UUID, Path()],
+    ) -> Response | JSONResponse:
+        try:
+            delete_service.delete(dictionary_id, lexeme_id, user.id)
+        except (LexemeAccessError, LexemeNotFoundError):
+            return _not_found()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router

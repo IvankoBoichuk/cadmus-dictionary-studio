@@ -65,6 +65,22 @@ class DuplicateLexemeError(ValueError):
         self.existing_id = existing_id
 
 
+class LexemeNotFoundError(LookupError):
+    """BH-56: raised for a lexeme that doesn't exist within the dictionary."""
+
+    def __init__(self, dictionary_id: UUID, lexeme_id: UUID) -> None:
+        super().__init__(f"lexeme {lexeme_id} not found in dictionary {dictionary_id}")
+        self.dictionary_id = dictionary_id
+        self.lexeme_id = lexeme_id
+
+
+class LexemeEventType(StrEnum):
+    """BH-56 AC: append-only history of who changed a lexeme, and when."""
+
+    UPDATED = "updated"
+    DELETED = "deleted"
+
+
 @dataclass
 class Lexeme:
     """One manually selected word/fragment on a dictionary page (BH-54).
@@ -87,6 +103,49 @@ class Lexeme:
     created_by: UUID
     updated_at: datetime
     updated_by: UUID
+
+
+@dataclass
+class LexemeEvent:
+    """One append-only BH-56 audit entry for an edited or deleted lexeme.
+
+    ``lexeme_id`` is deliberately not a live foreign key to ``lexemes``: a
+    deletion event must outlive the row it describes (ADR-0004 §10: "audit
+    trail is append-oriented"), mirroring ``sources.DictionaryEvent``.
+    """
+
+    id: UUID
+    lexeme_id: UUID
+    dictionary_id: UUID
+    event_type: LexemeEventType
+    actor_user_id: UUID
+    occurred_at: datetime
+    changed_fields: tuple[str, ...] = ()
+
+
+_EDITABLE_FIELDS: tuple[str, ...] = ("source_text", "x", "y", "width", "height")
+
+
+def changed_lexeme_fields(
+    before: Lexeme,
+    *,
+    source_text: str,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+) -> list[str]:
+    """List which editable fields actually differ, for the BH-56 audit trail."""
+    after = {
+        "source_text": source_text,
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+    }
+    return [
+        field for field in _EDITABLE_FIELDS if getattr(before, field) != after[field]
+    ]
 
 
 def validate_lexeme_fields(

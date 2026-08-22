@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { dictionaryPageImageUrl } from "../api";
+import { dictionaryPageImageUrl, type LexemeResponse } from "../api";
+import { useDeleteLexeme } from "../hooks/useDeleteLexeme";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
 import { useLexemesForPage } from "../hooks/useLexemesForPage";
+import { useUpdateLexeme } from "../hooks/useUpdateLexeme";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
 
@@ -26,16 +28,23 @@ export function DictionaryPageViewer({
   }, [totalPages, pageNumber, onNavigate]);
 
   const currentPage = Math.min(Math.max(pageNumber, 1), totalPages ?? pageNumber);
-  const { state: lexemesState, addLexeme } = useLexemesForPage(
-    dictionaryId,
-    currentPage,
-  );
+  const {
+    state: lexemesState,
+    addLexeme,
+    updateLexeme,
+    removeLexeme,
+  } = useLexemesForPage(dictionaryId, currentPage);
+  const { state: updateState, submit: submitUpdate } = useUpdateLexeme(dictionaryId);
+  const { remove: deleteLexeme } = useDeleteLexeme(dictionaryId);
+
   const [selectedLexemeId, setSelectedLexemeId] = useState<string | null>(null);
+  const [redrawingLexemeId, setRedrawingLexemeId] = useState<string | null>(null);
   const pageKey = `${dictionaryId}:${currentPage}`;
   const [previousPageKey, setPreviousPageKey] = useState(pageKey);
   if (pageKey !== previousPageKey) {
     setPreviousPageKey(pageKey);
     setSelectedLexemeId(null);
+    setRedrawingLexemeId(null);
   }
 
   if (summary.status === "loading") {
@@ -56,6 +65,42 @@ export function DictionaryPageViewer({
     );
   }
 
+  const handleStartRedraw = (lexemeId: string) => {
+    setSelectedLexemeId(lexemeId);
+    setRedrawingLexemeId(lexemeId);
+  };
+
+  const handleLexemeRedrawn = (lexeme: LexemeResponse) => {
+    updateLexeme(lexeme);
+    setRedrawingLexemeId(null);
+  };
+
+  const handleSaveText = (lexemeId: string, newText: string) => {
+    const target =
+      lexemesState.status === "loaded"
+        ? lexemesState.lexemes.find((lexeme) => lexeme.id === lexemeId)
+        : undefined;
+    if (!target) return;
+    void submitUpdate(lexemeId, {
+      source_text: newText,
+      x: target.x,
+      y: target.y,
+      width: target.width,
+      height: target.height,
+    }).then((updated) => {
+      if (updated) updateLexeme(updated);
+    });
+  };
+
+  const handleDelete = (lexemeId: string) => {
+    void deleteLexeme(lexemeId).then((deleted) => {
+      if (!deleted) return;
+      removeLexeme(lexemeId);
+      if (selectedLexemeId === lexemeId) setSelectedLexemeId(null);
+      if (redrawingLexemeId === lexemeId) setRedrawingLexemeId(null);
+    });
+  };
+
   return (
     <div className="page-viewer" aria-labelledby="page-viewer-heading">
       <h2 id="page-viewer-heading" className="visually-hidden">
@@ -71,6 +116,10 @@ export function DictionaryPageViewer({
           onLexemeCreated={addLexeme}
           selectedLexemeId={selectedLexemeId}
           onSelectLexeme={setSelectedLexemeId}
+          redrawingLexemeId={redrawingLexemeId}
+          onLexemeRedrawn={handleLexemeRedrawn}
+          onCancelRedraw={() => setRedrawingLexemeId(null)}
+          onSubmitUpdate={submitUpdate}
         />
         <aside className="lexeme-sidebar" aria-labelledby="lexeme-list-heading">
           <h3 id="lexeme-list-heading">Лексеми сторінки</h3>
@@ -79,6 +128,12 @@ export function DictionaryPageViewer({
             pageNumber={currentPage}
             selectedLexemeId={selectedLexemeId}
             onSelectLexeme={setSelectedLexemeId}
+            redrawingLexemeId={redrawingLexemeId}
+            onStartRedraw={handleStartRedraw}
+            onCancelRedraw={() => setRedrawingLexemeId(null)}
+            onSaveText={handleSaveText}
+            updateState={updateState}
+            onDelete={handleDelete}
           />
         </aside>
       </div>
