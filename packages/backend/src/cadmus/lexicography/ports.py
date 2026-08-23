@@ -5,7 +5,12 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
-from cadmus.lexicography.domain import Lexeme, LexemeEvent, OcrSuggestionTaskSnapshot
+from cadmus.lexicography.domain import (
+    DictionaryScanSnapshot,
+    Lexeme,
+    LexemeEvent,
+    OcrSuggestionTaskSnapshot,
+)
 
 
 class LexicographyRepository(Protocol):
@@ -70,3 +75,24 @@ class OcrSuggestionQueue(Protocol):
     ) -> str: ...
 
     def get_suggestions_task(self, task_id: str) -> OcrSuggestionTaskSnapshot: ...
+
+
+SCAN_DICTIONARY_TASK_NAME = "cadmus.lexicography.scan_dictionary"
+
+
+class DictionaryScanQueueUnavailableError(RuntimeError):
+    """Raised when the whole-dictionary OCR scan queue cannot be reached."""
+
+
+class DictionaryScanQueue(Protocol):
+    """Port used to hand off a whole-dictionary OCR scan and read it back.
+
+    Unlike ``OcrSuggestionQueue`` (one page, suggestions only), the worker
+    task behind this port creates draft ``Lexeme`` rows itself as it walks
+    every unscanned page -- this port only reports progress, never
+    suggestions.
+    """
+
+    def enqueue_scan(self, dictionary_id: UUID, actor_id: UUID) -> str: ...
+
+    def get_scan_task(self, task_id: str) -> DictionaryScanSnapshot: ...

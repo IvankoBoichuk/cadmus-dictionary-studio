@@ -347,6 +347,24 @@ class OcrSuggestionTaskSnapshot:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class DictionaryScanSnapshot:
+    """Current observable state of a background whole-dictionary OCR scan.
+
+    Unlike ``OcrSuggestionTaskSnapshot``, this never carries the
+    suggestions themselves -- the scanning task persists each surviving
+    suggestion directly as a draft ``Lexeme`` (``LexemeOrigin.OCR``) as it
+    goes, so there is nothing left to accept.
+    """
+
+    task_id: str
+    status: OcrSuggestionStatus
+    processed_pages: int = 0
+    total_pages: int = 0
+    created_lexemes: int = 0
+    error: str | None = None
+
+
 _ISO_TO_TESSERACT_LANGUAGE: dict[str, str] = {
     "uk": "ukr",
     "ru": "rus",

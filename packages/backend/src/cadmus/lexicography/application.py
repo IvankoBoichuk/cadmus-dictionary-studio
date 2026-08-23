@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from cadmus.lexicography.domain import (
     DictionaryNotReadyToScanError,
+    DictionaryScanSnapshot,
     DuplicateLexemeError,
     Lexeme,
     LexemeAccessError,
@@ -24,7 +25,11 @@ from cadmus.lexicography.domain import (
     validate_lexeme_fields,
     validate_second_box_fields,
 )
-from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory, OcrSuggestionQueue
+from cadmus.lexicography.ports import (
+    DictionaryScanQueue,
+    LexicographyUnitOfWorkFactory,
+    OcrSuggestionQueue,
+)
 from cadmus.sources import (
     Dictionary,
     DictionaryAccessError,
@@ -498,3 +503,39 @@ class SuggestLexemesService:
             suggestions=remaining,
             error=snapshot.error,
         )
+
+
+class QueueDictionaryScanService:
+    """Enqueue and read back a whole-dictionary OCR scan.
+
+    Unlike ``SuggestLexemesService`` (one page, review-then-accept), the
+    worker task behind this queues every unscanned page of a dictionary and
+    persists each surviving suggestion directly as a draft lexeme
+    (``LexemeOrigin.OCR``) -- no manual accept step. A page that already has
+    at least one lexeme is left untouched, so running the queue again only
+    fills gaps.
+    """
+
+    def __init__(
+        self,
+        dictionary_pages: GetDictionaryService,
+        queue: DictionaryScanQueue,
+    ) -> None:
+        self._dictionary_pages = dictionary_pages
+        self._queue = queue
+
+    def enqueue(self, dictionary_id: UUID, actor_id: UUID) -> str:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+        return self._queue.enqueue_scan(dictionary_id, actor_id)
+
+    def get_task(
+        self, dictionary_id: UUID, actor_id: UUID, task_id: str
+    ) -> DictionaryScanSnapshot:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+        return self._queue.get_scan_task(task_id)
