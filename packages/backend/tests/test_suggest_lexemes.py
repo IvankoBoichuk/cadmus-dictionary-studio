@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import TracebackType
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,6 +13,7 @@ from cadmus.lexicography import (
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeSuggestion,
+    LexicographyRepository,
     OcrSuggestionStatus,
     OcrSuggestionTaskSnapshot,
     SuggestLexemesService,
@@ -26,6 +28,7 @@ from cadmus.sources import (
     GetDictionaryService,
     InspectionStatus,
     SourceFile,
+    SourcesRepository,
 )
 
 NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
@@ -76,7 +79,7 @@ class MemorySourcesRepository:
 
 class MemorySourcesUnitOfWork:
     def __init__(self, repository: MemorySourcesRepository) -> None:
-        self.sources = repository
+        self.sources = cast(SourcesRepository, repository)
 
     def __enter__(self) -> "MemorySourcesUnitOfWork":
         return self
@@ -103,7 +106,7 @@ class MemoryLexicographyRepository:
 
 class MemoryLexicographyUnitOfWork:
     def __init__(self, repository: MemoryLexicographyRepository) -> None:
-        self.lexicography = repository
+        self.lexicography = cast(LexicographyRepository, repository)
 
     def __enter__(self) -> "MemoryLexicographyUnitOfWork":
         return self
