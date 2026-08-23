@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import TracebackType
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -26,6 +27,7 @@ from cadmus.sources import (
     PageRangeValidationError,
     SavePageRangesService,
     SourceFile,
+    SourcesRepository,
 )
 
 NOW = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
@@ -168,7 +170,7 @@ class MemorySourcesRepository:
 
 class MemorySourcesUnitOfWork:
     def __init__(self, repository: MemorySourcesRepository) -> None:
-        self.sources = repository
+        self.sources = cast(SourcesRepository, repository)
         self.committed = False
 
     def __enter__(self) -> "MemorySourcesUnitOfWork":
