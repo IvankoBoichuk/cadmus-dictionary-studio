@@ -1,5 +1,6 @@
 """Thin HTTP adapters for the dictionary draft (BH-26 + BH-27) use cases."""
 
+import logging
 import re
 from collections.abc import Generator
 from datetime import datetime
@@ -49,6 +50,8 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger(__name__)
 
 SESSION_COOKIE_NAME = "cadmus_session"
 _DOWNLOAD_SPOOL_MAX_BYTES = 64 * 1024 * 1024
@@ -610,8 +613,18 @@ def create_dictionaries_router(
         try:
             page = get_service.get_first_page(dictionary_id, user.id)
         except DictionaryAccessError:
+            logger.warning(
+                "thumbnail 404: dictionary %s not found or not owned by user %s",
+                dictionary_id,
+                user.id,
+            )
             return _not_found()
         if page is None:
+            logger.warning(
+                "thumbnail 404: dictionary %s has no first page yet "
+                "(source not processed)",
+                dictionary_id,
+            )
             return _not_found()
 
         buffer: SpooledTemporaryFile[bytes] = SpooledTemporaryFile(
@@ -621,6 +634,12 @@ def create_dictionaries_router(
             object_storage.download(page.processed_asset_key, cast(BinaryIO, buffer))
         except ObjectNotFoundError:
             buffer.close()
+            logger.warning(
+                "thumbnail 404: dictionary %s page asset %s missing "
+                "from object storage",
+                dictionary_id,
+                page.processed_asset_key,
+            )
             return _not_found()
         buffer.seek(0)
 

@@ -1,4 +1,4 @@
-.PHONY: help install api worker backfill-pages sync-geography web dev web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker backfill-pages sync-geography web dev web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade pull-prod-db-to-dev test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -26,6 +26,7 @@ help:
 	@echo "  make db-current    Show the current database revision"
 	@echo "  make db-history    Show migration history"
 	@echo "  make db-downgrade  Revert one revision"
+	@echo "  make pull-prod-db-to-dev  Overwrite the dev database with a copy of production"
 	@echo "  make test-integration  Run isolated PostgreSQL integration tests"
 	@echo "  make compose-build Build the local Compose services"
 	@echo "  make compose-up    Build and start the local environment"
@@ -115,6 +116,9 @@ db-history:
 
 db-downgrade:
 	docker compose run --rm migrate alembic downgrade -1
+
+pull-prod-db-to-dev:
+	./scripts/pull-prod-db-to-dev.sh
 
 test-integration:
 	@cleanup() { \
