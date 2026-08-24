@@ -621,7 +621,8 @@ def create_dictionaries_router(
             return _not_found()
         if page is None:
             logger.warning(
-                "thumbnail 404: dictionary %s has no first page yet (source not processed)",
+                "thumbnail 404: dictionary %s has no first page yet "
+                "(source not processed)",
                 dictionary_id,
             )
             return _not_found()
@@ -634,7 +635,8 @@ def create_dictionaries_router(
         except ObjectNotFoundError:
             buffer.close()
             logger.warning(
-                "thumbnail 404: dictionary %s page asset %s missing from object storage",
+                "thumbnail 404: dictionary %s page asset %s missing "
+                "from object storage",
                 dictionary_id,
                 page.processed_asset_key,
             )
