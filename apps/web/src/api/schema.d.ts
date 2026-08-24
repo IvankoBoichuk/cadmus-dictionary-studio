@@ -315,6 +315,40 @@ export interface paths {
         patch: operations["update_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__patch"];
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/ocr-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue OCR across every unscanned page of a dictionary */
+        post: operations["enqueue_scan_dictionaries__dictionary_id__ocr_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/ocr-scan/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll a whole-dictionary OCR scan task's status and progress */
+        get: operations["get_scan_task_dictionaries__dictionary_id__ocr_scan__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/page-ranges": {
         parameters: {
             query?: never;
@@ -1064,6 +1098,23 @@ export interface components {
             updated_at: string;
         };
         /**
+         * DictionaryScanTaskResponse
+         * @description Poll response: how far the scan queue has gotten.
+         */
+        DictionaryScanTaskResponse: {
+            /** Created Lexemes */
+            created_lexemes: number;
+            /** Error */
+            error?: string | null;
+            /** Processed Pages */
+            processed_pages: number;
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
+            /** Total Pages */
+            total_pages: number;
+        };
+        /**
          * DictionaryStatus
          * @description Dictionary lifecycle status (BH-27, BH-31, and BH-58).
          * @enum {string}
@@ -1142,6 +1193,16 @@ export interface components {
             message: string;
             /** Title */
             title: string | null;
+        };
+        /**
+         * EnqueueDictionaryScanResponse
+         * @description AC: accepted response for a newly queued whole-dictionary OCR scan.
+         */
+        EnqueueDictionaryScanResponse: {
+            /** @default queued */
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
         };
         /**
          * EnqueueSuggestionsResponse
@@ -3121,6 +3182,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    enqueue_scan_dictionaries__dictionary_id__ocr_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueDictionaryScanResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist, or the caller does not own it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scan_task_dictionaries__dictionary_id__ocr_scan__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                task_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DictionaryScanTaskResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist, or the caller does not own it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
