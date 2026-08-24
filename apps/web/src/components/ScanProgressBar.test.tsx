@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ScanProgressBar } from "./ScanProgressBar";
@@ -196,5 +196,45 @@ describe("ScanProgressBar", () => {
     fireEvent.click(await screen.findByRole("button", { name: "2" }));
 
     expect(onNavigate).toHaveBeenCalledWith(2);
+  });
+
+  it("enqueues the OCR scan queue and shows its progress", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          total_pages: 2,
+          processed_pages: 0,
+          pages: [
+            { page_number: 1, has_lexemes: false },
+            { page_number: 2, has_lexemes: false },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(202, { task_id: "scan-1", status: "queued" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <ScanProgressBar
+        dictionaryId="dict-1"
+        currentPage={1}
+        refreshToken={0}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    // Wait for the loaded progress grid (not just the trigger button, which
+    // is also present in the transient loading state) so we click the button
+    // instance that actually stays mounted, rather than one about to be
+    // replaced when the Fragment/div root swaps on load.
+    await screen.findByText("Опрацьовано 0 / 2 сторінок");
+    const trigger = screen.getByRole("button", {
+      name: "Запустити чергу OCR для всього словника",
+    });
+    await act(async () => {
+      fireEvent.click(trigger);
+    });
+
+    expect(screen.getByRole("button", { name: "Опрацьовуємо чергу…" })).toBeDisabled();
   });
 });

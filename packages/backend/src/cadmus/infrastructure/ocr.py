@@ -18,13 +18,16 @@ from celery import Celery, states
 from kombu.exceptions import OperationalError
 from redis.exceptions import RedisError
 
+from cadmus.lexicography.domain import DictionaryScanSnapshot as _ScanSnapshot
 from cadmus.lexicography.domain import (
     LexemeSuggestion,
     OcrSuggestionStatus,
 )
 from cadmus.lexicography.domain import OcrSuggestionTaskSnapshot as _Snapshot
 from cadmus.lexicography.ports import (
+    SCAN_DICTIONARY_TASK_NAME,
     SUGGEST_LEXEMES_TASK_NAME,
+    DictionaryScanQueueUnavailableError,
     OcrSuggestionQueueUnavailableError,
 )
 
@@ -232,3 +235,75 @@ class CeleryOcrSuggestionQueue:
         if state in {states.STARTED, states.RETRY}:
             return _Snapshot(task_id=task_id, status=OcrSuggestionStatus.RUNNING)
         return _Snapshot(task_id=task_id, status=OcrSuggestionStatus.QUEUED)
+
+
+_PROGRESS_STATE = "PROGRESS"
+
+
+class CeleryDictionaryScanQueue:
+    """Hand a whole-dictionary OCR scan job to the worker through Celery.
+
+    Progress is read back from Celery's own custom task state (the worker
+    calls ``task.update_state(state="PROGRESS", meta=...)`` as it walks
+    pages) -- no separate Postgres table for job progress.
+    """
+
+    def __init__(self, celery_app: Celery) -> None:
+        self._celery_app = celery_app
+
+    def enqueue_scan(self, dictionary_id: UUID, actor_id: UUID) -> str:
+        try:
+            result = self._celery_app.send_task(
+                SCAN_DICTIONARY_TASK_NAME,
+                args=[str(dictionary_id), str(actor_id)],
+                retry=False,
+            )
+        except _QUEUE_ERRORS as error:
+            raise DictionaryScanQueueUnavailableError(
+                "dictionary scan queue is unavailable"
+            ) from error
+        return str(result.id)
+
+    def get_scan_task(self, task_id: str) -> _ScanSnapshot:
+        try:
+            result = self._celery_app.AsyncResult(task_id)
+            state = result.state
+            info = result.info if state in {_PROGRESS_STATE, states.SUCCESS} else None
+        except _QUEUE_ERRORS as error:
+            raise DictionaryScanQueueUnavailableError(
+                "dictionary scan queue is unavailable"
+            ) from error
+
+        if state == states.SUCCESS:
+            payload = info if isinstance(info, dict) else {}
+            if payload.get("status") == "failed":
+                return _ScanSnapshot(
+                    task_id=task_id,
+                    status=OcrSuggestionStatus.FAILED,
+                    error=str(payload.get("error", "dictionary scan task failed")),
+                )
+            return _ScanSnapshot(
+                task_id=task_id,
+                status=OcrSuggestionStatus.SUCCEEDED,
+                processed_pages=int(payload.get("processed_pages", 0)),
+                total_pages=int(payload.get("total_pages", 0)),
+                created_lexemes=int(payload.get("created_lexemes", 0)),
+            )
+        if state == _PROGRESS_STATE:
+            payload = info if isinstance(info, dict) else {}
+            return _ScanSnapshot(
+                task_id=task_id,
+                status=OcrSuggestionStatus.RUNNING,
+                processed_pages=int(payload.get("processed_pages", 0)),
+                total_pages=int(payload.get("total_pages", 0)),
+                created_lexemes=int(payload.get("created_lexemes", 0)),
+            )
+        if state in {states.FAILURE, states.REVOKED}:
+            return _ScanSnapshot(
+                task_id=task_id,
+                status=OcrSuggestionStatus.FAILED,
+                error="dictionary scan task failed",
+            )
+        if state in {states.STARTED, states.RETRY}:
+            return _ScanSnapshot(task_id=task_id, status=OcrSuggestionStatus.RUNNING)
+        return _ScanSnapshot(task_id=task_id, status=OcrSuggestionStatus.QUEUED)

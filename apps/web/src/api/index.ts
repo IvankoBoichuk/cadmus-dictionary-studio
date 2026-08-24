@@ -168,6 +168,17 @@ export type PageProgress = ScanProgressResponse["pages"][number];
 type ScanProgressNotFoundResponse =
   GetScanProgressOperation["responses"][404]["content"]["application/json"];
 
+type EnqueueDictionaryScanOperation =
+  paths["/dictionaries/{dictionary_id}/ocr-scan"]["post"];
+export type EnqueueDictionaryScanResponse =
+  EnqueueDictionaryScanOperation["responses"][202]["content"]["application/json"];
+type DictionaryScanErrorResponse = components["schemas"]["ErrorResponse"];
+
+type GetDictionaryScanTaskOperation =
+  paths["/dictionaries/{dictionary_id}/ocr-scan/{task_id}"]["get"];
+export type DictionaryScanTaskResponse =
+  GetDictionaryScanTaskOperation["responses"][200]["content"]["application/json"];
+
 export type AbbreviationCategory = components["schemas"]["AbbreviationCategory"];
 export type AbbreviationRequest = components["schemas"]["AbbreviationRequest"];
 export type AbbreviationResponse = components["schemas"]["AbbreviationResponse"];
@@ -440,6 +451,14 @@ function ocrSuggestionsTaskPath(
 
 function scanProgressPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/scan-progress` as keyof paths;
+}
+
+function ocrScanPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/ocr-scan` as keyof paths;
+}
+
+function ocrScanTaskPath(dictionaryId: string, taskId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/ocr-scan/${taskId}` as keyof paths;
 }
 
 function abbreviationsPath(dictionaryId: string): keyof paths {
@@ -859,6 +878,29 @@ export const API = {
     ): Promise<ScanProgressResponse> {
       return get<ScanProgressResponse, ScanProgressNotFoundResponse>(
         scanProgressPath(dictionaryId),
+        options,
+      );
+    },
+  },
+
+  ocrScan: {
+    enqueue(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<EnqueueDictionaryScanResponse> {
+      return postWithoutBody<EnqueueDictionaryScanResponse, DictionaryScanErrorResponse>(
+        ocrScanPath(dictionaryId),
+        options,
+      );
+    },
+
+    getTask(
+      dictionaryId: string,
+      taskId: string,
+      options?: RequestOptions,
+    ): Promise<DictionaryScanTaskResponse> {
+      return get<DictionaryScanTaskResponse, DictionaryScanErrorResponse>(
+        ocrScanTaskPath(dictionaryId, taskId),
         options,
       );
     },

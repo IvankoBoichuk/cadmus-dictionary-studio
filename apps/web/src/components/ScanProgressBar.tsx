@@ -1,3 +1,4 @@
+import { useDictionaryScan } from "../hooks/useDictionaryScan";
 import { useScanProgress } from "../hooks/useScanProgress";
 
 /** BH-57: shows scan progress and lets the user jump to an unprocessed page. */
@@ -12,16 +13,73 @@ export function ScanProgressBar({
   refreshToken: number;
   onNavigate: (pageNumber: number) => void;
 }) {
-  const state = useScanProgress(dictionaryId, refreshToken);
+  const { state: scanState, trigger: triggerScan } = useDictionaryScan(dictionaryId);
+
+  // Derived (not effect-driven) from the queue's own progress counters, so
+  // the progress grid below refetches live as the queue works through the
+  // dictionary's pages, without a separate render pass.
+  const scanToken =
+    scanState.status === "queued" || scanState.status === "running"
+      ? scanState.processedPages * 1000 + scanState.createdLexemes
+      : scanState.status === "succeeded"
+        ? 1_000_000 + scanState.processedPages * 1000 + scanState.createdLexemes
+        : 0;
+
+  const state = useScanProgress(dictionaryId, refreshToken + scanToken);
+
+  const scanRunning =
+    scanState.status === "starting" ||
+    scanState.status === "queued" ||
+    scanState.status === "running";
+
+  const scanControls = (
+    <div className="ocr-suggestions-controls">
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={() => void triggerScan()}
+        disabled={scanRunning}
+      >
+        {scanRunning
+          ? "Опрацьовуємо чергу…"
+          : "Запустити чергу OCR для всього словника"}
+      </button>
+      {(scanState.status === "queued" || scanState.status === "running") && (
+        <span className="lede" role="status">
+          Опрацьовано {scanState.processedPages} / {scanState.totalPages} сторінок,
+          створено лексем: {scanState.createdLexemes}
+        </span>
+      )}
+      {scanState.status === "succeeded" && (
+        <span className="lede" role="status">
+          Чергу завершено: опрацьовано {scanState.processedPages} сторінок, створено
+          лексем: {scanState.createdLexemes}
+        </span>
+      )}
+      {scanState.status === "failed" && (
+        <span className="form-error" role="alert">
+          {scanState.message}
+        </span>
+      )}
+    </div>
+  );
 
   if (state.status === "loading") {
-    return <p role="status">Завантажуємо прогрес сканування…</p>;
+    return (
+      <>
+        {scanControls}
+        <p role="status">Завантажуємо прогрес сканування…</p>
+      </>
+    );
   }
   if (state.status === "error") {
     return (
-      <p className="form-error" role="alert">
-        {state.message}
-      </p>
+      <>
+        {scanControls}
+        <p className="form-error" role="alert">
+          {state.message}
+        </p>
+      </>
     );
   }
 
@@ -52,6 +110,7 @@ export function ScanProgressBar({
       <h3 id="scan-progress-heading" className="visually-hidden">
         Прогрес сканування словника
       </h3>
+      {scanControls}
       <p className="scan-progress-summary" role="status">
         Опрацьовано {progress.processed_pages} / {progress.total_pages} сторінок
       </p>

@@ -19,7 +19,10 @@ from cadmus.infrastructure.google_oauth import AuthlibGoogleOAuthClient
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.lexicography import create_lexicography_unit_of_work_factory
 from cadmus.infrastructure.object_storage import create_object_storage
-from cadmus.infrastructure.ocr import CeleryOcrSuggestionQueue
+from cadmus.infrastructure.ocr import (
+    CeleryDictionaryScanQueue,
+    CeleryOcrSuggestionQueue,
+)
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
     SecurePasswordResetTokenProvider,
@@ -34,6 +37,7 @@ from cadmus.lexicography import (
     DeleteLexemeService,
     FinishScanningService,
     LexemeQueryService,
+    QueueDictionaryScanService,
     ScanProgressService,
     SuggestLexemesService,
     UpdateLexemeService,
@@ -69,6 +73,7 @@ from cadmus_api.routes.lexemes import (
     create_lexeme_management_router,
     create_lexemes_router,
 )
+from cadmus_api.routes.ocr_scan import create_ocr_scan_router
 from cadmus_api.routes.ocr_suggestions import create_ocr_suggestions_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
@@ -107,6 +112,7 @@ def create_app(
     mark_dictionary_scanned_service: MarkDictionaryScannedService | None = None,
     finish_scanning_service: FinishScanningService | None = None,
     suggest_lexemes_service: SuggestLexemesService | None = None,
+    queue_dictionary_scan_service: QueueDictionaryScanService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -305,6 +311,14 @@ def create_app(
             queue=CeleryOcrSuggestionQueue(create_celery_client(app_settings)),
         )
     )
+    app.state.queue_dictionary_scan_service = (
+        queue_dictionary_scan_service
+        if queue_dictionary_scan_service is not None
+        else QueueDictionaryScanService(
+            dictionary_pages=app.state.get_dictionary_service,
+            queue=CeleryDictionaryScanQueue(create_celery_client(app_settings)),
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -395,6 +409,12 @@ def create_app(
         create_ocr_suggestions_router(
             app.state.authentication_service,
             app.state.suggest_lexemes_service,
+        )
+    )
+    app.include_router(
+        create_ocr_scan_router(
+            app.state.authentication_service,
+            app.state.queue_dictionary_scan_service,
         )
     )
     app.include_router(
