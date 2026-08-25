@@ -607,9 +607,7 @@ class GetDictionaryService:
     def list_for_actor(self, actor_id: UUID) -> list[DictionaryListEntry]:
         """BH-170: dictionaries ``actor_id`` owns plus ones they're a member of."""
         entries = self.list_for_owner(actor_id)
-        member_dictionary_ids = self._authorization.list_member_dictionary_ids(
-            actor_id
-        )
+        member_dictionary_ids = self._authorization.list_member_dictionary_ids(actor_id)
         if not member_dictionary_ids:
             return entries
         with self._unit_of_work_factory() as unit_of_work:
@@ -620,9 +618,7 @@ class GetDictionaryService:
                 entries.append(
                     DictionaryListEntry(
                         dictionary=dictionary,
-                        source_file=unit_of_work.sources.get_source_file(
-                            dictionary.id
-                        ),
+                        source_file=unit_of_work.sources.get_source_file(dictionary.id),
                         page_ranges=unit_of_work.sources.list_page_ranges(
                             dictionary.id
                         ),

@@ -64,9 +64,7 @@ class AuthorizationService:
         if self._membership_unit_of_work_factory is None:
             return []
         with self._membership_unit_of_work_factory() as unit_of_work:
-            memberships = unit_of_work.memberships.list_memberships_for_user(
-                actor_id
-            )
+            memberships = unit_of_work.memberships.list_memberships_for_user(actor_id)
         return [membership.dictionary_id for membership in memberships]
 
 

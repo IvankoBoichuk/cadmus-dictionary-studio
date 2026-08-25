@@ -328,9 +328,7 @@ def test_list_for_actor_includes_dictionaries_the_actor_is_a_member_of() -> None
     )
 
     class FakeMembershipsRepository:
-        def list_memberships_for_user(
-            self, user_id: UUID
-        ) -> list[ProjectMembership]:
+        def list_memberships_for_user(self, user_id: UUID) -> list[ProjectMembership]:
             return [membership] if user_id == member_id else []
 
     class FakeMembershipsUnitOfWork:
