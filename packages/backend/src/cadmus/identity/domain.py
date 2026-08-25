@@ -23,6 +23,7 @@ class User:
     status: AccountStatus
     created_at: datetime
     activated_at: datetime | None = None
+    telegram_chat_id: str | None = None
 
     def activate(self, activated_at: datetime) -> None:
         """Activate a pending user without weakening an already active account."""
