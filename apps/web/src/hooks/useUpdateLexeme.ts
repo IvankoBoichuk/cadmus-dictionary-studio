@@ -1,6 +1,12 @@
 import { useCallback, useState } from "react";
 
-import { API, apiMessageFrom, fieldErrorsFrom, type LexemeResponse } from "../api";
+import {
+  API,
+  apiMessageFrom,
+  fieldErrorsFrom,
+  type LexemeResponse,
+  type LexemeStatus,
+} from "../api";
 
 export type UpdateLexemeInput = {
   source_text: string;
@@ -12,6 +18,7 @@ export type UpdateLexemeInput = {
   y2?: number | null;
   width2?: number | null;
   height2?: number | null;
+  status?: LexemeStatus | null;
 };
 
 /**

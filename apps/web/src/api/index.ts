@@ -117,6 +117,7 @@ type PagesSummaryNotFoundResponse =
   GetPagesSummaryOperation["responses"][404]["content"]["application/json"];
 
 export type LexemeOrigin = components["schemas"]["LexemeOrigin"];
+export type LexemeStatus = components["schemas"]["LexemeStatus"];
 export type LexemeResponse = components["schemas"]["LexemeResponse"];
 export type DuplicateLexemeResponse = components["schemas"]["DuplicateLexemeResponse"];
 
@@ -214,6 +215,22 @@ export type ImportCommitRequest =
   ImportCommitOperation["requestBody"]["content"]["application/json"];
 export type ImportCommitResponse =
   ImportCommitOperation["responses"][200]["content"]["application/json"];
+
+export type Role = components["schemas"]["Role"];
+export type MemberResponse = components["schemas"]["MemberResponse"];
+export type MembersListResponse = components["schemas"]["MembersListResponse"];
+export type AddMemberRequest = components["schemas"]["AddMemberRequest"];
+export type ChangeMemberRoleRequest = components["schemas"]["ChangeMemberRoleRequest"];
+
+type ListMembersOperation = paths["/dictionaries/{dictionary_id}/members"]["get"];
+type MembersNotFoundResponse =
+  ListMembersOperation["responses"][404]["content"]["application/json"];
+
+type AddMemberOperation = paths["/dictionaries/{dictionary_id}/members"]["post"];
+type AddMemberFieldErrorsResponse =
+  AddMemberOperation["responses"][422]["content"]["application/json"];
+type AddMemberDuplicateResponse =
+  AddMemberOperation["responses"][409]["content"]["application/json"];
 
 export type AreaResponse = components["schemas"]["AreaResponse"];
 export type RegionResponse = components["schemas"]["RegionResponse"];
@@ -475,6 +492,14 @@ function abbreviationsImportPreviewPath(dictionaryId: string): keyof paths {
 
 function abbreviationsImportCommitPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/abbreviations/import/commit` as keyof paths;
+}
+
+function membersPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/members` as keyof paths;
+}
+
+function memberPath(dictionaryId: string, userId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/members/${userId}` as keyof paths;
 }
 
 function geographyRegionsPath(areaId?: string): keyof paths {
@@ -979,6 +1004,51 @@ export const API = {
         body,
         options,
       );
+    },
+  },
+
+  members: {
+    list(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<MembersListResponse> {
+      return get<MembersListResponse, MembersNotFoundResponse>(
+        membersPath(dictionaryId),
+        options,
+      );
+    },
+
+    add(
+      dictionaryId: string,
+      body: AddMemberRequest,
+      options?: RequestOptions,
+    ): Promise<MemberResponse> {
+      return post<
+        AddMemberRequest,
+        MemberResponse,
+        AddMemberFieldErrorsResponse | AddMemberDuplicateResponse | MembersNotFoundResponse
+      >(membersPath(dictionaryId), body, options);
+    },
+
+    changeRole(
+      dictionaryId: string,
+      userId: string,
+      body: ChangeMemberRoleRequest,
+      options?: RequestOptions,
+    ): Promise<MemberResponse> {
+      return patch<
+        ChangeMemberRoleRequest,
+        MemberResponse,
+        MembersNotFoundResponse
+      >(memberPath(dictionaryId, userId), body, options);
+    },
+
+    remove(
+      dictionaryId: string,
+      userId: string,
+      options?: RequestOptions,
+    ): Promise<void> {
+      return del<MembersNotFoundResponse>(memberPath(dictionaryId, userId), options);
     },
   },
 

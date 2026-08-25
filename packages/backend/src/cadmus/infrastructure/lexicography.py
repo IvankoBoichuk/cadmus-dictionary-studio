@@ -20,7 +20,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, registry
 
 from cadmus.infrastructure.database import metadata
-from cadmus.lexicography.domain import Lexeme, LexemeEvent
+from cadmus.lexicography.domain import Lexeme, LexemeEvent, LexemeStatus
 from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory
 
 lexicography_registry = registry(metadata=metadata)
@@ -67,7 +67,18 @@ lexemes = Table(
         ForeignKey("cadmus.users.id", ondelete="CASCADE"),
         nullable=False,
     ),
+    Column(
+        "status",
+        String(20),
+        nullable=False,
+        default=LexemeStatus.DRAFT.value,
+        server_default=LexemeStatus.DRAFT.value,
+    ),
     CheckConstraint("origin IN ('manual', 'ocr')", name="lexeme_origin"),
+    CheckConstraint(
+        "status IN ('draft', 'ready_to_process', 'ready_to_review', 'complete')",
+        name="lexeme_status",
+    ),
     CheckConstraint("width > 0 AND height > 0", name="lexeme_positive_size"),
     CheckConstraint(
         "(x2 IS NULL) = (y2 IS NULL) AND (y2 IS NULL) = (width2 IS NULL) "

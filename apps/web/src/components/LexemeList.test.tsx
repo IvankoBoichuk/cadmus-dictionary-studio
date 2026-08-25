@@ -17,6 +17,7 @@ function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse 
     width: 200,
     height: 80,
     origin: "manual",
+    status: "draft",
     created_at: "2026-08-18T00:00:00Z",
     created_by: "user-1",
     updated_at: "2026-08-18T00:00:00Z",
@@ -43,6 +44,7 @@ function renderList(
     onStartAddSecondBox: (lexemeId: string) => void;
     onCancelSecondBoxDraft: () => void;
     onRemoveSecondBox: (lexemeId: string) => void;
+    onMarkComplete: (lexemeId: string) => void;
   }> = {},
 ) {
   return render(
@@ -61,6 +63,7 @@ function renderList(
       onStartAddSecondBox={overrides.onStartAddSecondBox ?? vi.fn()}
       onCancelSecondBoxDraft={overrides.onCancelSecondBoxDraft ?? vi.fn()}
       onRemoveSecondBox={overrides.onRemoveSecondBox ?? vi.fn()}
+      onMarkComplete={overrides.onMarkComplete ?? vi.fn()}
     />,
   );
 }
@@ -271,5 +274,37 @@ describe("LexemeList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
 
     expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it("marks a lexeme complete (BH-113)", () => {
+    const onMarkComplete = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onMarkComplete,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Позначити завершеною" }));
+
+    expect(onMarkComplete).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("locks editing once a lexeme is complete (BH-113)", () => {
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", status: "complete" })],
+      },
+    });
+
+    expect(screen.getByText(/редагування заблоковане/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Редагувати текст" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Видалити" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Позначити завершеною" }),
+    ).not.toBeInTheDocument();
   });
 });

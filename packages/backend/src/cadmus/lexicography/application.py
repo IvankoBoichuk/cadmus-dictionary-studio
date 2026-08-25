@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from cadmus.access import Permission
 from cadmus.lexicography.domain import (
     DictionaryNotReadyToScanError,
     DictionaryScanSnapshot,
@@ -13,9 +14,11 @@ from cadmus.lexicography.domain import (
     LexemeAccessError,
     LexemeEvent,
     LexemeEventType,
+    LexemeNotEditableError,
     LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
+    LexemeStatus,
     LexemeValidationError,
     OcrSuggestionStatus,
     OcrSuggestionTaskSnapshot,
@@ -63,14 +66,18 @@ def _resolve_page(
     dictionary_id: UUID,
     actor_id: UUID,
     page_number: int,
+    *,
+    required_permission: Permission = Permission.VIEW,
 ) -> DictionaryPage:
     """Resolve a BH-53 viewer ordinal to its ``DictionaryPage``.
 
     Reuses ``GetDictionaryService.get_viewable_page``, so a lexeme can only
     ever be created on a page within the dictionary's saved ranges and
-    ownership is checked the same way the viewer already checks it.
+    ownership/role is checked the same way the viewer already checks it.
     """
-    page = dictionary_pages.get_viewable_page(dictionary_id, actor_id, page_number)
+    page = dictionary_pages.get_viewable_page(
+        dictionary_id, actor_id, page_number, required_permission=required_permission
+    )
     if page is None:
         raise LexemePageNotFoundError(dictionary_id, page_number)
     return page
@@ -92,7 +99,11 @@ class CreateLexemeService:
     def create(self, dictionary_id: UUID, actor_id: UUID, data: LexemeInput) -> Lexeme:
         try:
             page = _resolve_page(
-                self._dictionary_pages, dictionary_id, actor_id, data.page_number
+                self._dictionary_pages,
+                dictionary_id,
+                actor_id,
+                data.page_number,
+                required_permission=Permission.EDIT,
             )
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
@@ -158,7 +169,11 @@ class CreateLexemeService:
 
 @dataclass(frozen=True)
 class UpdateLexemeInput:
-    """One BH-56 lexeme edit submission: full replacement text and box."""
+    """One BH-56 lexeme edit submission: full replacement text and box.
+
+    ``status`` is ``None`` unless the caller is explicitly requesting a
+    status change (BH-113) -- most edits leave it untouched.
+    """
 
     source_text: str
     x: float
@@ -169,6 +184,7 @@ class UpdateLexemeInput:
     y2: float | None = None
     width2: float | None = None
     height2: float | None = None
+    status: LexemeStatus | None = None
 
 
 class UpdateLexemeService:
@@ -192,7 +208,9 @@ class UpdateLexemeService:
         data: UpdateLexemeInput,
     ) -> Lexeme:
         try:
-            self._dictionary_pages.get(dictionary_id, actor_id)
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
 
@@ -201,6 +219,8 @@ class UpdateLexemeService:
             existing = unit_of_work.lexicography.get_lexeme(dictionary_id, lexeme_id)
             if existing is None:
                 raise LexemeNotFoundError(dictionary_id, lexeme_id)
+            if existing.status == LexemeStatus.COMPLETE:
+                raise LexemeNotEditableError(dictionary_id, lexeme_id)
 
             page = self._dictionary_pages.get_page_by_id(
                 dictionary_id, actor_id, existing.page_id
@@ -244,6 +264,7 @@ class UpdateLexemeService:
                 y2=data.y2,
                 width2=data.width2,
                 height2=data.height2,
+                status=data.status,
             )
             if changed:
                 existing.source_text = data.source_text.strip()
@@ -255,6 +276,8 @@ class UpdateLexemeService:
                 existing.y2 = data.y2
                 existing.width2 = data.width2
                 existing.height2 = data.height2
+                if data.status is not None:
+                    existing.status = data.status
                 existing.updated_at = now
                 existing.updated_by = actor_id
                 unit_of_work.lexicography.update_lexeme(existing)
@@ -288,7 +311,9 @@ class DeleteLexemeService:
 
     def delete(self, dictionary_id: UUID, lexeme_id: UUID, actor_id: UUID) -> None:
         try:
-            self._dictionary_pages.get(dictionary_id, actor_id)
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
 
@@ -297,6 +322,8 @@ class DeleteLexemeService:
             existing = unit_of_work.lexicography.get_lexeme(dictionary_id, lexeme_id)
             if existing is None:
                 raise LexemeNotFoundError(dictionary_id, lexeme_id)
+            if existing.status == LexemeStatus.COMPLETE:
+                raise LexemeNotEditableError(dictionary_id, lexeme_id)
 
             unit_of_work.lexicography.delete_lexeme(dictionary_id, lexeme_id)
             unit_of_work.lexicography.add_lexeme_event(
@@ -416,7 +443,9 @@ class FinishScanningService:
 
     def finish(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
         try:
-            dictionary = self._dictionary_pages.get(dictionary_id, actor_id)
+            dictionary = self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
 
@@ -452,9 +481,15 @@ class SuggestLexemesService:
 
     def enqueue(self, dictionary_id: UUID, actor_id: UUID, page_number: int) -> str:
         try:
-            dictionary = self._dictionary_pages.get(dictionary_id, actor_id)
+            dictionary = self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
             page = _resolve_page(
-                self._dictionary_pages, dictionary_id, actor_id, page_number
+                self._dictionary_pages,
+                dictionary_id,
+                actor_id,
+                page_number,
+                required_permission=Permission.EDIT,
             )
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
@@ -526,7 +561,9 @@ class QueueDictionaryScanService:
 
     def enqueue(self, dictionary_id: UUID, actor_id: UUID) -> str:
         try:
-            self._dictionary_pages.get(dictionary_id, actor_id)
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
         return self._queue.enqueue_scan(dictionary_id, actor_id)

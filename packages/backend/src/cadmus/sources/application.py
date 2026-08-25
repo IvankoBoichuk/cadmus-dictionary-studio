@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import BinaryIO
 from uuid import UUID, uuid4
 
+from cadmus.access import AccessDeniedError, AuthorizationService, Permission
 from cadmus.geography.ports import GeographyUnitOfWorkFactory
 from cadmus.sources.domain import (
     ALLOWED_CONTENT_TYPE,
@@ -69,6 +70,28 @@ from cadmus.sources.ports import (
 logger = logging.getLogger(__name__)
 
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+
+def _authorize(
+    authorization: AuthorizationService,
+    dictionary: Dictionary | None,
+    dictionary_id: UUID,
+    actor_id: UUID,
+    permission: Permission,
+) -> Dictionary:
+    """Require ``permission`` on ``dictionary_id``, hiding both absence and denial.
+
+    A missing dictionary and a dictionary the actor lacks ``permission`` on
+    both raise the same ``DictionaryAccessError`` (BH-170 AC: "недоступний
+    проєкт не розкриває метадані").
+    """
+    if dictionary is None:
+        raise DictionaryAccessError(dictionary_id)
+    try:
+        authorization.require(dictionary_id, dictionary.owner_id, actor_id, permission)
+    except AccessDeniedError as error:
+        raise DictionaryAccessError(dictionary_id) from error
+    return dictionary
 
 
 @dataclass(frozen=True)
@@ -347,9 +370,11 @@ class SaveDictionaryMetadataService:
         self,
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def save(
         self,
@@ -365,8 +390,13 @@ class SaveDictionaryMetadataService:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
 
             changed_fields = self._changed_fields(dictionary, data, normalized_isbn)
 
@@ -521,15 +551,30 @@ class DictionaryListEntry:
 class GetDictionaryService:
     """Read a dictionary draft, enforcing owner-only visibility."""
 
-    def __init__(self, unit_of_work_factory: SourcesUnitOfWorkFactory) -> None:
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        authorization: AuthorizationService | None = None,
+    ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._authorization = authorization or AuthorizationService()
 
-    def get(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
+    def get(
+        self,
+        dictionary_id: UUID,
+        actor_id: UUID,
+        *,
+        required_permission: Permission = Permission.VIEW,
+    ) -> Dictionary:
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
-            return dictionary
+            return _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                required_permission,
+            )
 
     def get_source_file(self, dictionary_id: UUID, actor_id: UUID) -> SourceFile:
         dictionary = self.get(dictionary_id, actor_id)
@@ -578,7 +623,12 @@ class GetDictionaryService:
         return len(expand_page_ranges(ranges))
 
     def get_viewable_page(
-        self, dictionary_id: UUID, actor_id: UUID, ordinal: int
+        self,
+        dictionary_id: UUID,
+        actor_id: UUID,
+        ordinal: int,
+        *,
+        required_permission: Permission = Permission.VIEW,
     ) -> DictionaryPage | None:
         """BH-53: the ``ordinal``-th (1-based) page within the saved ranges.
 
@@ -588,7 +638,9 @@ class GetDictionaryService:
         makes an out-of-range or unconfigured request simply miss rather
         than leak pages outside the dictionary's declared scope.
         """
-        dictionary = self.get(dictionary_id, actor_id)
+        dictionary = self.get(
+            dictionary_id, actor_id, required_permission=required_permission
+        )
         with self._unit_of_work_factory() as unit_of_work:
             source_file = unit_of_work.sources.get_source_file(dictionary.id)
             if source_file is None:
@@ -657,9 +709,11 @@ class DeleteDictionaryService:
         self,
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         object_storage: ObjectStorage,
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._object_storage = object_storage
+        self._authorization = authorization or AuthorizationService()
 
     def delete(self, dictionary_id: UUID, actor_id: UUID) -> None:
         """Remove the dictionary row (cascading to its children), then storage.
@@ -667,12 +721,19 @@ class DeleteDictionaryService:
         The database delete is the authoritative "is it gone" answer for the
         caller and commits first; object storage cleanup afterward is
         best-effort, matching this codebase's existing posture toward
-        coordinating (not two-phase-committing) Postgres and MinIO.
+        coordinating (not two-phase-committing) Postgres and MinIO. Requires
+        ``MANAGE_MEMBERS`` -- only ``Role.OWNER`` has it -- since deleting the
+        whole project is a stronger action than ordinary editing.
         """
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.MANAGE_MEMBERS,
+            )
             source_file = unit_of_work.sources.get_source_file(dictionary_id)
             unit_of_work.sources.delete_dictionary(dictionary_id)
             unit_of_work.commit()
@@ -696,9 +757,11 @@ class DictionaryReadinessService:
         self,
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def confirm_configured(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
         """Mark ``dictionary_id`` ``configured`` once every check passes.
@@ -709,8 +772,13 @@ class DictionaryReadinessService:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
 
             source_file = unit_of_work.sources.get_source_file(dictionary_id)
             page_ranges = unit_of_work.sources.list_page_ranges(dictionary_id)
@@ -754,16 +822,23 @@ class MarkDictionaryScannedService:
         self,
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def mark_scanned(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
 
             if dictionary.status == DictionaryStatus.SCANNED:
                 return dictionary
@@ -804,9 +879,11 @@ class SavePageRangesService:
         self,
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def save(
         self,
@@ -825,8 +902,13 @@ class SavePageRangesService:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
 
             source_file = unit_of_work.sources.get_source_file(dictionary_id)
             if source_file is None or source_file.page_count is None:
@@ -915,17 +997,24 @@ class AbbreviationCrudService:
         self,
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def list_for_dictionary(
         self, dictionary_id: UUID, actor_id: UUID
     ) -> list[Abbreviation]:
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.VIEW,
+            )
             return unit_of_work.sources.list_abbreviations(dictionary_id)
 
     def create(
@@ -939,8 +1028,13 @@ class AbbreviationCrudService:
         abbreviation_id = uuid4()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
 
             duplicate = unit_of_work.sources.find_abbreviation_duplicate(
                 dictionary_id, data.category, data.language_code, data.abbreviation
@@ -986,8 +1080,13 @@ class AbbreviationCrudService:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
             existing = unit_of_work.sources.get_abbreviation(
                 dictionary_id, abbreviation_id
             )
@@ -1028,8 +1127,13 @@ class AbbreviationCrudService:
     ) -> None:
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
             existing = unit_of_work.sources.get_abbreviation(
                 dictionary_id, abbreviation_id
             )
@@ -1093,18 +1197,25 @@ class SettlementMappingCrudService:
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         geography_unit_of_work_factory: GeographyUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._geography_unit_of_work_factory = geography_unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def list_for_dictionary(
         self, dictionary_id: UUID, actor_id: UUID
     ) -> list[DictionarySettlementMapping]:
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.VIEW,
+            )
             return unit_of_work.sources.list_settlement_mappings(dictionary_id)
 
     def create(
@@ -1121,8 +1232,13 @@ class SettlementMappingCrudService:
         )
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
 
             duplicate = unit_of_work.sources.find_settlement_mapping_duplicate(
                 dictionary_id,
@@ -1173,8 +1289,13 @@ class SettlementMappingCrudService:
         )
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
             existing = unit_of_work.sources.get_settlement_mapping(
                 dictionary_id, mapping_id
             )
@@ -1213,8 +1334,13 @@ class SettlementMappingCrudService:
     def delete(self, dictionary_id: UUID, mapping_id: UUID, actor_id: UUID) -> None:
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
             existing = unit_of_work.sources.get_settlement_mapping(
                 dictionary_id, mapping_id
             )
@@ -1229,8 +1355,13 @@ class SettlementMappingCrudService:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
             existing = unit_of_work.sources.get_settlement_mapping(
                 dictionary_id, mapping_id
             )
@@ -1347,10 +1478,12 @@ class SettlementConfirmationService:
         unit_of_work_factory: SourcesUnitOfWorkFactory,
         geography_unit_of_work_factory: GeographyUnitOfWorkFactory,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._geography_unit_of_work_factory = geography_unit_of_work_factory
         self._clock = clock
+        self._authorization = authorization or AuthorizationService()
 
     def confirm(
         self, dictionary_id: UUID, mapping_id: UUID, actor_id: UUID
@@ -1358,8 +1491,13 @@ class SettlementConfirmationService:
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
             dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
-            if dictionary is None or dictionary.owner_id != actor_id:
-                raise DictionaryAccessError(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
             mapping = unit_of_work.sources.get_settlement_mapping(
                 dictionary_id, mapping_id
             )

@@ -32,6 +32,33 @@ class LexemeOrigin(StrEnum):
     OCR = "ocr"
 
 
+class LexemeStatus(StrEnum):
+    """A lexeme's structural-decomposition progress (BH-113).
+
+    ``DRAFT`` is the state ALTO/OCR (or a manual selection) leaves a lexeme
+    in. ``READY_TO_PROCESS`` and ``READY_TO_REVIEW`` mark it as being (or
+    having finished) further broken down into smaller structural data.
+    ``COMPLETE`` is the only status set exclusively by an explicit user
+    action, never automatically, and is the sole status that locks the
+    lexeme against further edits (BH-107/BH-113: a lexeme stays editable in
+    every other status).
+    """
+
+    DRAFT = "draft"
+    READY_TO_PROCESS = "ready_to_process"
+    READY_TO_REVIEW = "ready_to_review"
+    COMPLETE = "complete"
+
+
+class LexemeNotEditableError(ValueError):
+    """BH-113: raised when editing/deleting a lexeme whose status is COMPLETE."""
+
+    def __init__(self, dictionary_id: UUID, lexeme_id: UUID) -> None:
+        super().__init__(f"lexeme {lexeme_id} is complete and can no longer be edited")
+        self.dictionary_id = dictionary_id
+        self.lexeme_id = lexeme_id
+
+
 class LexemeValidationError(ValueError):
     """Field-addressable BH-54 lexeme validation errors (AC1, AC2, AC3)."""
 
@@ -124,6 +151,7 @@ class Lexeme:
     created_by: UUID
     updated_at: datetime
     updated_by: UUID
+    status: LexemeStatus = LexemeStatus.DRAFT
     x2: float | None = None
     y2: float | None = None
     width2: float | None = None
@@ -173,8 +201,14 @@ def changed_lexeme_fields(
     y2: float | None = None,
     width2: float | None = None,
     height2: float | None = None,
+    status: LexemeStatus | None = None,
 ) -> list[str]:
-    """List which editable fields actually differ, for the BH-56 audit trail."""
+    """List which editable fields actually differ, for the BH-56 audit trail.
+
+    ``status`` is ``None`` when the caller isn't requesting a status change
+    at all (BH-113) -- distinct from any real ``LexemeStatus`` value, which
+    ``Lexeme.status`` always has.
+    """
     after = {
         "source_text": source_text,
         "x": x,
@@ -186,9 +220,12 @@ def changed_lexeme_fields(
         "width2": width2,
         "height2": height2,
     }
-    return [
+    changed = [
         field for field in _EDITABLE_FIELDS if getattr(before, field) != after[field]
     ]
+    if status is not None and status != before.status:
+        changed.append("status")
+    return changed
 
 
 def validate_lexeme_fields(

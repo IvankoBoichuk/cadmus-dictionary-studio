@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
 import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
+import { LEXEME_STATUS_LABELS } from "../lexemeStatusLabels";
 
 /** BH-55/BH-56: the list of lexemes saved on the current page, editable and deletable. */
 export function LexemeList({
@@ -19,6 +20,7 @@ export function LexemeList({
   onStartAddSecondBox,
   onCancelSecondBoxDraft,
   onRemoveSecondBox,
+  onMarkComplete,
 }: {
   lexemesState: LexemesForPageState;
   pageNumber: number;
@@ -34,6 +36,7 @@ export function LexemeList({
   onStartAddSecondBox?: (lexemeId: string) => void;
   onCancelSecondBoxDraft?: () => void;
   onRemoveSecondBox?: (lexemeId: string) => void;
+  onMarkComplete?: (lexemeId: string) => void;
 }) {
   const [editingLexemeId, setEditingLexemeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
@@ -83,6 +86,7 @@ export function LexemeList({
         const isRedrawing = redrawingLexemeId === lexeme.id;
         const isDraftingSecondBox = secondBoxDraftLexemeId === lexeme.id;
         const hasSecondBox = lexeme.x2 != null;
+        const isComplete = lexeme.status === "complete";
         return (
           <li key={lexeme.id} className="lexeme-list-row">
             <button
@@ -122,6 +126,16 @@ export function LexemeList({
                 Сторінка {pageNumber} · x={Math.round(lexeme.x)}, y=
                 {Math.round(lexeme.y)}, {Math.round(lexeme.width)}×
                 {Math.round(lexeme.height)}
+                {" · "}
+                <span
+                  className={
+                    isComplete
+                      ? "badge badge--complete"
+                      : "badge badge--status"
+                  }
+                >
+                  {LEXEME_STATUS_LABELS[lexeme.status]}
+                </span>
               </span>
             </button>
             {updateState.status === "error" && isEditing && (
@@ -130,7 +144,9 @@ export function LexemeList({
               </p>
             )}
             <div className="lexeme-list-actions">
-              {isEditing ? (
+              {isComplete ? (
+                <p className="lede">Лексема завершена — редагування заблоковане.</p>
+              ) : isEditing ? (
                 <>
                   <button
                     type="button"
@@ -199,6 +215,13 @@ export function LexemeList({
                       Додати другу область
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => onMarkComplete?.(lexeme.id)}
+                  >
+                    Позначити завершеною
+                  </button>
                   <button
                     type="button"
                     className="danger-button"

@@ -943,6 +943,24 @@ h1 {
   font-size: 0.85rem;
 }
 
+.member-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.member-table th,
+.member-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #d6dbd2;
+  text-align: left;
+  vertical-align: top;
+}
+
+.member-table th {
+  color: #33443d;
+  font-size: 0.85rem;
+}
+
 .settlement-search {
   display: flex;
   flex-direction: column;
@@ -997,4 +1015,14 @@ h1 {
 .badge--error {
   color: #9a3024;
   background: #fbe9e6;
+}
+
+.badge--status {
+  color: #1d5c8a;
+  background: #e6f0f7;
+}
+
+.badge--complete {
+  color: #245847;
+  background: #eaf1ec;
 }

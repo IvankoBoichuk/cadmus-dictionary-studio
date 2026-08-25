@@ -421,6 +421,7 @@ export function LexemeCanvas({
               const isSelected = lexeme.id === selectedLexemeId;
               const isFullyRedrawing = lexeme.id === redrawingLexemeId;
               const isDraftingSecondBox = lexeme.id === secondBoxDraftLexemeId;
+              const isComplete = lexeme.status === "complete";
               const box1Displayed =
                 isSelected && handleDrag?.box === 1
                   ? resizeRect(
@@ -449,7 +450,7 @@ export function LexemeCanvas({
                       rect={box1Displayed}
                       selected={isSelected}
                       title={lexeme.source_text}
-                      showHandles={isSelected && !isDraftingSecondBox}
+                      showHandles={isSelected && !isDraftingSecondBox && !isComplete}
                       onSelect={() => onSelectLexeme(lexeme.id)}
                       onHandleMouseDown={(handle, event) =>
                         startHandleDrag(lexeme, 1, handle, event)
@@ -462,7 +463,7 @@ export function LexemeCanvas({
                       rect={box2Displayed}
                       selected={isSelected}
                       title={lexeme.source_text}
-                      showHandles={isSelected}
+                      showHandles={isSelected && !isComplete}
                       onSelect={() => onSelectLexeme(lexeme.id)}
                       onHandleMouseDown={(handle, event) =>
                         startHandleDrag(lexeme, 2, handle, event)
