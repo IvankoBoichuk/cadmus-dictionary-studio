@@ -125,6 +125,25 @@ describe("LexemeList", () => {
     );
   });
 
+  it("scrolls the selected lexeme's row into view (BH-70)", () => {
+    const scrollIntoViewMock = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoViewMock,
+    );
+
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-1" }), lexemeFixture({ id: "lex-7" })],
+      },
+      selectedLexemeId: "lex-7",
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "nearest" }),
+    );
+  });
+
   it("edits text inline and saves it (BH-56 AC2, AC4)", () => {
     const onSaveText = vi.fn();
     renderList({

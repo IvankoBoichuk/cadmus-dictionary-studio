@@ -345,6 +345,23 @@ describe("LexemeCanvas", () => {
     expect(screen.queryByTitle("друге")).not.toBeInTheDocument();
   });
 
+  it("scrolls to and focuses the selected lexeme's box (BH-70)", async () => {
+    stubContainerRect();
+    const scrollIntoViewMock = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoViewMock,
+    );
+
+    renderCanvas({ lexemes: [lexemeFixture()], selectedLexemeId: "lex-1" });
+    await loadImage();
+
+    const box = await screen.findByTitle("слово");
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "center" }),
+    );
+    expect(box).toHaveFocus();
+  });
+
   it("dragging a resize handle resizes the selected lexeme's box", async () => {
     stubContainerRect();
     const existing = lexemeFixture({
