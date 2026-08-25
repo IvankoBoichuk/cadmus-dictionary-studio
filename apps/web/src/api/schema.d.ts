@@ -311,8 +311,44 @@ export interface paths {
         delete: operations["delete_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__delete"];
         options?: never;
         head?: never;
-        /** Edit a lexeme's text and/or bounding box (BH-56) */
+        /** Edit a lexeme's text, bounding box, and/or status (BH-56, BH-113) */
         patch: operations["update_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__patch"];
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every member of a project, including the owner (BH-170) */
+        get: operations["list_members_dictionaries__dictionary_id__members_get"];
+        put?: never;
+        /** Invite a registered user to a project by email (BH-170) */
+        post: operations["add_member_dictionaries__dictionary_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a project member (BH-170) */
+        delete: operations["remove_member_dictionaries__dictionary_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change a project member's role (BH-170) */
+        patch: operations["change_member_role_dictionaries__dictionary_id__members__user_id__patch"];
         trace?: never;
     };
     "/dictionaries/{dictionary_id}/ocr-scan": {
@@ -857,6 +893,15 @@ export interface components {
          */
         ActivationFailure: "invalid" | "expired" | "used";
         /**
+         * AddMemberRequest
+         * @description One BH-170 invite-by-email submission.
+         */
+        AddMemberRequest: {
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+        };
+        /**
          * AreaResponse
          * @description One synced oblast.
          */
@@ -913,6 +958,13 @@ export interface components {
         Body_upload_dictionaries_upload_post: {
             /** File */
             file: string;
+        };
+        /**
+         * ChangeMemberRoleRequest
+         * @description A BH-170 role change for an existing member.
+         */
+        ChangeMemberRoleRequest: {
+            role: components["schemas"]["Role"];
         };
         /**
          * CommunityGeometryResponse
@@ -1344,6 +1396,7 @@ export interface components {
             page_id: string;
             /** Source Text */
             source_text: string;
+            status: components["schemas"]["LexemeStatus"];
             /**
              * Updated At
              * Format: date-time
@@ -1367,6 +1420,20 @@ export interface components {
             /** Y2 */
             y2?: number | null;
         };
+        /**
+         * LexemeStatus
+         * @description A lexeme's structural-decomposition progress (BH-113).
+         *
+         *     ``DRAFT`` is the state ALTO/OCR (or a manual selection) leaves a lexeme
+         *     in. ``READY_TO_PROCESS`` and ``READY_TO_REVIEW`` mark it as being (or
+         *     having finished) further broken down into smaller structural data.
+         *     ``COMPLETE`` is the only status set exclusively by an explicit user
+         *     action, never automatically, and is the sole status that locks the
+         *     lexeme against further edits (BH-107/BH-113: a lexeme stays editable in
+         *     every other status).
+         * @enum {string}
+         */
+        LexemeStatus: "draft" | "ready_to_process" | "ready_to_review" | "complete";
         /**
          * LexemeSuggestionResponse
          * @description One OCR word candidate, not yet a lexeme.
@@ -1402,6 +1469,39 @@ export interface components {
         LogoutResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * MemberResponse
+         * @description One project member (owner or invited collaborator).
+         */
+        MemberResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * MembersListResponse
+         * @description Every member of a project, plus the caller's own role.
+         */
+        MembersListResponse: {
+            /** Members */
+            members: components["schemas"]["MemberResponse"][];
+            my_role: components["schemas"]["Role"];
         };
         /**
          * OcrSuggestionStatus
@@ -1562,6 +1662,12 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * Role
+         * @description A user's standing on one dictionary ("project").
+         * @enum {string}
+         */
+        Role: "owner" | "editor" | "reviewer" | "viewer";
         /**
          * SaveMetadataRequest
          * @description Full BH-27 metadata submission; missing required fields are allowed.
@@ -1809,6 +1915,7 @@ export interface components {
             height2?: number | null;
             /** Source Text */
             source_text: string;
+            status?: components["schemas"]["LexemeStatus"] | null;
             /** Width */
             width: number;
             /** Width2 */
@@ -1964,6 +2071,16 @@ export interface components {
          * @description Validation errors addressable by ``ranges.<index>.<field>`` (AC4, AC5).
          */
         cadmus_api__routes__page_ranges__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__project_members__FieldErrorsResponse: {
             /** Errors */
             errors: {
                 [key: string]: string;
@@ -3119,6 +3236,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The lexeme is 'complete' and can no longer be edited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3175,6 +3301,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The lexeme is 'complete' and can no longer be edited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description The text or bounding box failed validation */
             422: {
                 headers: {
@@ -3182,6 +3317,227 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    list_members_dictionaries__dictionary_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembersListResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_member_dictionaries__dictionary_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This user is already a member of the project */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The email or role is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__project_members__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    remove_member_dictionaries__dictionary_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                user_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_member_role_dictionaries__dictionary_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                user_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
