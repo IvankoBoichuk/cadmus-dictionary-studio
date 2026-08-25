@@ -51,6 +51,7 @@ users = Table(
     ),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("activated_at", DateTime(timezone=True), nullable=True),
+    Column("telegram_chat_id", String(64), nullable=True),
     CheckConstraint(
         "status IN ('pending_verification', 'active')",
         name="account_status",

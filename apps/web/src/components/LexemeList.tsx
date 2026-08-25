@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
 import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
@@ -37,6 +37,13 @@ export function LexemeList({
 }) {
   const [editingLexemeId, setEditingLexemeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
+  const itemRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  // BH-70: keep the selected row visible in the scrollable list, however it was selected.
+  useEffect(() => {
+    if (!selectedLexemeId) return;
+    itemRefs.current.get(selectedLexemeId)?.scrollIntoView({ block: "nearest" });
+  }, [selectedLexemeId]);
 
   if (lexemesState.status === "loading") {
     return <p role="status">Завантажуємо лексеми…</p>;
@@ -80,6 +87,10 @@ export function LexemeList({
           <li key={lexeme.id} className="lexeme-list-row">
             <button
               type="button"
+              ref={(element) => {
+                if (element) itemRefs.current.set(lexeme.id, element);
+                else itemRefs.current.delete(lexeme.id);
+              }}
               className={
                 lexeme.id === selectedLexemeId
                   ? "lexeme-list-item lexeme-list-item--selected"
