@@ -103,6 +103,7 @@ Web-клієнт не звертається напряму до БД, Redis а�
 | `exports` | snapshots та serializers JSON/TEI | редагування записів |
 | `quality` | gold samples, measurements, run statistics | production decisions без експериментів |
 | `geography` | синхронізований з decentralization.ua кеш areas/regions/communities/settlements, geometry громад, sync runs | зіставлення геолейблів словника з населеними пунктами |
+| `notifications` | канали доставки сповіщень (email/Telegram) та їхній fan-out (`NotificationService`) | вирішення, коли й кого сповіщати -- це рішення викликача (worker entrypoint) |
 
 ## 6. Правило залежностей
 
@@ -123,6 +124,7 @@ flowchart TD
 ```text
 identity
 geography
+notifications
 projects -> identity
 sources -> projects, geography
 processing -> sources
@@ -138,6 +140,8 @@ quality -> processing, document, lexicography, review
 `lexicography -> sources` (BH-54): лексема — ручне, доOCR-виділення (bounding box + текст) на зображенні сторінки, тобто майбутній прекурсор `headword`/`entry`. Вона посилається на `sources.Dictionary`/`sources.DictionaryPage` напряму, а не через `document`, бо `document` (нормалізована геометрія, отримана з OCR) на цьому етапі pipeline ще не існує й не має існувати — лексема створюється до запуску OCR. Коли реальний OCR/`document`-шар з'явиться, він продовжить використовувати `document -> sources`; ручний шлях лексем через `sources` лишається окремим і не є обхідним шляхом навколо `document`.
 
 `geography` — незалежний leaf-модуль без залежностей на будь-який інший предметний модуль: це спільний, tenant-independent кеш довідкових даних (areas/regions/communities/settlements), синхронізований окремим CLI-процесом. `sources` імпортує з нього лише для пошуку/зіставлення населених пунктів (`SettlementSearchService`, `SettlementMappingCrudService`, `SettlementConfirmationService`); зворотного імпорту `geography -> sources` немає.
+
+`notifications` — так само незалежний leaf-модуль: `NotificationRecipient`/`Notification` — прості значення (адреси, текст), модуль нічого не знає про `identity.User` чи будь-яку доменну подію. Полiморфізм живе в `NotificationChannel` (`GmailNotificationChannel` через SMTP, `TelegramNotificationChannel` через Telegram Bot API) — `NotificationService.notify` перебирає канали й не зупиняється, якщо один з них впав. Worker entrypoint (не сам домен) складає `NotificationRecipient` з `identity.User` і вирішує, коли сповіщати — наприклад, після завершення `cadmus.lexicography.scan_dictionary`.
 
 ## 7. Основні потоки даних
 
