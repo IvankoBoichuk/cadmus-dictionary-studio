@@ -130,7 +130,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List every dictionary draft owned by the caller */
+        /** List every dictionary draft the caller owns or is a member of */
         get: operations["list_dictionaries_dictionaries_get"];
         put?: never;
         post?: never;

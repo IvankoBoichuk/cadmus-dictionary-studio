@@ -93,6 +93,15 @@ class SqlAlchemyMembershipsRepository:
             )
         )
 
+    def list_memberships_for_user(self, user_id: UUID) -> list[ProjectMembership]:
+        return list(
+            self._session.scalars(
+                select(ProjectMembership).where(
+                    project_memberships.c.user_id == user_id
+                )
+            )
+        )
+
     def add_member(self, membership: ProjectMembership) -> None:
         self._session.add(membership)
 

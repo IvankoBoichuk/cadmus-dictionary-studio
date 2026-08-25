@@ -604,6 +604,29 @@ class GetDictionaryService:
                 for dictionary in dictionaries
             ]
 
+    def list_for_actor(self, actor_id: UUID) -> list[DictionaryListEntry]:
+        """BH-170: dictionaries ``actor_id`` owns plus ones they're a member of."""
+        entries = self.list_for_owner(actor_id)
+        member_dictionary_ids = self._authorization.list_member_dictionary_ids(actor_id)
+        if not member_dictionary_ids:
+            return entries
+        with self._unit_of_work_factory() as unit_of_work:
+            for dictionary_id in member_dictionary_ids:
+                dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+                if dictionary is None:
+                    continue
+                entries.append(
+                    DictionaryListEntry(
+                        dictionary=dictionary,
+                        source_file=unit_of_work.sources.get_source_file(dictionary.id),
+                        page_ranges=unit_of_work.sources.list_page_ranges(
+                            dictionary.id
+                        ),
+                    )
+                )
+        entries.sort(key=lambda entry: entry.dictionary.updated_at, reverse=True)
+        return entries
+
     def get_first_page(
         self, dictionary_id: UUID, actor_id: UUID
     ) -> DictionaryPage | None:

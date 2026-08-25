@@ -42,6 +42,13 @@ class MemoryMembershipsRepository:
             if dict_id == dictionary_id
         ]
 
+    def list_memberships_for_user(self, user_id: UUID) -> list[ProjectMembership]:
+        return [
+            membership
+            for (_, mem_user_id), membership in self.memberships.items()
+            if mem_user_id == user_id
+        ]
+
     def add_member(self, membership: ProjectMembership) -> None:
         self.memberships[(membership.dictionary_id, membership.user_id)] = membership
 

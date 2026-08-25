@@ -414,7 +414,7 @@ def create_dictionaries_router(
         "",
         response_model=list[DictionaryResponse],
         responses={**UNAUTHORIZED_RESPONSE},
-        summary="List every dictionary draft owned by the caller",
+        summary="List every dictionary draft the caller owns or is a member of",
     )
     def list_dictionaries(user: AuthenticatedUser) -> list[DictionaryResponse]:
         return [
@@ -424,7 +424,7 @@ def create_dictionaries_router(
                 entry.source_file,
                 entry.page_ranges,
             )
-            for entry in get_service.list_for_owner(user.id)
+            for entry in get_service.list_for_actor(user.id)
         ]
 
     @router.delete(
