@@ -16,10 +16,12 @@ from cadmus.lexicography import (
     LexemeEvent,
     LexemeEventType,
     LexemeInput,
+    LexemeNotEditableError,
     LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeQueryService,
+    LexemeStatus,
     LexemeValidationError,
     LexicographyRepository,
     UpdateLexemeInput,
@@ -808,3 +810,82 @@ def test_delete_lexeme_actor_other_than_owner_raises_access_error() -> None:
 
     with pytest.raises(LexemeAccessError):
         fixture.delete_service.delete(fixture.dictionary.id, lexeme.id, uuid4())
+
+
+def test_create_lexeme_defaults_to_draft_status() -> None:
+    fixture = Fixture()
+
+    lexeme = fixture.create_lexeme()
+
+    assert lexeme.status is LexemeStatus.DRAFT
+
+
+@pytest.mark.parametrize(
+    "status",
+    [LexemeStatus.DRAFT, LexemeStatus.READY_TO_PROCESS, LexemeStatus.READY_TO_REVIEW],
+)
+def test_update_lexeme_allows_edits_in_every_status_but_complete(
+    status: LexemeStatus,
+) -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+    fixture.lexicography_repository.lexemes[lexeme.id].status = status
+
+    updated = fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(source_text="нове", x=20, y=20, width=120, height=50),
+    )
+
+    assert updated.source_text == "нове"
+
+
+def test_update_lexeme_can_set_status_to_complete() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+
+    updated = fixture.update_service.update(
+        fixture.dictionary.id,
+        lexeme.id,
+        fixture.owner_id,
+        UpdateLexemeInput(
+            source_text="слово",
+            x=10,
+            y=10,
+            width=100,
+            height=40,
+            status=LexemeStatus.COMPLETE,
+        ),
+    )
+
+    assert updated.status is LexemeStatus.COMPLETE
+    event = fixture.lexicography_repository.events[0]
+    assert "status" in event.changed_fields
+
+
+def test_update_lexeme_rejects_edits_once_complete() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+    fixture.lexicography_repository.lexemes[lexeme.id].status = LexemeStatus.COMPLETE
+
+    with pytest.raises(LexemeNotEditableError):
+        fixture.update_service.update(
+            fixture.dictionary.id,
+            lexeme.id,
+            fixture.owner_id,
+            UpdateLexemeInput(source_text="нове", x=20, y=20, width=120, height=50),
+        )
+
+
+def test_delete_lexeme_rejects_deletion_once_complete() -> None:
+    fixture = Fixture()
+    lexeme = fixture.create_lexeme()
+    fixture.lexicography_repository.lexemes[lexeme.id].status = LexemeStatus.COMPLETE
+
+    with pytest.raises(LexemeNotEditableError):
+        fixture.delete_service.delete(
+            fixture.dictionary.id, lexeme.id, fixture.owner_id
+        )
+
+    assert lexeme.id in fixture.lexicography_repository.lexemes

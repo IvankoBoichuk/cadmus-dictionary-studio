@@ -12,10 +12,12 @@ from cadmus.lexicography import (
     Lexeme,
     LexemeAccessError,
     LexemeInput,
+    LexemeNotEditableError,
     LexemeNotFoundError,
     LexemeOrigin,
     LexemePageNotFoundError,
     LexemeQueryService,
+    LexemeStatus,
     LexemeValidationError,
     UpdateLexemeInput,
     UpdateLexemeService,
@@ -64,6 +66,7 @@ class LexemeResponse(BaseModel):
     width: float
     height: float
     origin: LexemeOrigin
+    status: LexemeStatus
     created_at: datetime
     created_by: UUID
     updated_at: datetime
@@ -105,6 +108,7 @@ class UpdateLexemeRequest(BaseModel):
     y2: float | None = Field(default=None, ge=0)
     width2: float | None = Field(default=None, gt=0)
     height2: float | None = Field(default=None, gt=0)
+    status: LexemeStatus | None = None
 
 
 class DuplicateLexemeResponse(BaseModel):
@@ -137,6 +141,12 @@ LEXEME_NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
         "description": "The dictionary, or the lexeme within it, does not exist",
     }
 }
+LEXEME_LOCKED_RESPONSE: dict[int | str, dict[str, object]] = {
+    status.HTTP_409_CONFLICT: {
+        "model": ErrorResponse,
+        "description": "The lexeme is 'complete' and can no longer be edited",
+    }
+}
 
 
 def _lexeme_response(lexeme: Lexeme) -> LexemeResponse:
@@ -150,6 +160,7 @@ def _lexeme_response(lexeme: Lexeme) -> LexemeResponse:
         width=lexeme.width,
         height=lexeme.height,
         origin=lexeme.origin,
+        status=lexeme.status,
         created_at=lexeme.created_at,
         created_by=lexeme.created_by,
         updated_at=lexeme.updated_at,
@@ -310,18 +321,28 @@ def create_lexeme_management_router(
             content={"code": "not_found", "message": "Лексему не знайдено."},
         )
 
+    def _locked() -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": "lexeme_not_editable",
+                "message": "Лексема завершена, редагування заблоковане.",
+            },
+        )
+
     @router.patch(
         "/{lexeme_id}",
         response_model=LexemeResponse,
         responses={
             **UNAUTHORIZED_RESPONSE,
             **LEXEME_NOT_FOUND_RESPONSE,
+            **LEXEME_LOCKED_RESPONSE,
             status.HTTP_422_UNPROCESSABLE_CONTENT: {
                 "model": FieldErrorsResponse,
                 "description": "The text or bounding box failed validation",
             },
         },
-        summary="Edit a lexeme's text and/or bounding box (BH-56)",
+        summary="Edit a lexeme's text, bounding box, and/or status (BH-56, BH-113)",
     )
     def update_lexeme(
         user: AuthenticatedUser,
@@ -339,11 +360,14 @@ def create_lexeme_management_router(
             y2=request.y2,
             width2=request.width2,
             height2=request.height2,
+            status=request.status,
         )
         try:
             lexeme = update_service.update(dictionary_id, lexeme_id, user.id, data)
         except (LexemeAccessError, LexemeNotFoundError, LexemePageNotFoundError):
             return _not_found()
+        except LexemeNotEditableError:
+            return _locked()
         except LexemeValidationError as error:
             return JSONResponse(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -355,7 +379,11 @@ def create_lexeme_management_router(
         "/{lexeme_id}",
         status_code=status.HTTP_204_NO_CONTENT,
         response_model=None,
-        responses={**UNAUTHORIZED_RESPONSE, **LEXEME_NOT_FOUND_RESPONSE},
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **LEXEME_NOT_FOUND_RESPONSE,
+            **LEXEME_LOCKED_RESPONSE,
+        },
         summary="Delete a lexeme (BH-56)",
     )
     def delete_lexeme(
@@ -367,6 +395,8 @@ def create_lexeme_management_router(
             delete_service.delete(dictionary_id, lexeme_id, user.id)
         except (LexemeAccessError, LexemeNotFoundError):
             return _not_found()
+        except LexemeNotEditableError:
+            return _locked()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router
