@@ -11,6 +11,7 @@ import { DictionaryViewerPage } from "./pages/DictionaryViewerPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PageRangesPage } from "./pages/PageRangesPage";
+import { ProjectMembersPage } from "./pages/ProjectMembersPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SettlementsPage } from "./pages/SettlementsPage";
@@ -79,6 +80,10 @@ export function App() {
             <Route
               path="/dictionaries/:dictionaryId/page-ranges"
               element={<PageRangesPage />}
+            />
+            <Route
+              path="/dictionaries/:dictionaryId/members"
+              element={<ProjectMembersPage />}
             />
             <Route
               path="/dictionaries/:dictionaryId/view"

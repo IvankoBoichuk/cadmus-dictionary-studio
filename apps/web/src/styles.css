@@ -943,6 +943,24 @@ h1 {
   font-size: 0.85rem;
 }
 
+.member-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.member-table th,
+.member-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #d6dbd2;
+  text-align: left;
+  vertical-align: top;
+}
+
+.member-table th {
+  color: #33443d;
+  font-size: 0.85rem;
+}
+
 .settlement-search {
   display: flex;
   flex-direction: column;
