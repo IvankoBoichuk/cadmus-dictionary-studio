@@ -1016,3 +1016,13 @@ h1 {
   color: #9a3024;
   background: #fbe9e6;
 }
+
+.badge--status {
+  color: #1d5c8a;
+  background: #e6f0f7;
+}
+
+.badge--complete {
+  color: #245847;
+  background: #eaf1ec;
+}

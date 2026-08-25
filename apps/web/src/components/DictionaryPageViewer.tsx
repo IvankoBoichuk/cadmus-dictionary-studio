@@ -133,6 +133,20 @@ export function DictionaryPageViewer({
     });
   };
 
+  const handleMarkComplete = (lexemeId: string) => {
+    const target = findLexeme(lexemeId);
+    if (!target) return;
+    if (!window.confirm("Позначити лексему завершеною? Її більше не можна редагувати.")) {
+      return;
+    }
+    void submitUpdate(lexemeId, {
+      ...lexemeToUpdateInput(target),
+      status: "complete",
+    }).then((updated) => {
+      if (updated) updateLexeme(updated);
+    });
+  };
+
   const handleDelete = (lexemeId: string) => {
     void deleteLexeme(lexemeId).then((deleted) => {
       if (!deleted) return;
@@ -213,6 +227,7 @@ export function DictionaryPageViewer({
             onStartAddSecondBox={handleStartAddSecondBox}
             onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
             onRemoveSecondBox={handleRemoveSecondBox}
+            onMarkComplete={handleMarkComplete}
           />
         </aside>
       </div>

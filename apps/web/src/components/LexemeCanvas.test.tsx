@@ -44,6 +44,7 @@ function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse 
     width: 200,
     height: 80,
     origin: "manual",
+    status: "draft",
     created_at: "2026-08-18T00:00:00Z",
     created_by: "user-1",
     updated_at: "2026-08-18T00:00:00Z",
