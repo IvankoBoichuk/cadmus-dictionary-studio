@@ -328,8 +328,25 @@ def test_list_for_actor_includes_dictionaries_the_actor_is_a_member_of() -> None
     )
 
     class FakeMembershipsRepository:
+        def get_membership(
+            self, dictionary_id: UUID, user_id: UUID
+        ) -> ProjectMembership | None:
+            raise AssertionError("not used by list-for-actor tests")
+
+        def list_members(self, dictionary_id: UUID) -> list[ProjectMembership]:
+            raise AssertionError("not used by list-for-actor tests")
+
         def list_memberships_for_user(self, user_id: UUID) -> list[ProjectMembership]:
             return [membership] if user_id == member_id else []
+
+        def add_member(self, membership: ProjectMembership) -> None:
+            raise AssertionError("not used by list-for-actor tests")
+
+        def update_member(self, membership: ProjectMembership) -> None:
+            raise AssertionError("not used by list-for-actor tests")
+
+        def remove_member(self, dictionary_id: UUID, user_id: UUID) -> None:
+            raise AssertionError("not used by list-for-actor tests")
 
     class FakeMembershipsUnitOfWork:
         def __enter__(self) -> "FakeMembershipsUnitOfWork":
@@ -337,6 +354,9 @@ def test_list_for_actor_includes_dictionaries_the_actor_is_a_member_of() -> None
             return self
 
         def __exit__(self, *args: object) -> None:
+            pass
+
+        def commit(self) -> None:
             pass
 
     authorization = AuthorizationService(
