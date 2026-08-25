@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from types import TracebackType
 from uuid import UUID, uuid4
 
+from cadmus.access import AuthorizationService, ProjectMembership, Role
 from cadmus.sources import (
     Abbreviation,
     AbbreviationCategory,
@@ -303,6 +304,53 @@ def test_list_for_owner_is_empty_when_the_owner_has_no_dictionaries() -> None:
     service = GetDictionaryService(lambda: MemorySourcesUnitOfWork(repository))
 
     assert service.list_for_owner(OWNER_ID) == []
+
+
+def test_list_for_actor_includes_dictionaries_the_actor_is_a_member_of() -> None:
+    member_id = uuid4()
+    repository = MemorySourcesRepository()
+    owned = _dictionary(owner_id=member_id)
+    shared = _dictionary(owner_id=OTHER_OWNER_ID)
+    unrelated = _dictionary(owner_id=OTHER_OWNER_ID)
+    repository.dictionaries[owned.id] = owned
+    repository.dictionaries[shared.id] = shared
+    repository.dictionaries[unrelated.id] = unrelated
+
+    membership = ProjectMembership(
+        id=uuid4(),
+        dictionary_id=shared.id,
+        user_id=member_id,
+        role=Role.EDITOR,
+        created_at=NOW,
+        created_by=OTHER_OWNER_ID,
+        updated_at=NOW,
+        updated_by=OTHER_OWNER_ID,
+    )
+
+    class FakeMembershipsRepository:
+        def list_memberships_for_user(
+            self, user_id: UUID
+        ) -> list[ProjectMembership]:
+            return [membership] if user_id == member_id else []
+
+    class FakeMembershipsUnitOfWork:
+        def __enter__(self) -> "FakeMembershipsUnitOfWork":
+            self.memberships = FakeMembershipsRepository()
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    authorization = AuthorizationService(
+        membership_unit_of_work_factory=FakeMembershipsUnitOfWork
+    )
+    service = GetDictionaryService(
+        lambda: MemorySourcesUnitOfWork(repository), authorization=authorization
+    )
+
+    entries = service.list_for_actor(member_id)
+
+    assert {entry.dictionary.id for entry in entries} == {owned.id, shared.id}
 
 
 def test_get_first_page_returns_the_page_at_index_zero() -> None:

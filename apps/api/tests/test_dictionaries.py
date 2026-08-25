@@ -169,6 +169,9 @@ class StubGetDictionaryService:
     def list_for_owner(self, owner_id: UUID) -> list[DictionaryListEntry]:
         return self.entries or []
 
+    def list_for_actor(self, actor_id: UUID) -> list[DictionaryListEntry]:
+        return self.entries or []
+
     def get_first_page(
         self, dictionary_id: UUID, actor_id: UUID
     ) -> DictionaryPage | None:

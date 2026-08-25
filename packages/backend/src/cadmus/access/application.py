@@ -59,6 +59,16 @@ class AuthorizationService:
             raise AccessDeniedError(dictionary_id)
         return role
 
+    def list_member_dictionary_ids(self, actor_id: UUID) -> list[UUID]:
+        """Dictionaries ``actor_id`` can see as a non-owner member (BH-170)."""
+        if self._membership_unit_of_work_factory is None:
+            return []
+        with self._membership_unit_of_work_factory() as unit_of_work:
+            memberships = unit_of_work.memberships.list_memberships_for_user(
+                actor_id
+            )
+        return [membership.dictionary_id for membership in memberships]
+
 
 class ManageMembersService:
     """Add, re-role, and remove non-owner project members (BH-170)."""
