@@ -1,13 +1,15 @@
 """Tesseract/ALTO OCR word-suggestion infrastructure.
 
 Worker-only boundary: parses Tesseract's native ALTO XML output into
-``LexemeSuggestion`` values and hands suggestion jobs to Celery. Domain and
-application code never import this module directly (see
+``LexemeSuggestion``/``FragmentSegment`` values and hands suggestion jobs to
+Celery. Domain and application code never import this module directly (see
 ``packages/backend/AGENTS.md``: "Domain code must not import ... OCR
 SDKs").
 """
 
 import subprocess
+from collections.abc import Sequence
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Final
@@ -16,10 +18,12 @@ from xml.etree import ElementTree
 
 from celery import Celery, states
 from kombu.exceptions import OperationalError
+from PIL import Image
 from redis.exceptions import RedisError
 
 from cadmus.lexicography.domain import DictionaryScanSnapshot as _ScanSnapshot
 from cadmus.lexicography.domain import (
+    FragmentSegment,
     LexemeSuggestion,
     OcrSuggestionStatus,
 )
@@ -32,6 +36,13 @@ from cadmus.lexicography.ports import (
 )
 
 _QUEUE_ERRORS: Final = (OperationalError, RedisError, OSError)
+
+Box = tuple[float, float, float, float]
+"""``(x, y, width, height)`` in page-pixel coordinates -- the convention
+already shared by ``Lexeme``/``EntryFragment``."""
+
+_DEFAULT_SEGMENT_PADDING_RATIO: Final = 0.2
+_DEFAULT_SEGMENT_MIN_PADDING: Final = 40.0
 
 
 class OcrExecutionError(RuntimeError):
@@ -117,8 +128,123 @@ def _parse_confidence(raw: str | None) -> float:
     return max(0.0, min(1.0, value))
 
 
+def parse_alto_words(
+    xml_bytes: bytes, *, offset_x: float = 0.0, offset_y: float = 0.0
+) -> list[FragmentSegment]:
+    """Parse Tesseract's ALTO XML into individual word-level ``FragmentSegment``
+    values, in reading order (BH-148 ALTO segmentation, experimental variant 1).
+
+    Unlike ``parse_alto_entries`` (which groups words into one suggestion per
+    ``TextBlock``), every non-empty ``String`` becomes its own segment --
+    the AI provider picks a contiguous range of these to build one field,
+    instead of guessing character offsets into a flat string. ``offset_x``/
+    ``offset_y`` translate ALTO's crop-local ``HPOS``/``VPOS`` back onto the
+    original page's coordinate space, since the XML is produced by running
+    Tesseract on a cropped region (see ``TesseractAltoOcrProvider.segment_region``).
+    """
+    try:
+        root = ElementTree.fromstring(xml_bytes)
+    except ElementTree.ParseError as error:
+        raise OcrExecutionError(f"could not parse ALTO output: {error}") from error
+
+    segments: list[FragmentSegment] = []
+    for line in root.iter():
+        if _local_name(line.tag) != "TextLine":
+            continue
+        for string in line:
+            if _local_name(string.tag) != "String":
+                continue
+            content = string.get("CONTENT", "").strip()
+            if not content:
+                continue
+            try:
+                x = float(string.get("HPOS", ""))
+                y = float(string.get("VPOS", ""))
+                width = float(string.get("WIDTH", ""))
+                height = float(string.get("HEIGHT", ""))
+            except ValueError:
+                continue
+            if width <= 0 or height <= 0:
+                continue
+            segments.append(
+                FragmentSegment(
+                    index=len(segments),
+                    text=content,
+                    x=x + offset_x,
+                    y=y + offset_y,
+                    width=width,
+                    height=height,
+                    confidence=_parse_confidence(string.get("WC")),
+                )
+            )
+    return segments
+
+
+def _union_box(boxes: Sequence[Box]) -> Box:
+    min_x = min(x for x, _y, _w, _h in boxes)
+    min_y = min(y for _x, y, _w, _h in boxes)
+    max_x = max(x + w for x, _y, w, _h in boxes)
+    max_y = max(y + h for _x, y, _w, h in boxes)
+    return (min_x, min_y, max_x - min_x, max_y - min_y)
+
+
+def _padded_and_clamped_box(
+    box: Box,
+    image_width: int,
+    image_height: int,
+    *,
+    padding_ratio: float,
+    min_padding: float,
+) -> Box:
+    x, y, width, height = box
+    padding = max(min_padding, max(width, height) * padding_ratio)
+    left = max(0.0, x - padding)
+    top = max(0.0, y - padding)
+    right = min(float(image_width), x + width + padding)
+    bottom = min(float(image_height), y + height + padding)
+    return (left, top, max(0.0, right - left), max(0.0, bottom - top))
+
+
+def crop_region(
+    image_bytes: bytes,
+    boxes: Sequence[Box],
+    *,
+    padding_ratio: float = _DEFAULT_SEGMENT_PADDING_RATIO,
+    min_padding: float = _DEFAULT_SEGMENT_MIN_PADDING,
+) -> tuple[bytes, float, float]:
+    """Crop a page image to a padded region around one or more boxes.
+
+    The crop exists only as PNG bytes in memory -- callers write it to a
+    ``TemporaryDirectory`` for feeding to Tesseract and never persist it, so
+    the original page image is never mutated or replaced. Padding is
+    generous by design (20% of the region's larger side, at least 40px) so
+    that a slightly-undersized manual box still lets OCR pick up text right
+    at its edges. Returns ``(png_bytes, origin_x, origin_y)`` -- the crop's
+    top-left corner in the original image's coordinate space, needed to
+    translate ALTO word positions back.
+    """
+    if not boxes:
+        raise ValueError("crop_region requires at least one box")
+    with Image.open(BytesIO(image_bytes)) as image:
+        image_width, image_height = image.size
+        left, top, width, height = _padded_and_clamped_box(
+            _union_box(boxes),
+            image_width,
+            image_height,
+            padding_ratio=padding_ratio,
+            min_padding=min_padding,
+        )
+        cropped = image.convert("RGB").crop(
+            (round(left), round(top), round(left + width), round(top + height))
+        )
+        buffer = BytesIO()
+        cropped.save(buffer, format="PNG")
+        return buffer.getvalue(), left, top
+
+
 class TesseractAltoOcrProvider:
-    """Runs the ``tesseract`` CLI in ALTO output mode on one page image."""
+    """Runs the ``tesseract`` CLI in ALTO output mode on one page image (or a
+    padded crop of one, for BH-148 segment-based field extraction)."""
 
     def __init__(self, timeout_seconds: float) -> None:
         self._timeout_seconds = timeout_seconds
@@ -126,6 +252,34 @@ class TesseractAltoOcrProvider:
     def suggest_words(
         self, image_bytes: bytes, language: str
     ) -> list[LexemeSuggestion]:
+        xml_bytes = self._run_alto(image_bytes, language)
+        return parse_alto_entries(xml_bytes)
+
+    def segment_region(
+        self,
+        image_bytes: bytes,
+        boxes: Sequence[Box],
+        language: str,
+        *,
+        padding_ratio: float = _DEFAULT_SEGMENT_PADDING_RATIO,
+        min_padding: float = _DEFAULT_SEGMENT_MIN_PADDING,
+    ) -> list[FragmentSegment]:
+        """Word-level segmentation of one or more boxes' region on a page
+        (BH-148, experimental variant 1).
+
+        Crops ``image_bytes`` to a padded region covering ``boxes`` (see
+        ``crop_region`` -- never persisted, temp-file-only), runs Tesseract
+        on just that crop, and returns each recognized word as a
+        ``FragmentSegment`` already translated back onto the original
+        page's coordinate space.
+        """
+        cropped_bytes, origin_x, origin_y = crop_region(
+            image_bytes, boxes, padding_ratio=padding_ratio, min_padding=min_padding
+        )
+        xml_bytes = self._run_alto(cropped_bytes, language)
+        return parse_alto_words(xml_bytes, offset_x=origin_x, offset_y=origin_y)
+
+    def _run_alto(self, image_bytes: bytes, language: str) -> bytes:
         with TemporaryDirectory(prefix="cadmus-ocr-") as tmp_dir:
             image_path = Path(tmp_dir) / "page.png"
             output_base = Path(tmp_dir) / "output"
@@ -156,12 +310,11 @@ class TesseractAltoOcrProvider:
 
             xml_path = output_base.with_suffix(".xml")
             try:
-                xml_bytes = xml_path.read_bytes()
+                return xml_path.read_bytes()
             except FileNotFoundError as error:
                 raise OcrExecutionError(
                     "tesseract did not produce ALTO output"
                 ) from error
-            return parse_alto_entries(xml_bytes)
 
 
 class CeleryOcrSuggestionQueue:

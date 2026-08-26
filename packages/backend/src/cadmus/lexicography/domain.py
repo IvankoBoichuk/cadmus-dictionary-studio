@@ -655,13 +655,18 @@ class EntryField:
     """One structured field extracted (or manually added) from an entry
     fragment (BH-148), with full ADR-0004 provenance.
 
-    ``source_start``/``source_end`` are the field's source span: character
-    offsets into its ``fragment``'s ``recognized_text``. ``parent_field_id``
-    lets fields nest (e.g. an ``example`` under a ``meaning``) and repeat
-    (several fields sharing the same ``parent_field_id`` and role, ordered
-    by ``position``). ``field_path`` is a human-readable locator into the
-    owning ``ArticleSchema.definition`` tree (e.g.
-    ``"senses[0].examples[1]"``).
+    Two, independently optional kinds of source span: ``source_start``/
+    ``source_end`` are character offsets into the fragment's
+    ``recognized_text`` (set by the manual-add flow, which lets an editor
+    type/select text directly); ``x``/``y``/``width``/``height`` are a real
+    page-pixel bounding box (set by ALTO segment-based extraction --
+    BH-148 experimental variant 1 -- as the union of the OCR segments the
+    field was extracted from). A field may have either, both, or neither.
+    ``parent_field_id`` lets fields nest (e.g. an ``example`` under a
+    ``meaning``) and repeat (several fields sharing the same
+    ``parent_field_id`` and role, ordered by ``position``). ``field_path``
+    is a human-readable locator into the owning ``ArticleSchema.definition``
+    tree (e.g. ``"senses[0].examples[1]"``).
     """
 
     id: UUID
@@ -671,8 +676,6 @@ class EntryField:
     role: EntryFieldRole
     position: int
     source_text: str
-    source_start: int
-    source_end: int
     origin: EntryFieldOrigin
     created_at: datetime
     created_by: UUID
@@ -682,6 +685,12 @@ class EntryField:
     normalized_text: str | None = None
     confidence: float | None = None
     processing_run_id: UUID | None = None
+    source_start: int | None = None
+    source_end: int | None = None
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
 
 
 @dataclass(frozen=True)
@@ -698,18 +707,44 @@ class GeneratedSchema:
 
 
 @dataclass(frozen=True)
+class FragmentSegment:
+    """One OCR-recognized word within a fragment's region (BH-148 ALTO
+    segmentation, experimental), positioned in the same page-pixel
+    coordinate space as ``EntryFragment``/``Lexeme`` boxes.
+
+    ``index`` is this segment's position in the ordered list handed to
+    ``AiSchemaProvider.extract_fields`` -- the AI references a contiguous
+    range of these instead of guessing character offsets into a flat
+    string, which gives each extracted field a real bounding box instead
+    of just a text span.
+    """
+
+    index: int
+    text: str
+    x: float
+    y: float
+    width: float
+    height: float
+    confidence: float
+
+
+@dataclass(frozen=True)
 class ExtractedField:
     """One AI provider's proposed structured field, not yet an ``EntryField``.
 
     Ephemeral by design: never persisted directly -- the application layer
     wraps it into a new ``EntryField`` row (``origin=EntryFieldOrigin.MODEL``).
+
+    ``segment_start``/``segment_end`` are an inclusive index range into the
+    ``FragmentSegment`` list the provider was given -- the field's text and
+    bounding box are derived by the caller from the segments they cover.
     """
 
     field_path: str
     role: EntryFieldRole
     value: str
-    source_start: int
-    source_end: int
+    segment_start: int
+    segment_end: int
     confidence: float
 
 
