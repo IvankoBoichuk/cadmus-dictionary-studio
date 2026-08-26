@@ -95,6 +95,31 @@ export type FinishScanningNotReadyResponse =
 type FinishScanningNotFoundResponse =
   FinishScanningOperation["responses"][404]["content"]["application/json"];
 
+export type SchemaGenerationStatus = components["schemas"]["SchemaGenerationStatus"];
+export type ArticleSchemaResponse = components["schemas"]["ArticleSchemaResponse"];
+
+type EnqueueGenerationOperation =
+  paths["/dictionaries/{dictionary_id}/article-schema/generate"]["post"];
+export type EnqueueGenerationResponse =
+  EnqueueGenerationOperation["responses"][202]["content"]["application/json"];
+type ArticleSchemaNotFoundResponse =
+  EnqueueGenerationOperation["responses"][404]["content"]["application/json"];
+
+type GetGenerationTaskOperation =
+  paths["/dictionaries/{dictionary_id}/article-schema/generate/{task_id}"]["get"];
+export type GenerationTaskResponse =
+  GetGenerationTaskOperation["responses"][200]["content"]["application/json"];
+
+type ListArticleSchemasOperation =
+  paths["/dictionaries/{dictionary_id}/article-schemas"]["get"];
+export type ArticleSchemaListResponse =
+  ListArticleSchemasOperation["responses"][200]["content"]["application/json"];
+
+type ActivateArticleSchemaOperation =
+  paths["/dictionaries/{dictionary_id}/article-schemas/{schema_id}/activate"]["post"];
+export type ActivateArticleSchemaFieldErrorsResponse =
+  ActivateArticleSchemaOperation["responses"][422]["content"]["application/json"];
+
 type GetPageRangesOperation =
   paths["/dictionaries/{dictionary_id}/page-ranges"]["get"];
 export type PageRangesResponse =
@@ -146,6 +171,54 @@ type DeleteLexemeOperation =
   paths["/dictionaries/{dictionary_id}/lexemes/{lexeme_id}"]["delete"];
 type DeleteLexemeNotFoundResponse =
   DeleteLexemeOperation["responses"][404]["content"]["application/json"];
+
+export type EntryStatus = components["schemas"]["EntryStatus"];
+export type EntryFieldRole = components["schemas"]["EntryFieldRole"];
+export type EntryFieldOrigin = components["schemas"]["EntryFieldOrigin"];
+export type EntryResponse = components["schemas"]["EntryResponse"];
+export type EntryFieldResponse = components["schemas"]["EntryFieldResponse"];
+export type EntryFragmentResponse = components["schemas"]["EntryFragmentResponse"];
+export type DuplicateEntryResponse = components["schemas"]["DuplicateEntryResponse"];
+
+type PromoteLexemeOperation =
+  paths["/dictionaries/{dictionary_id}/lexemes/{lexeme_id}/promote"]["post"];
+type PromoteLexemeFieldErrorsResponse =
+  PromoteLexemeOperation["responses"][422]["content"]["application/json"];
+type PromoteLexemeNotFoundResponse =
+  PromoteLexemeOperation["responses"][404]["content"]["application/json"];
+
+type GetEntryOperation = paths["/entries/{entry_id}"]["get"];
+type EntryNotFoundResponse =
+  GetEntryOperation["responses"][404]["content"]["application/json"];
+
+type CompleteEntryOperation = paths["/entries/{entry_id}/complete"]["post"];
+export type CompleteEntryFieldErrorsResponse =
+  CompleteEntryOperation["responses"][422]["content"]["application/json"];
+
+type EnqueueExtractionOperation = paths["/entries/{entry_id}/extract"]["post"];
+export type EnqueueExtractionResponse =
+  EnqueueExtractionOperation["responses"][202]["content"]["application/json"];
+
+type GetExtractionTaskOperation =
+  paths["/entries/{entry_id}/extract/{task_id}"]["get"];
+export type ExtractionTaskResponse =
+  GetExtractionTaskOperation["responses"][200]["content"]["application/json"];
+
+type CreateEntryFieldOperation = paths["/entries/{entry_id}/fields"]["post"];
+export type CreateEntryFieldRequest =
+  CreateEntryFieldOperation["requestBody"]["content"]["application/json"];
+export type EntryFieldErrorsResponse =
+  CreateEntryFieldOperation["responses"][422]["content"]["application/json"];
+
+type UpdateEntryFieldOperation =
+  paths["/entries/{entry_id}/fields/{field_id}"]["patch"];
+export type UpdateEntryFieldRequest =
+  UpdateEntryFieldOperation["requestBody"]["content"]["application/json"];
+
+type DeleteEntryFieldOperation =
+  paths["/entries/{entry_id}/fields/{field_id}"]["delete"];
+type DeleteEntryFieldNotFoundResponse =
+  DeleteEntryFieldOperation["responses"][404]["content"]["application/json"];
 
 export type OcrSuggestionStatus = components["schemas"]["OcrSuggestionStatus"];
 export type LexemeSuggestion = components["schemas"]["LexemeSuggestionResponse"];
@@ -452,6 +525,56 @@ function lexemesPath(dictionaryId: string, pageNumber: number): keyof paths {
 
 function lexemePath(dictionaryId: string, lexemeId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/lexemes/${lexemeId}` as keyof paths;
+}
+
+function promoteLexemePath(dictionaryId: string, lexemeId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/lexemes/${lexemeId}/promote` as keyof paths;
+}
+
+function articleSchemaGeneratePath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/article-schema/generate` as keyof paths;
+}
+
+function articleSchemaGenerationTaskPath(
+  dictionaryId: string,
+  taskId: string,
+): keyof paths {
+  return `/dictionaries/${dictionaryId}/article-schema/generate/${taskId}` as keyof paths;
+}
+
+function articleSchemasPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/article-schemas` as keyof paths;
+}
+
+function activateArticleSchemaPath(
+  dictionaryId: string,
+  schemaId: string,
+): keyof paths {
+  return `/dictionaries/${dictionaryId}/article-schemas/${schemaId}/activate` as keyof paths;
+}
+
+function entryPath(entryId: string): keyof paths {
+  return `/entries/${entryId}` as keyof paths;
+}
+
+function entryCompletePath(entryId: string): keyof paths {
+  return `/entries/${entryId}/complete` as keyof paths;
+}
+
+function entryExtractPath(entryId: string): keyof paths {
+  return `/entries/${entryId}/extract` as keyof paths;
+}
+
+function entryExtractionTaskPath(entryId: string, taskId: string): keyof paths {
+  return `/entries/${entryId}/extract/${taskId}` as keyof paths;
+}
+
+function entryFieldsPath(entryId: string): keyof paths {
+  return `/entries/${entryId}/fields` as keyof paths;
+}
+
+function entryFieldPath(entryId: string, fieldId: string): keyof paths {
+  return `/entries/${entryId}/fields/${fieldId}` as keyof paths;
 }
 
 function ocrSuggestionsPath(dictionaryId: string, pageNumber: number): keyof paths {
@@ -869,6 +992,19 @@ export const API = {
         options,
       );
     },
+
+    promote(
+      dictionaryId: string,
+      lexemeId: string,
+      options?: RequestOptions,
+    ): Promise<EntryResponse> {
+      return postWithoutBody<
+        EntryResponse,
+        | PromoteLexemeFieldErrorsResponse
+        | DuplicateEntryResponse
+        | PromoteLexemeNotFoundResponse
+      >(promoteLexemePath(dictionaryId, lexemeId), options);
+    },
   },
 
   ocrSuggestions: {
@@ -1199,6 +1335,120 @@ export const API = {
       >(settlementsImportCommitPath(dictionaryId), body, options);
     },
   },
+
+  articleSchemas: {
+    generate(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<EnqueueGenerationResponse> {
+      return postWithoutBody<EnqueueGenerationResponse, ArticleSchemaNotFoundResponse>(
+        articleSchemaGeneratePath(dictionaryId),
+        options,
+      );
+    },
+
+    getGenerationTask(
+      dictionaryId: string,
+      taskId: string,
+      options?: RequestOptions,
+    ): Promise<GenerationTaskResponse> {
+      return get<GenerationTaskResponse, ArticleSchemaNotFoundResponse>(
+        articleSchemaGenerationTaskPath(dictionaryId, taskId),
+        options,
+      );
+    },
+
+    list(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<ArticleSchemaListResponse> {
+      return get<ArticleSchemaListResponse, ArticleSchemaNotFoundResponse>(
+        articleSchemasPath(dictionaryId),
+        options,
+      );
+    },
+
+    activate(
+      dictionaryId: string,
+      schemaId: string,
+      options?: RequestOptions,
+    ): Promise<ArticleSchemaResponse> {
+      return postWithoutBody<
+        ArticleSchemaResponse,
+        ActivateArticleSchemaFieldErrorsResponse | ArticleSchemaNotFoundResponse
+      >(activateArticleSchemaPath(dictionaryId, schemaId), options);
+    },
+  },
+
+  entries: {
+    get(entryId: string, options?: RequestOptions): Promise<EntryResponse> {
+      return get<EntryResponse, EntryNotFoundResponse>(entryPath(entryId), options);
+    },
+
+    complete(entryId: string, options?: RequestOptions): Promise<EntryResponse> {
+      return postWithoutBody<
+        EntryResponse,
+        CompleteEntryFieldErrorsResponse | EntryNotFoundResponse
+      >(entryCompletePath(entryId), options);
+    },
+
+    extract(
+      entryId: string,
+      options?: RequestOptions,
+    ): Promise<EnqueueExtractionResponse> {
+      return postWithoutBody<EnqueueExtractionResponse, EntryNotFoundResponse>(
+        entryExtractPath(entryId),
+        options,
+      );
+    },
+
+    getExtractionTask(
+      entryId: string,
+      taskId: string,
+      options?: RequestOptions,
+    ): Promise<ExtractionTaskResponse> {
+      return get<ExtractionTaskResponse, EntryNotFoundResponse>(
+        entryExtractionTaskPath(entryId, taskId),
+        options,
+      );
+    },
+
+    createField(
+      entryId: string,
+      body: CreateEntryFieldRequest,
+      options?: RequestOptions,
+    ): Promise<EntryFieldResponse> {
+      return post<
+        CreateEntryFieldRequest,
+        EntryFieldResponse,
+        EntryFieldErrorsResponse | EntryNotFoundResponse
+      >(entryFieldsPath(entryId), body, options);
+    },
+
+    updateField(
+      entryId: string,
+      fieldId: string,
+      body: UpdateEntryFieldRequest,
+      options?: RequestOptions,
+    ): Promise<EntryFieldResponse> {
+      return patch<
+        UpdateEntryFieldRequest,
+        EntryFieldResponse,
+        EntryFieldErrorsResponse | EntryNotFoundResponse
+      >(entryFieldPath(entryId, fieldId), body, options);
+    },
+
+    deleteField(
+      entryId: string,
+      fieldId: string,
+      options?: RequestOptions,
+    ): Promise<void> {
+      return del<DeleteEntryFieldNotFoundResponse>(
+        entryFieldPath(entryId, fieldId),
+        options,
+      );
+    },
+  },
 } as const;
 
 export function abbreviationsExportUrl(
@@ -1291,6 +1541,18 @@ export function duplicateLexemeFrom(
   }
   const payload = error.payload as DuplicateLexemeResponse | undefined;
   return payload && typeof payload === "object" && "existing_lexeme_id" in payload
+    ? payload
+    : undefined;
+}
+
+export function duplicateEntryFrom(
+  error: unknown,
+): DuplicateEntryResponse | undefined {
+  if (!(error instanceof ApiError) || error.kind !== "http" || error.status !== 409) {
+    return undefined;
+  }
+  const payload = error.payload as DuplicateEntryResponse | undefined;
+  return payload && typeof payload === "object" && "entry_id" in payload
     ? payload
     : undefined;
 }

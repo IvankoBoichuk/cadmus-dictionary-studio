@@ -438,6 +438,7 @@ class Dictionary:
     updated_by: UUID
     title: str | None = None
     description: str | None = None
+    article_description: str | None = None
     dictionary_type: str | None = None
     publisher: str | None = None
     publication_year: int | None = None

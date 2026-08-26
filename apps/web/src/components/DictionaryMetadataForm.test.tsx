@@ -12,6 +12,7 @@ function baseDictionary(
     status: "draft",
     title: null,
     description: null,
+    article_description: null,
     dictionary_type: null,
     publisher: null,
     publication_year: null,
@@ -176,12 +177,37 @@ describe("DictionaryMetadataForm", () => {
       title: "Наявний словник",
       legal_status: "public_domain",
       language_codes: ["uk"],
+      article_description: "Стаття містить значення, приклади та синоніми.",
     });
 
     render(<DictionaryMetadataForm initialDictionary={existing} source={null} />);
 
     expect(screen.getByLabelText("Назва")).toHaveValue("Наявний словник");
     expect(screen.getByLabelText("Українська")).toBeChecked();
+    expect(screen.getByLabelText("Структура словникової статті")).toHaveValue(
+      "Стаття містить значення, приклади та синоніми.",
+    );
+  });
+
+  it("saves article_description alongside the rest of the metadata", async () => {
+    const saved = baseDictionary({
+      article_description: "Значення, приклади, синоніми.",
+    });
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, saved));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DictionaryMetadataForm initialDictionary={baseDictionary()} />);
+    fireEvent.change(screen.getByLabelText("Структура словникової статті"), {
+      target: { value: "Значення, приклади, синоніми." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти чернетку" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string) as {
+      article_description: string | null;
+    };
+    expect(body.article_description).toBe("Значення, приклади, синоніми.");
   });
 
   it("shows the already-uploaded source without offering to re-upload it", () => {

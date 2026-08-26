@@ -1,7 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DictionaryPageViewer } from "./DictionaryPageViewer";
+
+function RouterWrapper({ children }: { children: ReactNode }) {
+  return <MemoryRouter>{children}</MemoryRouter>;
+}
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -56,6 +62,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={3} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
 
     const image = await screen.findByAltText("Сторінка 3 з 12");
@@ -73,6 +80,7 @@ describe("DictionaryPageViewer", () => {
         pageNumber={3}
         onNavigate={onNavigate}
       />,
+      { wrapper: RouterWrapper },
     );
     await screen.findByAltText("Сторінка 3 з 12");
 
@@ -88,6 +96,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={2} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
     await screen.findByAltText("Сторінка 2 з 2");
 
@@ -100,6 +109,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
 
     expect(
@@ -117,6 +127,7 @@ describe("DictionaryPageViewer", () => {
         pageNumber={99}
         onNavigate={onNavigate}
       />,
+      { wrapper: RouterWrapper },
     );
 
     await screen.findByAltText("Сторінка 5 з 5");
@@ -148,6 +159,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
     loadPageImage(await screen.findByAltText("Сторінка 1 з 1"));
 
@@ -167,6 +179,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
     await screen.findByAltText("Сторінка 1 з 1");
 
@@ -210,6 +223,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
     const image = loadPageImage(await screen.findByAltText("Сторінка 1 з 1"));
     const canvas = image.parentElement as HTMLElement;
@@ -286,6 +300,7 @@ describe("DictionaryPageViewer", () => {
 
     render(
       <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
     );
     loadPageImage(await screen.findByAltText("Сторінка 1 з 1"));
 

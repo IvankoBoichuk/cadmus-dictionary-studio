@@ -12,6 +12,7 @@ function baseDictionary(
     status: "draft",
     title: "Словник",
     description: null,
+    article_description: null,
     dictionary_type: null,
     publisher: null,
     publication_year: null,

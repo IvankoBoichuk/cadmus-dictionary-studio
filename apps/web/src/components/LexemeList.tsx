@@ -21,6 +21,8 @@ export function LexemeList({
   onCancelSecondBoxDraft,
   onRemoveSecondBox,
   onMarkComplete,
+  onPromoteToEntry,
+  promotingLexemeId = null,
 }: {
   lexemesState: LexemesForPageState;
   pageNumber: number;
@@ -37,6 +39,8 @@ export function LexemeList({
   onCancelSecondBoxDraft?: () => void;
   onRemoveSecondBox?: (lexemeId: string) => void;
   onMarkComplete?: (lexemeId: string) => void;
+  onPromoteToEntry?: (lexemeId: string) => void;
+  promotingLexemeId?: string | null;
 }) {
   const [editingLexemeId, setEditingLexemeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
@@ -145,7 +149,19 @@ export function LexemeList({
             )}
             <div className="lexeme-list-actions">
               {isComplete ? (
-                <p className="lede">Лексема завершена — редагування заблоковане.</p>
+                <>
+                  <p className="lede">Лексема завершена — редагування заблоковане.</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => onPromoteToEntry?.(lexeme.id)}
+                    disabled={promotingLexemeId === lexeme.id}
+                  >
+                    {promotingLexemeId === lexeme.id
+                      ? "Створюємо статтю…"
+                      : "Створити статтю зі структурою"}
+                  </button>
+                </>
               ) : isEditing ? (
                 <>
                   <button

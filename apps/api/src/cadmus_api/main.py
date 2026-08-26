@@ -14,6 +14,10 @@ from cadmus.identity import (
     RegistrationService,
 )
 from cadmus.infrastructure.access import create_access_unit_of_work_factory
+from cadmus.infrastructure.ai_schema import (
+    CeleryArticleSchemaQueue,
+    CeleryEntryExtractionQueue,
+)
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.email import SmtpEmailSender
 from cadmus.infrastructure.geography import create_geography_unit_of_work_factory
@@ -35,14 +39,22 @@ from cadmus.infrastructure.source_inspection_queue import CeleryInspectionQueue
 from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.lexicography import (
+    ActivateArticleSchemaService,
+    CreateEntryFieldService,
     CreateLexemeService,
+    DeleteEntryFieldService,
     DeleteLexemeService,
     FinishScanningService,
     LexemeQueryService,
+    PromoteLexemeToEntryService,
+    QueueArticleSchemaGenerationService,
     QueueDictionaryScanService,
+    QueueEntryFieldExtractionService,
     ScanProgressService,
     SuggestLexemesService,
+    UpdateEntryFieldService,
     UpdateLexemeService,
+    ValidateEntryService,
 )
 from cadmus.processing import TaskQueue
 from cadmus.sources import (
@@ -65,8 +77,10 @@ from fastapi import FastAPI
 from sqlalchemy import Engine, text
 
 from cadmus_api.routes.abbreviations import create_abbreviations_router
+from cadmus_api.routes.article_schemas import create_article_schemas_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
+from cadmus_api.routes.entries import create_entries_router
 from cadmus_api.routes.finish_scanning import create_finish_scanning_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
@@ -116,6 +130,17 @@ def create_app(
     finish_scanning_service: FinishScanningService | None = None,
     suggest_lexemes_service: SuggestLexemesService | None = None,
     queue_dictionary_scan_service: QueueDictionaryScanService | None = None,
+    queue_article_schema_generation_service: (
+        QueueArticleSchemaGenerationService | None
+    ) = None,
+    activate_article_schema_service: ActivateArticleSchemaService | None = None,
+    promote_lexeme_to_entry_service: PromoteLexemeToEntryService | None = None,
+    queue_entry_field_extraction_service: QueueEntryFieldExtractionService
+    | None = None,
+    create_entry_field_service: CreateEntryFieldService | None = None,
+    update_entry_field_service: UpdateEntryFieldService | None = None,
+    delete_entry_field_service: DeleteEntryFieldService | None = None,
+    validate_entry_service: ValidateEntryService | None = None,
     authorization_service: AuthorizationService | None = None,
     manage_members_service: ManageMembersService | None = None,
     list_members_service: ListMembersService | None = None,
@@ -341,6 +366,71 @@ def create_app(
             queue=CeleryDictionaryScanQueue(create_celery_client(app_settings)),
         )
     )
+    app.state.queue_article_schema_generation_service = (
+        queue_article_schema_generation_service
+        if queue_article_schema_generation_service is not None
+        else QueueArticleSchemaGenerationService(
+            dictionary_pages=app.state.get_dictionary_service,
+            queue=CeleryArticleSchemaQueue(create_celery_client(app_settings)),
+        )
+    )
+    app.state.activate_article_schema_service = (
+        activate_article_schema_service
+        if activate_article_schema_service is not None
+        else ActivateArticleSchemaService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.promote_lexeme_to_entry_service = (
+        promote_lexeme_to_entry_service
+        if promote_lexeme_to_entry_service is not None
+        else PromoteLexemeToEntryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.queue_entry_field_extraction_service = (
+        queue_entry_field_extraction_service
+        if queue_entry_field_extraction_service is not None
+        else QueueEntryFieldExtractionService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            queue=CeleryEntryExtractionQueue(create_celery_client(app_settings)),
+        )
+    )
+    app.state.create_entry_field_service = (
+        create_entry_field_service
+        if create_entry_field_service is not None
+        else CreateEntryFieldService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.update_entry_field_service = (
+        update_entry_field_service
+        if update_entry_field_service is not None
+        else UpdateEntryFieldService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.delete_entry_field_service = (
+        delete_entry_field_service
+        if delete_entry_field_service is not None
+        else DeleteEntryFieldService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.validate_entry_service = (
+        validate_entry_service
+        if validate_entry_service is not None
+        else ValidateEntryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
@@ -470,6 +560,25 @@ def create_app(
             app.state.authentication_service,
             app.state.abbreviation_crud_service,
             app.state.abbreviation_import_service,
+        )
+    )
+    app.include_router(
+        create_article_schemas_router(
+            app.state.authentication_service,
+            app.state.queue_article_schema_generation_service,
+            app.state.activate_article_schema_service,
+        )
+    )
+    app.include_router(
+        create_entries_router(
+            app.state.authentication_service,
+            app.state.promote_lexeme_to_entry_service,
+            app.state.queue_entry_field_extraction_service,
+            app.state.create_entry_field_service,
+            app.state.update_entry_field_service,
+            app.state.delete_entry_field_service,
+            app.state.validate_entry_service,
+            app.state.get_dictionary_service,
         )
     )
     geography_unit_of_work_factory = create_geography_unit_of_work_factory(engine)

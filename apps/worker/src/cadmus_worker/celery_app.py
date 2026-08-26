@@ -24,6 +24,8 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "cadmus_worker.tasks",
             "cadmus_worker.ocr_tasks",
             "cadmus_worker.bulk_scan_tasks",
+            "cadmus_worker.article_schema_tasks",
+            "cadmus_worker.entry_extraction_tasks",
         ],
     )
     app.conf.update(

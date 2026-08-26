@@ -7,9 +7,25 @@ from uuid import UUID, uuid4
 
 from cadmus.access import Permission
 from cadmus.lexicography.domain import (
+    ArticleSchema,
+    ArticleSchemaAccessError,
+    ArticleSchemaGenerationSnapshot,
+    ArticleSchemaValidationError,
+    DictionaryEntry,
     DictionaryNotReadyToScanError,
     DictionaryScanSnapshot,
+    DuplicateEntryError,
     DuplicateLexemeError,
+    EntryAccessError,
+    EntryExtractionSnapshot,
+    EntryField,
+    EntryFieldAccessError,
+    EntryFieldOrigin,
+    EntryFieldRole,
+    EntryFieldValidationError,
+    EntryFragment,
+    EntryStatus,
+    EntryValidationError,
     Lexeme,
     LexemeAccessError,
     LexemeEvent,
@@ -22,14 +38,18 @@ from cadmus.lexicography.domain import (
     LexemeValidationError,
     OcrSuggestionStatus,
     OcrSuggestionTaskSnapshot,
+    SchemaGenerationStatus,
     changed_lexeme_fields,
     find_overlapping_lexeme,
     resolve_ocr_language,
+    validate_entry_against_schema,
     validate_lexeme_fields,
     validate_second_box_fields,
 )
 from cadmus.lexicography.ports import (
+    ArticleSchemaQueue,
     DictionaryScanQueue,
+    EntryExtractionQueue,
     LexicographyUnitOfWorkFactory,
     OcrSuggestionQueue,
 )
@@ -39,6 +59,7 @@ from cadmus.sources import (
     DictionaryPage,
     DictionaryStatus,
     MarkDictionaryScannedService,
+    SourcesUnitOfWorkFactory,
 )
 from cadmus.sources.application import GetDictionaryService
 
@@ -576,3 +597,510 @@ class QueueDictionaryScanService:
         except DictionaryAccessError as error:
             raise LexemeAccessError(dictionary_id) from error
         return self._queue.get_scan_task(task_id)
+
+
+class QueueArticleSchemaGenerationService:
+    """Enqueue and read back AI article-schema generation for one dictionary.
+
+    The worker task behind this persists the resulting ``ArticleSchema``
+    version itself (``READY``/``FAILED``) -- this port only reports
+    progress, mirroring ``QueueDictionaryScanService``.
+    """
+
+    def __init__(
+        self,
+        dictionary_pages: GetDictionaryService,
+        queue: ArticleSchemaQueue,
+    ) -> None:
+        self._dictionary_pages = dictionary_pages
+        self._queue = queue
+
+    def enqueue(self, dictionary_id: UUID, actor_id: UUID) -> str:
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+        return self._queue.enqueue_generation(dictionary_id, actor_id)
+
+    def get_task(
+        self, dictionary_id: UUID, actor_id: UUID, task_id: str
+    ) -> ArticleSchemaGenerationSnapshot:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+        return self._queue.get_generation_task(task_id)
+
+
+class ActivateArticleSchemaService:
+    """Confirm one ``READY`` article-schema version as the dictionary's active one.
+
+    AI-generated schemas are a proposal (AGENTS.md) until an editor
+    explicitly activates a version; at most one version per dictionary is
+    ever active at a time.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._clock = clock
+
+    def list_versions(self, dictionary_id: UUID, actor_id: UUID) -> list[ArticleSchema]:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+        with self._unit_of_work_factory() as unit_of_work:
+            return unit_of_work.lexicography.list_article_schemas(dictionary_id)
+
+    def activate(
+        self, dictionary_id: UUID, schema_id: UUID, actor_id: UUID
+    ) -> ArticleSchema:
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            schema = unit_of_work.lexicography.get_article_schema(schema_id)
+            if schema is None or schema.dictionary_id != dictionary_id:
+                raise ArticleSchemaAccessError(schema_id)
+            if schema.status != SchemaGenerationStatus.READY:
+                raise ArticleSchemaValidationError(
+                    {"status": "Тільки готову схему можна активувати."}
+                )
+
+            active = unit_of_work.lexicography.get_active_article_schema(dictionary_id)
+            if active is not None and active.id != schema.id:
+                active.activated_at = None
+                active.activated_by = None
+                unit_of_work.lexicography.update_article_schema(active)
+
+            schema.activated_at = now
+            schema.activated_by = actor_id
+            unit_of_work.lexicography.update_article_schema(schema)
+            unit_of_work.commit()
+        return schema
+
+
+class PromoteLexemeToEntryService:
+    """Promote a ``COMPLETE`` lexeme into a ``DictionaryEntry`` (BH-148).
+
+    Creates one ``EntryFragment`` copying the lexeme's page, box, and text --
+    a lexeme may be promoted at most once (``DuplicateEntryError``).
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._clock = clock
+
+    def create(
+        self, dictionary_id: UUID, lexeme_id: UUID, actor_id: UUID
+    ) -> DictionaryEntry:
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            lexeme = unit_of_work.lexicography.get_lexeme(dictionary_id, lexeme_id)
+            if lexeme is None:
+                raise LexemeNotFoundError(dictionary_id, lexeme_id)
+            if lexeme.status != LexemeStatus.COMPLETE:
+                raise EntryValidationError(
+                    {
+                        "lexeme": (
+                            "Лексему потрібно завершити перед перетворенням на статтю."
+                        )
+                    }
+                )
+
+            existing = unit_of_work.lexicography.get_entry_by_lexeme(lexeme_id)
+            if existing is not None:
+                raise DuplicateEntryError(existing.id, lexeme_id)
+
+            entry = DictionaryEntry(
+                id=uuid4(),
+                dictionary_id=dictionary_id,
+                lexeme_id=lexeme_id,
+                headword=lexeme.source_text,
+                status=EntryStatus.DRAFT,
+                created_at=now,
+                updated_at=now,
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+            fragment = EntryFragment(
+                id=uuid4(),
+                entry_id=entry.id,
+                page_id=lexeme.page_id,
+                x=lexeme.x,
+                y=lexeme.y,
+                width=lexeme.width,
+                height=lexeme.height,
+                reading_order=0,
+                recognized_text=lexeme.source_text,
+                x2=lexeme.x2,
+                y2=lexeme.y2,
+                width2=lexeme.width2,
+                height2=lexeme.height2,
+            )
+            unit_of_work.lexicography.add_entry(entry)
+            unit_of_work.lexicography.add_fragment(fragment)
+            unit_of_work.commit()
+        return entry
+
+
+class QueueEntryFieldExtractionService:
+    """Enqueue and read back AI field extraction for one entry.
+
+    The worker task behind this persists each extracted field itself
+    (``origin=EntryFieldOrigin.MODEL``) and runs the rule-based
+    abbreviation/geography pass -- this port only reports progress,
+    mirroring ``QueueArticleSchemaGenerationService``.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        queue: EntryExtractionQueue,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._queue = queue
+
+    def _authorized_entry(
+        self,
+        entry_id: UUID,
+        actor_id: UUID,
+        *,
+        required_permission: Permission = Permission.VIEW,
+    ) -> DictionaryEntry:
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+        if entry is None:
+            raise EntryAccessError(entry_id)
+        try:
+            self._dictionary_pages.get(
+                entry.dictionary_id,
+                actor_id,
+                required_permission=required_permission,
+            )
+        except DictionaryAccessError as error:
+            raise EntryAccessError(entry_id) from error
+        return entry
+
+    def get(
+        self, entry_id: UUID, actor_id: UUID
+    ) -> tuple[DictionaryEntry, list[EntryFragment], list[EntryField]]:
+        entry = self._authorized_entry(entry_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            fragments = unit_of_work.lexicography.list_fragments_for_entry(entry_id)
+            fields = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+        return entry, fragments, fields
+
+    def enqueue(self, entry_id: UUID, actor_id: UUID) -> str:
+        entry = self._authorized_entry(
+            entry_id, actor_id, required_permission=Permission.EDIT
+        )
+        return self._queue.enqueue_extraction(entry.id, actor_id)
+
+    def get_task(
+        self, entry_id: UUID, actor_id: UUID, task_id: str
+    ) -> EntryExtractionSnapshot:
+        self._authorized_entry(entry_id, actor_id)
+        return self._queue.get_extraction_task(task_id)
+
+
+class RuleBasedAnnotationService:
+    """Tag abbreviation and geographic-label spans within an entry's fields.
+
+    Deterministic, no AI call: matches each field's ``source_text`` against
+    the dictionary's own BH-29/BH-30 abbreviation and settlement reference
+    data, creating child ``EntryField`` rows (``origin=EntryFieldOrigin.RULE``)
+    for every match found -- run as a step after AI extraction, or on its
+    own to re-tag an entry after the reference data changes.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        sources_unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._sources_unit_of_work_factory = sources_unit_of_work_factory
+        self._clock = clock
+
+    def tag_abbreviations_and_geography(
+        self, dictionary_id: UUID, entry_id: UUID, actor_id: UUID
+    ) -> list[EntryField]:
+        with self._sources_unit_of_work_factory() as sources_unit_of_work:
+            abbreviations = sources_unit_of_work.sources.list_abbreviations(
+                dictionary_id
+            )
+            settlements = sources_unit_of_work.sources.list_settlement_mappings(
+                dictionary_id
+            )
+
+        needles: list[tuple[str, EntryFieldRole]] = [
+            (item.abbreviation, EntryFieldRole.ABBREVIATION)
+            for item in abbreviations
+            if item.abbreviation
+        ] + [
+            (item.source_label, EntryFieldRole.GEOGRAPHIC_LABEL)
+            for item in settlements
+            if item.source_label
+        ]
+        if not needles:
+            return []
+
+        now = self._clock()
+        created: list[EntryField] = []
+        with self._unit_of_work_factory() as unit_of_work:
+            fields = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+            for source_field in fields:
+                if source_field.origin == EntryFieldOrigin.RULE:
+                    continue  # don't re-tag matches found by this same pass
+                haystack = source_field.source_text.lower()
+                for needle, role in needles:
+                    start = haystack.find(needle.lower())
+                    if start < 0:
+                        continue
+                    end = start + len(needle)
+                    tag = EntryField(
+                        id=uuid4(),
+                        entry_id=entry_id,
+                        fragment_id=source_field.fragment_id,
+                        parent_field_id=source_field.id,
+                        field_path=f"{source_field.field_path}.{role.value}",
+                        role=role,
+                        position=len(created),
+                        source_text=source_field.source_text[start:end],
+                        source_start=start,
+                        source_end=end,
+                        origin=EntryFieldOrigin.RULE,
+                        created_at=now,
+                        created_by=actor_id,
+                        updated_at=now,
+                        updated_by=actor_id,
+                    )
+                    unit_of_work.lexicography.add_field(tag)
+                    created.append(tag)
+            if created:
+                unit_of_work.commit()
+        return created
+
+
+class ValidateEntryService:
+    """Check an entry against its ``ArticleSchema`` and gate ``COMPLETE`` (BH-148)."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._clock = clock
+
+    def validate(self, entry_id: UUID) -> dict[str, str]:
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            if entry.schema_id is None:
+                return {"schema": "Для статті ще не визначено схему."}
+            schema = unit_of_work.lexicography.get_article_schema(entry.schema_id)
+            if schema is None:
+                return {"schema": "Схему статті не знайдено."}
+            fields = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+        return validate_entry_against_schema(entry, fields, schema)
+
+    def complete(
+        self, dictionary_id: UUID, entry_id: UUID, actor_id: UUID
+    ) -> DictionaryEntry:
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        errors = self.validate(entry_id)
+        if errors:
+            raise EntryValidationError(errors)
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            entry.status = EntryStatus.COMPLETE
+            entry.updated_at = now
+            entry.updated_by = actor_id
+            unit_of_work.lexicography.update_entry(entry)
+            unit_of_work.commit()
+        return entry
+
+
+class _EntryFieldWriteService:
+    """Shared authorization for the manual ``EntryField`` CRUD services."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+
+    def _authorize(self, entry_id: UUID, actor_id: UUID) -> DictionaryEntry:
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+        if entry is None:
+            raise EntryAccessError(entry_id)
+        try:
+            self._dictionary_pages.get(
+                entry.dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise EntryAccessError(entry_id) from error
+        return entry
+
+
+class CreateEntryFieldService(_EntryFieldWriteService):
+    """Manually add a field an automatic pass missed (BH-148)."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        super().__init__(unit_of_work_factory, dictionary_pages)
+        self._clock = clock
+
+    def create(
+        self,
+        entry_id: UUID,
+        actor_id: UUID,
+        *,
+        fragment_id: UUID,
+        field_path: str,
+        role: EntryFieldRole,
+        source_text: str,
+        source_start: int,
+        source_end: int,
+        parent_field_id: UUID | None = None,
+        normalized_text: str | None = None,
+    ) -> EntryField:
+        self._authorize(entry_id, actor_id)
+        if not source_text.strip():
+            raise EntryFieldValidationError({"source_text": "Вкажіть текст поля."})
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            existing = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+            field = EntryField(
+                id=uuid4(),
+                entry_id=entry_id,
+                fragment_id=fragment_id,
+                parent_field_id=parent_field_id,
+                field_path=field_path,
+                role=role,
+                position=len(existing),
+                source_text=source_text,
+                source_start=source_start,
+                source_end=source_end,
+                normalized_text=normalized_text,
+                origin=EntryFieldOrigin.MANUAL,
+                created_at=now,
+                created_by=actor_id,
+                updated_at=now,
+                updated_by=actor_id,
+            )
+            unit_of_work.lexicography.add_field(field)
+            unit_of_work.commit()
+        return field
+
+
+class UpdateEntryFieldService(_EntryFieldWriteService):
+    """Edit a field's value; any manual edit flips its origin to ``MANUAL``."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        super().__init__(unit_of_work_factory, dictionary_pages)
+        self._clock = clock
+
+    def update(
+        self,
+        entry_id: UUID,
+        field_id: UUID,
+        actor_id: UUID,
+        *,
+        role: EntryFieldRole | None = None,
+        source_text: str | None = None,
+        normalized_text: str | None = None,
+    ) -> EntryField:
+        self._authorize(entry_id, actor_id)
+        if source_text is not None and not source_text.strip():
+            raise EntryFieldValidationError({"source_text": "Вкажіть текст поля."})
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            fields = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+            field = next((f for f in fields if f.id == field_id), None)
+            if field is None:
+                raise EntryFieldAccessError(field_id)
+
+            if source_text is not None:
+                field.source_text = source_text
+            if role is not None:
+                field.role = role
+            if normalized_text is not None:
+                field.normalized_text = normalized_text
+            field.origin = EntryFieldOrigin.MANUAL
+            field.updated_at = now
+            field.updated_by = actor_id
+            unit_of_work.lexicography.update_field(field)
+            unit_of_work.commit()
+        return field
+
+
+class DeleteEntryFieldService(_EntryFieldWriteService):
+    """Remove a manually-added or mistakenly-extracted field (BH-148)."""
+
+    def delete(self, entry_id: UUID, field_id: UUID, actor_id: UUID) -> None:
+        self._authorize(entry_id, actor_id)
+        with self._unit_of_work_factory() as unit_of_work:
+            fields = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+            if not any(f.id == field_id for f in fields):
+                raise EntryFieldAccessError(field_id)
+            unit_of_work.lexicography.delete_field(field_id)
+            unit_of_work.commit()

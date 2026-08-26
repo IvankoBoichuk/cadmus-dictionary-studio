@@ -139,6 +139,9 @@ services:
       CADMUS_REDIS_PORT: 6379
       CADMUS_REDIS_BROKER_DATABASE: 2
       CADMUS_REDIS_RESULT_DATABASE: 3
+      CADMUS_ANTHROPIC_API_KEY: ${CADMUS_ANTHROPIC_API_KEY:-}
+      CADMUS_AI_SCHEMA_MODEL: ${CADMUS_AI_SCHEMA_MODEL:-claude-opus-5}
+      CADMUS_AI_SCHEMA_TIMEOUT_SECONDS: ${CADMUS_AI_SCHEMA_TIMEOUT_SECONDS:-60.0}
       <<: [*database-environment, *object-storage-environment, *notification-environment]
     depends_on:
       migrate-dev:

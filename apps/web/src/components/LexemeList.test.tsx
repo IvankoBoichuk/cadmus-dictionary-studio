@@ -45,6 +45,8 @@ function renderList(
     onCancelSecondBoxDraft: () => void;
     onRemoveSecondBox: (lexemeId: string) => void;
     onMarkComplete: (lexemeId: string) => void;
+    onPromoteToEntry: (lexemeId: string) => void;
+    promotingLexemeId: string | null;
   }> = {},
 ) {
   return render(
@@ -64,6 +66,8 @@ function renderList(
       onCancelSecondBoxDraft={overrides.onCancelSecondBoxDraft ?? vi.fn()}
       onRemoveSecondBox={overrides.onRemoveSecondBox ?? vi.fn()}
       onMarkComplete={overrides.onMarkComplete ?? vi.fn()}
+      onPromoteToEntry={overrides.onPromoteToEntry}
+      promotingLexemeId={overrides.promotingLexemeId}
     />,
   );
 }
@@ -306,5 +310,36 @@ describe("LexemeList", () => {
     expect(
       screen.queryByRole("button", { name: "Позначити завершеною" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers to create a structured entry once a lexeme is complete (BH-148)", () => {
+    const onPromoteToEntry = vi.fn();
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", status: "complete" })],
+      },
+      onPromoteToEntry,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Створити статтю зі структурою" }),
+    );
+
+    expect(onPromoteToEntry).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("disables the promote button while promotion is in progress", () => {
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", status: "complete" })],
+      },
+      promotingLexemeId: "lex-7",
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Створюємо статтю…" }),
+    ).toBeDisabled();
   });
 });

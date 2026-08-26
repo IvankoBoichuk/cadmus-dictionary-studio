@@ -15,6 +15,7 @@ export type ContributorFormValue = { name: string; role: ContributorRole };
 export type MetadataFormValues = {
   title: string;
   description: string;
+  article_description: string;
   dictionary_type: string;
   publisher: string;
   publication_year: string;
@@ -35,6 +36,7 @@ function initialValuesFrom(dictionary: DictionaryResponse): MetadataFormValues {
   return {
     title: dictionary.title ?? "",
     description: dictionary.description ?? "",
+    article_description: dictionary.article_description ?? "",
     dictionary_type: dictionary.dictionary_type ?? "",
     publisher: dictionary.publisher ?? "",
     publication_year:
@@ -107,6 +109,7 @@ export function useDictionaryMetadataForm(
         const saved = await API.dictionaries.saveMetadata(dictionary.id, {
           title: values.title.trim() || null,
           description: values.description.trim() || null,
+          article_description: values.article_description.trim() || null,
           dictionary_type: values.dictionary_type.trim() || null,
           publisher: values.publisher.trim() || null,
           publication_year: values.publication_year.trim()

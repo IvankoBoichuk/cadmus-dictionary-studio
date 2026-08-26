@@ -199,6 +199,7 @@ def test_metadata_can_be_saved_and_edited_without_reuploading_the_source() -> No
             MetadataInput(
                 title="Словник української мови",
                 description=None,
+                article_description=None,
                 dictionary_type=None,
                 publisher=None,
                 publication_year=1993,
@@ -228,6 +229,7 @@ def test_metadata_can_be_saved_and_edited_without_reuploading_the_source() -> No
             MetadataInput(
                 title="Словник української мови, друге видання",
                 description="Оновлений опис.",
+                article_description=None,
                 dictionary_type=None,
                 publisher=None,
                 publication_year=1993,

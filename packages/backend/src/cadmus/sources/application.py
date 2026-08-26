@@ -325,6 +325,7 @@ class MetadataInput:
 
     title: str | None
     description: str | None
+    article_description: str | None
     dictionary_type: str | None
     publisher: str | None
     publication_year: int | None
@@ -350,6 +351,7 @@ class MetadataSaveOutcome:
 _METADATA_FIELDS = (
     "title",
     "description",
+    "article_description",
     "dictionary_type",
     "publisher",
     "publication_year",
@@ -402,6 +404,7 @@ class SaveDictionaryMetadataService:
 
             dictionary.title = data.title
             dictionary.description = data.description
+            dictionary.article_description = data.article_description
             dictionary.dictionary_type = data.dictionary_type
             dictionary.publisher = data.publisher
             dictionary.publication_year = data.publication_year

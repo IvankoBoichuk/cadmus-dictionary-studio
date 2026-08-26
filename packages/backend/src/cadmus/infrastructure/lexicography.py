@@ -9,8 +9,11 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Integer,
     String,
     Table,
+    Text,
+    UniqueConstraint,
     Uuid,
     delete,
     select,
@@ -20,7 +23,15 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, registry
 
 from cadmus.infrastructure.database import metadata
-from cadmus.lexicography.domain import Lexeme, LexemeEvent, LexemeStatus
+from cadmus.lexicography.domain import (
+    ArticleSchema,
+    DictionaryEntry,
+    EntryField,
+    EntryFragment,
+    Lexeme,
+    LexemeEvent,
+    LexemeStatus,
+)
 from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory
 
 lexicography_registry = registry(metadata=metadata)
@@ -115,8 +126,188 @@ lexeme_events = Table(
     CheckConstraint("event_type IN ('updated', 'deleted')", name="lexeme_event_type"),
 )
 
+article_schemas = Table(
+    "article_schemas",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "dictionary_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("version", Integer, nullable=False),
+    Column("status", String(16), nullable=False),
+    Column("source_description", Text, nullable=False),
+    Column("definition", JSONB, nullable=False),
+    Column("raw_provider_response", JSONB, nullable=True),
+    Column("provider_name", String(255), nullable=True),
+    Column("error_message", Text, nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "created_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("activated_at", DateTime(timezone=True), nullable=True),
+    Column(
+        "activated_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=True,
+    ),
+    CheckConstraint(
+        "status IN ('pending', 'running', 'ready', 'failed')",
+        name="article_schema_status",
+    ),
+    UniqueConstraint(
+        "dictionary_id", "version", name="uq_article_schemas_dictionary_version"
+    ),
+)
+
+dictionary_entries = Table(
+    "dictionary_entries",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "dictionary_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionaries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column(
+        "lexeme_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.lexemes.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    ),
+    Column("headword", String(500), nullable=False),
+    Column("status", String(20), nullable=False),
+    Column(
+        "schema_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.article_schemas.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "created_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "updated_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    CheckConstraint(
+        "status IN ('draft', 'ready_to_review', 'complete')",
+        name="dictionary_entry_status",
+    ),
+)
+
+entry_fragments = Table(
+    "entry_fragments",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "entry_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionary_entries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column(
+        "page_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionary_pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("x", Float, nullable=False),
+    Column("y", Float, nullable=False),
+    Column("width", Float, nullable=False),
+    Column("height", Float, nullable=False),
+    Column("x2", Float, nullable=True),
+    Column("y2", Float, nullable=True),
+    Column("width2", Float, nullable=True),
+    Column("height2", Float, nullable=True),
+    Column("reading_order", Integer, nullable=False),
+    Column("recognized_text", Text, nullable=False),
+    CheckConstraint("width > 0 AND height > 0", name="entry_fragment_positive_size"),
+)
+
+entry_fields = Table(
+    "entry_fields",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "entry_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionary_entries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column(
+        "fragment_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.entry_fragments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column(
+        "parent_field_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.entry_fields.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    ),
+    Column("field_path", String(500), nullable=False),
+    Column("role", String(32), nullable=False),
+    Column("position", Integer, nullable=False),
+    Column("source_text", Text, nullable=False),
+    Column("source_start", Integer, nullable=False),
+    Column("source_end", Integer, nullable=False),
+    Column("normalized_text", Text, nullable=True),
+    Column("confidence", Float, nullable=True),
+    Column("origin", String(16), nullable=False),
+    Column("processing_run_id", Uuid(as_uuid=True), nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "created_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Column(
+        "updated_by",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    CheckConstraint(
+        "role IN ('headword', 'part_of_speech', 'meaning', 'example', 'synonym', "
+        "'abbreviation', 'geographic_label', 'other')",
+        name="entry_field_role",
+    ),
+    CheckConstraint("origin IN ('model', 'rule', 'manual')", name="entry_field_origin"),
+    CheckConstraint("source_end >= source_start", name="entry_field_positive_span"),
+)
+
 lexicography_registry.map_imperatively(Lexeme, lexemes)
 lexicography_registry.map_imperatively(LexemeEvent, lexeme_events)
+lexicography_registry.map_imperatively(ArticleSchema, article_schemas)
+lexicography_registry.map_imperatively(DictionaryEntry, dictionary_entries)
+lexicography_registry.map_imperatively(EntryFragment, entry_fragments)
+lexicography_registry.map_imperatively(EntryField, entry_fields)
 
 
 class SqlAlchemyLexicographyRepository:
@@ -175,6 +366,79 @@ class SqlAlchemyLexicographyRepository:
             )
             is not None
         )
+
+    def add_article_schema(self, schema: ArticleSchema) -> None:
+        self._session.add(schema)
+
+    def get_article_schema(self, schema_id: UUID) -> ArticleSchema | None:
+        return self._session.get(ArticleSchema, schema_id)
+
+    def get_active_article_schema(self, dictionary_id: UUID) -> ArticleSchema | None:
+        return self._session.scalar(
+            select(ArticleSchema)
+            .where(
+                article_schemas.c.dictionary_id == dictionary_id,
+                article_schemas.c.activated_at.is_not(None),
+            )
+            .order_by(article_schemas.c.activated_at.desc())
+            .limit(1)
+        )
+
+    def list_article_schemas(self, dictionary_id: UUID) -> list[ArticleSchema]:
+        return list(
+            self._session.scalars(
+                select(ArticleSchema)
+                .where(article_schemas.c.dictionary_id == dictionary_id)
+                .order_by(article_schemas.c.version)
+            )
+        )
+
+    def update_article_schema(self, schema: ArticleSchema) -> None:
+        self._session.add(schema)
+
+    def add_entry(self, entry: DictionaryEntry) -> None:
+        self._session.add(entry)
+
+    def get_entry(self, entry_id: UUID) -> DictionaryEntry | None:
+        return self._session.get(DictionaryEntry, entry_id)
+
+    def get_entry_by_lexeme(self, lexeme_id: UUID) -> DictionaryEntry | None:
+        return self._session.scalar(
+            select(DictionaryEntry).where(dictionary_entries.c.lexeme_id == lexeme_id)
+        )
+
+    def update_entry(self, entry: DictionaryEntry) -> None:
+        self._session.add(entry)
+
+    def add_fragment(self, fragment: EntryFragment) -> None:
+        self._session.add(fragment)
+
+    def list_fragments_for_entry(self, entry_id: UUID) -> list[EntryFragment]:
+        return list(
+            self._session.scalars(
+                select(EntryFragment)
+                .where(entry_fragments.c.entry_id == entry_id)
+                .order_by(entry_fragments.c.reading_order)
+            )
+        )
+
+    def add_field(self, field: EntryField) -> None:
+        self._session.add(field)
+
+    def list_fields_for_entry(self, entry_id: UUID) -> list[EntryField]:
+        return list(
+            self._session.scalars(
+                select(EntryField)
+                .where(entry_fields.c.entry_id == entry_id)
+                .order_by(entry_fields.c.position)
+            )
+        )
+
+    def update_field(self, field: EntryField) -> None:
+        self._session.add(field)
+
+    def delete_field(self, field_id: UUID) -> None:
+        self._session.execute(delete(entry_fields).where(entry_fields.c.id == field_id))
 
 
 class SqlAlchemyLexicographyUnitOfWork:
