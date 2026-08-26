@@ -252,6 +252,7 @@ def _minimal_input(**overrides: object) -> MetadataInput:
         "dictionary_type": None,
         "publisher": None,
         "publication_year": None,
+        "article_description": None,
         "edition": None,
         "isbn": None,
         "digital_source": None,

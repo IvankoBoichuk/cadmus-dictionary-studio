@@ -13,11 +13,16 @@ from tempfile import SpooledTemporaryFile
 from typing import BinaryIO, cast
 from uuid import UUID, uuid4
 
-import cadmus.infrastructure.identity  # noqa: F401 -- registers `users` for FKs
 from cadmus.config import Settings
+from cadmus.identity import IdentityUnitOfWorkFactory
 from cadmus.infrastructure.database import create_database_engine
+from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.lexicography import (
     create_lexicography_unit_of_work_factory,
+)
+from cadmus.infrastructure.notifications import (
+    GmailNotificationChannel,
+    TelegramNotificationChannel,
 )
 from cadmus.infrastructure.object_storage import create_object_storage
 from cadmus.infrastructure.ocr import OcrExecutionError, TesseractAltoOcrProvider
@@ -32,6 +37,11 @@ from cadmus.lexicography import (
     validate_lexeme_fields,
 )
 from cadmus.lexicography.ports import LexicographyUnitOfWorkFactory
+from cadmus.notifications import (
+    Notification,
+    NotificationRecipient,
+    NotificationService,
+)
 from cadmus.sources import (
     DictionaryAccessError,
     DictionaryPage,
@@ -59,8 +69,10 @@ def _log_task_event(event: str, task_id: str, **fields: object) -> None:
 class _ScanDependencies:
     dictionary_pages: GetDictionaryService
     lexicography_unit_of_work_factory: LexicographyUnitOfWorkFactory
+    identity_unit_of_work_factory: IdentityUnitOfWorkFactory
     object_storage: ObjectStorage
     ocr_provider: TesseractAltoOcrProvider
+    notification_service: NotificationService
 
 
 @lru_cache(maxsize=1)
@@ -75,7 +87,14 @@ def _scan_dependencies() -> _ScanDependencies:
         lexicography_unit_of_work_factory=create_lexicography_unit_of_work_factory(
             engine
         ),
+        identity_unit_of_work_factory=create_identity_unit_of_work_factory(engine),
         object_storage=create_object_storage(settings),
+        notification_service=NotificationService(
+            channels=[
+                GmailNotificationChannel(settings),
+                TelegramNotificationChannel(settings),
+            ]
+        ),
         ocr_provider=TesseractAltoOcrProvider(
             timeout_seconds=settings.ocr_task_timeout_seconds
         ),
@@ -239,9 +258,65 @@ def scan_dictionary_pages(
         processed_pages=processed_pages,
         created_lexemes=created_lexemes,
     )
+    _notify_scan_complete(
+        deps,
+        actor_uuid,
+        dictionary.title or "Без назви",
+        processed_pages,
+        created_lexemes,
+        task_id,
+    )
     return {
         "status": "succeeded",
         "processed_pages": processed_pages,
         "total_pages": total_pages,
         "created_lexemes": created_lexemes,
     }
+
+
+def _build_scan_notification(
+    dictionary_title: str, processed_pages: int, created_lexemes: int
+) -> Notification:
+    return Notification(
+        subject="Оцифрування словника завершено",
+        body=(
+            f"Оцифрування словника «{dictionary_title}» завершено.\n\n"
+            f"Оброблено сторінок: {processed_pages}\n"
+            f"Створено чорнових лексем: {created_lexemes}"
+        ),
+    )
+
+
+def _notify_scan_complete(
+    deps: _ScanDependencies,
+    owner_id: UUID,
+    dictionary_title: str,
+    processed_pages: int,
+    created_lexemes: int,
+    task_id: str,
+) -> None:
+    """Best-effort: a notification problem must never fail a finished scan."""
+    try:
+        with deps.identity_unit_of_work_factory() as unit_of_work:
+            owner = unit_of_work.users.get_user(owner_id)
+        if owner is None:
+            return
+        recipient = NotificationRecipient(
+            email=owner.email, telegram_chat_id=owner.telegram_chat_id
+        )
+        notification = _build_scan_notification(
+            dictionary_title, processed_pages, created_lexemes
+        )
+        failed_channels = deps.notification_service.notify(recipient, notification)
+        if failed_channels:
+            _log_task_event(
+                "dictionary_scan_notification_failed",
+                task_id,
+                channels=failed_channels,
+            )
+    except Exception:  # notifying is a side-channel, never fatal to a finished scan
+        logger.exception(
+            "dictionary_scan_notification_error task_id=%s owner_id=%s",
+            task_id,
+            owner_id,
+        )

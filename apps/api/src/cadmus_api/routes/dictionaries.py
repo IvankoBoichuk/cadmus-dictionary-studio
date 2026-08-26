@@ -93,6 +93,7 @@ class SaveMetadataRequest(BaseModel):
 
     title: str | None = Field(default=None, max_length=512)
     description: str | None = Field(default=None, max_length=10_000)
+    article_description: str | None = Field(default=None, max_length=20_000)
     dictionary_type: str | None = Field(default=None, max_length=255)
     publisher: str | None = Field(default=None, max_length=255)
     publication_year: int | None = None
@@ -152,6 +153,7 @@ class DictionaryResponse(BaseModel):
     status: DictionaryStatus
     title: str | None
     description: str | None
+    article_description: str | None
     dictionary_type: str | None
     publisher: str | None
     publication_year: int | None
@@ -258,6 +260,7 @@ def _dictionary_response(
         status=dictionary.status,
         title=dictionary.title,
         description=dictionary.description,
+        article_description=dictionary.article_description,
         dictionary_type=dictionary.dictionary_type,
         publisher=dictionary.publisher,
         publication_year=dictionary.publication_year,
@@ -414,7 +417,7 @@ def create_dictionaries_router(
         "",
         response_model=list[DictionaryResponse],
         responses={**UNAUTHORIZED_RESPONSE},
-        summary="List every dictionary draft owned by the caller",
+        summary="List every dictionary draft the caller owns or is a member of",
     )
     def list_dictionaries(user: AuthenticatedUser) -> list[DictionaryResponse]:
         return [
@@ -424,7 +427,7 @@ def create_dictionaries_router(
                 entry.source_file,
                 entry.page_ranges,
             )
-            for entry in get_service.list_for_owner(user.id)
+            for entry in get_service.list_for_actor(user.id)
         ]
 
     @router.delete(
@@ -491,6 +494,7 @@ def create_dictionaries_router(
         data = MetadataInput(
             title=request.title,
             description=request.description,
+            article_description=request.article_description,
             dictionary_type=request.dictionary_type,
             publisher=request.publisher,
             publication_year=request.publication_year,

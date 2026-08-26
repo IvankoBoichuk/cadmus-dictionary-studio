@@ -49,8 +49,17 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
         <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/settlements`}>
           Зіставити географічні мітки словника
         </Link>
+        <Link
+          className="secondary-link"
+          to={`/dictionaries/${dictionaryId}/article-schema`}
+        >
+          Схема словникової статті
+        </Link>
         <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/view`}>
           Переглянути сторінки
+        </Link>
+        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/members`}>
+          Учасники проєкту
         </Link>
       </div>
       <DictionaryReadiness

@@ -89,6 +89,20 @@ export function DictionaryMetadataForm({
         </div>
 
         <div className="form-field">
+          <label htmlFor="article_description">Структура словникової статті</label>
+          <p className="section-hint">
+            Опишіть, з яких частин складається словникова стаття (значення,
+            приклади, синоніми тощо) — на основі цього опису система
+            згенерує схему для автоматичного розбору статей.
+          </p>
+          <textarea
+            id="article_description"
+            rows={6}
+            {...form.getFieldProps("article_description")}
+          />
+        </div>
+
+        <div className="form-field">
           <label htmlFor="dictionary_type">Тип словника</label>
           <input id="dictionary_type" {...form.getFieldProps("dictionary_type")} />
         </div>

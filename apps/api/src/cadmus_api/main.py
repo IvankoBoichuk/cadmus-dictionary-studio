@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
+from cadmus.access import AuthorizationService, ListMembersService, ManageMembersService
 from cadmus.config import Settings
 from cadmus.geography import GeographyQueryService
 from cadmus.identity import (
@@ -11,6 +12,11 @@ from cadmus.identity import (
     GoogleAuthenticationService,
     PasswordResetService,
     RegistrationService,
+)
+from cadmus.infrastructure.access import create_access_unit_of_work_factory
+from cadmus.infrastructure.ai_schema import (
+    CeleryArticleSchemaQueue,
+    CeleryEntryExtractionQueue,
 )
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.email import SmtpEmailSender
@@ -33,14 +39,22 @@ from cadmus.infrastructure.source_inspection_queue import CeleryInspectionQueue
 from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.infrastructure.task_queue import CeleryTaskQueue, create_celery_client
 from cadmus.lexicography import (
+    ActivateArticleSchemaService,
+    CreateEntryFieldService,
     CreateLexemeService,
+    DeleteEntryFieldService,
     DeleteLexemeService,
     FinishScanningService,
     LexemeQueryService,
+    PromoteLexemeToEntryService,
+    QueueArticleSchemaGenerationService,
     QueueDictionaryScanService,
+    QueueEntryFieldExtractionService,
     ScanProgressService,
     SuggestLexemesService,
+    UpdateEntryFieldService,
     UpdateLexemeService,
+    ValidateEntryService,
 )
 from cadmus.processing import TaskQueue
 from cadmus.sources import (
@@ -63,8 +77,10 @@ from fastapi import FastAPI
 from sqlalchemy import Engine, text
 
 from cadmus_api.routes.abbreviations import create_abbreviations_router
+from cadmus_api.routes.article_schemas import create_article_schemas_router
 from cadmus_api.routes.auth import create_auth_router
 from cadmus_api.routes.dictionaries import create_dictionaries_router
+from cadmus_api.routes.entries import create_entries_router
 from cadmus_api.routes.finish_scanning import create_finish_scanning_router
 from cadmus_api.routes.geography import create_geography_router
 from cadmus_api.routes.google_oauth import create_google_oauth_router
@@ -77,6 +93,7 @@ from cadmus_api.routes.ocr_scan import create_ocr_scan_router
 from cadmus_api.routes.ocr_suggestions import create_ocr_suggestions_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
+from cadmus_api.routes.project_members import create_project_members_router
 from cadmus_api.routes.scan_progress import create_scan_progress_router
 from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
@@ -113,6 +130,20 @@ def create_app(
     finish_scanning_service: FinishScanningService | None = None,
     suggest_lexemes_service: SuggestLexemesService | None = None,
     queue_dictionary_scan_service: QueueDictionaryScanService | None = None,
+    queue_article_schema_generation_service: (
+        QueueArticleSchemaGenerationService | None
+    ) = None,
+    activate_article_schema_service: ActivateArticleSchemaService | None = None,
+    promote_lexeme_to_entry_service: PromoteLexemeToEntryService | None = None,
+    queue_entry_field_extraction_service: QueueEntryFieldExtractionService
+    | None = None,
+    create_entry_field_service: CreateEntryFieldService | None = None,
+    update_entry_field_service: UpdateEntryFieldService | None = None,
+    delete_entry_field_service: DeleteEntryFieldService | None = None,
+    validate_entry_service: ValidateEntryService | None = None,
+    authorization_service: AuthorizationService | None = None,
+    manage_members_service: ManageMembersService | None = None,
+    list_members_service: ListMembersService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -200,6 +231,14 @@ def create_app(
             ),
         )
     )
+    access_unit_of_work_factory = create_access_unit_of_work_factory(engine)
+    app.state.authorization_service = (
+        authorization_service
+        if authorization_service is not None
+        else AuthorizationService(
+            membership_unit_of_work_factory=access_unit_of_work_factory
+        )
+    )
     sources_unit_of_work_factory = create_sources_unit_of_work_factory(engine)
     app.state.upload_dictionary_service = (
         upload_dictionary_service
@@ -216,12 +255,16 @@ def create_app(
         if save_dictionary_metadata_service is not None
         else SaveDictionaryMetadataService(
             unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.get_dictionary_service = (
         get_dictionary_service
         if get_dictionary_service is not None
-        else GetDictionaryService(unit_of_work_factory=sources_unit_of_work_factory)
+        else GetDictionaryService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
+        )
     )
     app.state.delete_dictionary_service = (
         delete_dictionary_service
@@ -229,6 +272,7 @@ def create_app(
         else DeleteDictionaryService(
             unit_of_work_factory=sources_unit_of_work_factory,
             object_storage=app.state.object_storage,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.dictionary_readiness_service = (
@@ -236,6 +280,7 @@ def create_app(
         if dictionary_readiness_service is not None
         else DictionaryReadinessService(
             unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.save_page_ranges_service = (
@@ -243,6 +288,7 @@ def create_app(
         if save_page_ranges_service is not None
         else SavePageRangesService(
             unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.mark_dictionary_scanned_service = (
@@ -250,6 +296,7 @@ def create_app(
         if mark_dictionary_scanned_service is not None
         else MarkDictionaryScannedService(
             unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     lexicography_unit_of_work_factory = create_lexicography_unit_of_work_factory(engine)
@@ -319,11 +366,77 @@ def create_app(
             queue=CeleryDictionaryScanQueue(create_celery_client(app_settings)),
         )
     )
+    app.state.queue_article_schema_generation_service = (
+        queue_article_schema_generation_service
+        if queue_article_schema_generation_service is not None
+        else QueueArticleSchemaGenerationService(
+            dictionary_pages=app.state.get_dictionary_service,
+            queue=CeleryArticleSchemaQueue(create_celery_client(app_settings)),
+        )
+    )
+    app.state.activate_article_schema_service = (
+        activate_article_schema_service
+        if activate_article_schema_service is not None
+        else ActivateArticleSchemaService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.promote_lexeme_to_entry_service = (
+        promote_lexeme_to_entry_service
+        if promote_lexeme_to_entry_service is not None
+        else PromoteLexemeToEntryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.queue_entry_field_extraction_service = (
+        queue_entry_field_extraction_service
+        if queue_entry_field_extraction_service is not None
+        else QueueEntryFieldExtractionService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            queue=CeleryEntryExtractionQueue(create_celery_client(app_settings)),
+        )
+    )
+    app.state.create_entry_field_service = (
+        create_entry_field_service
+        if create_entry_field_service is not None
+        else CreateEntryFieldService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.update_entry_field_service = (
+        update_entry_field_service
+        if update_entry_field_service is not None
+        else UpdateEntryFieldService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.delete_entry_field_service = (
+        delete_entry_field_service
+        if delete_entry_field_service is not None
+        else DeleteEntryFieldService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.validate_entry_service = (
+        validate_entry_service
+        if validate_entry_service is not None
+        else ValidateEntryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
     app.state.abbreviation_crud_service = (
         abbreviation_crud_service
         if abbreviation_crud_service is not None
         else AbbreviationCrudService(
             unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.abbreviation_import_service = (
@@ -331,6 +444,22 @@ def create_app(
         if abbreviation_import_service is not None
         else AbbreviationImportService(
             unit_of_work_factory=sources_unit_of_work_factory,
+        )
+    )
+    app.state.manage_members_service = (
+        manage_members_service
+        if manage_members_service is not None
+        else ManageMembersService(
+            unit_of_work_factory=access_unit_of_work_factory,
+            authorization=app.state.authorization_service,
+        )
+    )
+    app.state.list_members_service = (
+        list_members_service
+        if list_members_service is not None
+        else ListMembersService(
+            unit_of_work_factory=access_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.include_router(create_health_router(app_settings))
@@ -363,6 +492,15 @@ def create_app(
             app.state.object_storage,
             app.state.delete_dictionary_service,
             app.state.dictionary_readiness_service,
+        )
+    )
+    app.include_router(
+        create_project_members_router(
+            app.state.authentication_service,
+            app.state.get_dictionary_service,
+            app.state.manage_members_service,
+            app.state.list_members_service,
+            unit_of_work_factory,
         )
     )
     app.include_router(
@@ -424,6 +562,25 @@ def create_app(
             app.state.abbreviation_import_service,
         )
     )
+    app.include_router(
+        create_article_schemas_router(
+            app.state.authentication_service,
+            app.state.queue_article_schema_generation_service,
+            app.state.activate_article_schema_service,
+        )
+    )
+    app.include_router(
+        create_entries_router(
+            app.state.authentication_service,
+            app.state.promote_lexeme_to_entry_service,
+            app.state.queue_entry_field_extraction_service,
+            app.state.create_entry_field_service,
+            app.state.update_entry_field_service,
+            app.state.delete_entry_field_service,
+            app.state.validate_entry_service,
+            app.state.get_dictionary_service,
+        )
+    )
     geography_unit_of_work_factory = create_geography_unit_of_work_factory(engine)
     app.state.geography_query_service = (
         geography_query_service
@@ -444,6 +601,7 @@ def create_app(
         else SettlementMappingCrudService(
             unit_of_work_factory=sources_unit_of_work_factory,
             geography_unit_of_work_factory=geography_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.settlement_search_service = (
@@ -459,6 +617,7 @@ def create_app(
         else SettlementConfirmationService(
             unit_of_work_factory=sources_unit_of_work_factory,
             geography_unit_of_work_factory=geography_unit_of_work_factory,
+            authorization=app.state.authorization_service,
         )
     )
     app.state.settlement_mapping_import_service = (

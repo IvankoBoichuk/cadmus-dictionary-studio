@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 MAX_SOURCE_TEXT_LENGTH = 500
@@ -30,6 +31,33 @@ class LexemeOrigin(StrEnum):
 
     MANUAL = "manual"
     OCR = "ocr"
+
+
+class LexemeStatus(StrEnum):
+    """A lexeme's structural-decomposition progress (BH-113).
+
+    ``DRAFT`` is the state ALTO/OCR (or a manual selection) leaves a lexeme
+    in. ``READY_TO_PROCESS`` and ``READY_TO_REVIEW`` mark it as being (or
+    having finished) further broken down into smaller structural data.
+    ``COMPLETE`` is the only status set exclusively by an explicit user
+    action, never automatically, and is the sole status that locks the
+    lexeme against further edits (BH-107/BH-113: a lexeme stays editable in
+    every other status).
+    """
+
+    DRAFT = "draft"
+    READY_TO_PROCESS = "ready_to_process"
+    READY_TO_REVIEW = "ready_to_review"
+    COMPLETE = "complete"
+
+
+class LexemeNotEditableError(ValueError):
+    """BH-113: raised when editing/deleting a lexeme whose status is COMPLETE."""
+
+    def __init__(self, dictionary_id: UUID, lexeme_id: UUID) -> None:
+        super().__init__(f"lexeme {lexeme_id} is complete and can no longer be edited")
+        self.dictionary_id = dictionary_id
+        self.lexeme_id = lexeme_id
 
 
 class LexemeValidationError(ValueError):
@@ -124,6 +152,7 @@ class Lexeme:
     created_by: UUID
     updated_at: datetime
     updated_by: UUID
+    status: LexemeStatus = LexemeStatus.DRAFT
     x2: float | None = None
     y2: float | None = None
     width2: float | None = None
@@ -173,8 +202,14 @@ def changed_lexeme_fields(
     y2: float | None = None,
     width2: float | None = None,
     height2: float | None = None,
+    status: LexemeStatus | None = None,
 ) -> list[str]:
-    """List which editable fields actually differ, for the BH-56 audit trail."""
+    """List which editable fields actually differ, for the BH-56 audit trail.
+
+    ``status`` is ``None`` when the caller isn't requesting a status change
+    at all (BH-113) -- distinct from any real ``LexemeStatus`` value, which
+    ``Lexeme.status`` always has.
+    """
     after = {
         "source_text": source_text,
         "x": x,
@@ -186,9 +221,12 @@ def changed_lexeme_fields(
         "width2": width2,
         "height2": height2,
     }
-    return [
+    changed = [
         field for field in _EDITABLE_FIELDS if getattr(before, field) != after[field]
     ]
+    if status is not None and status != before.status:
+        changed.append("status")
+    return changed
 
 
 def validate_lexeme_fields(
@@ -365,6 +403,37 @@ class DictionaryScanSnapshot:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class ArticleSchemaGenerationSnapshot:
+    """Current observable state of a background schema-generation task.
+
+    Unlike ``OcrSuggestionTaskSnapshot``, this never carries the generated
+    schema itself -- the worker task persists it directly as a new
+    ``ArticleSchema`` version (status ``READY``/``FAILED``) as soon as the
+    AI provider call returns, mirroring ``DictionaryScanSnapshot``.
+    """
+
+    task_id: str
+    status: OcrSuggestionStatus
+    schema_id: UUID | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class EntryExtractionSnapshot:
+    """Current observable state of a background entry field-extraction task.
+
+    Like ``DictionaryScanSnapshot``, this never carries the extracted
+    fields themselves -- the worker task persists each one directly as an
+    ``EntryField`` row (``origin=EntryFieldOrigin.MODEL``) as it goes.
+    """
+
+    task_id: str
+    status: OcrSuggestionStatus
+    created_fields: int = 0
+    error: str | None = None
+
+
 _ISO_TO_TESSERACT_LANGUAGE: dict[str, str] = {
     "uk": "ukr",
     "ru": "rus",
@@ -391,3 +460,299 @@ def resolve_ocr_language(language_codes: Sequence[str]) -> str:
     # Preserve first-seen order while de-duplicating (dict keys are
     # insertion-ordered), so ``["uk", "uk", "en"]`` -> ``"ukr+eng"``.
     return "+".join(dict.fromkeys(mapped))
+
+
+class SchemaGenerationStatus(StrEnum):
+    """Lifecycle of one AI-generated article schema version (BH-148)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    READY = "ready"
+    FAILED = "failed"
+
+
+class EntryStatus(StrEnum):
+    """A dictionary entry's structural-extraction progress (BH-148).
+
+    Mirrors ``LexemeStatus``: ``DRAFT`` is the state extraction leaves an
+    entry in, ``READY_TO_REVIEW`` marks it as awaiting editor review, and
+    ``COMPLETE`` is set only by an explicit user action after the entry
+    passes ``validate_entry_against_schema``.
+    """
+
+    DRAFT = "draft"
+    READY_TO_REVIEW = "ready_to_review"
+    COMPLETE = "complete"
+
+
+class EntryFieldRole(StrEnum):
+    """Semantic role of one structured field extracted from an article."""
+
+    HEADWORD = "headword"
+    PART_OF_SPEECH = "part_of_speech"
+    MEANING = "meaning"
+    EXAMPLE = "example"
+    SYNONYM = "synonym"
+    ABBREVIATION = "abbreviation"
+    GEOGRAPHIC_LABEL = "geographic_label"
+    OTHER = "other"
+
+
+class EntryFieldOrigin(StrEnum):
+    """How an entry field's value came to exist (ADR-0004 provenance model).
+
+    ``MODEL`` is AI-extracted per the dictionary's active ``ArticleSchema``
+    (a proposal, per AGENTS.md, until an editor reviews it). ``RULE`` is a
+    deterministic match against the dictionary's own abbreviation/settlement
+    reference data (BH-29/BH-30), not an AI call. ``MANUAL`` is a field an
+    editor typed or edited by hand -- editing any field flips its origin to
+    ``MANUAL`` and stamps the editor as ``updated_by``.
+    """
+
+    MODEL = "model"
+    RULE = "rule"
+    MANUAL = "manual"
+
+
+class ArticleSchemaValidationError(ValueError):
+    """Field-addressable BH-148 article schema validation errors."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("article schema is invalid")
+        self.errors = dict(errors)
+
+
+class ArticleSchemaAccessError(LookupError):
+    """Raised for a missing article schema or one outside the given dictionary."""
+
+    def __init__(self, schema_id: UUID) -> None:
+        super().__init__(f"article schema {schema_id} is not accessible")
+        self.schema_id = schema_id
+
+
+class EntryValidationError(ValueError):
+    """Field-addressable BH-148 dictionary entry validation errors."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("entry is invalid")
+        self.errors = dict(errors)
+
+
+class EntryAccessError(LookupError):
+    """Raised for a missing entry or one outside the given dictionary."""
+
+    def __init__(self, entry_id: UUID) -> None:
+        super().__init__(f"entry {entry_id} is not accessible")
+        self.entry_id = entry_id
+
+
+class DuplicateEntryError(ValueError):
+    """Raised when a lexeme has already been promoted to an entry."""
+
+    def __init__(self, existing_id: UUID, lexeme_id: UUID) -> None:
+        super().__init__("this lexeme has already been promoted to an entry")
+        self.existing_id = existing_id
+        self.lexeme_id = lexeme_id
+
+
+class EntryFieldValidationError(ValueError):
+    """Field-addressable BH-148 entry field validation errors."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("entry field is invalid")
+        self.errors = dict(errors)
+
+
+class EntryFieldAccessError(LookupError):
+    """Raised for a missing entry field or one outside the given entry."""
+
+    def __init__(self, field_id: UUID) -> None:
+        super().__init__(f"entry field {field_id} is not accessible")
+        self.field_id = field_id
+
+
+@dataclass
+class ArticleSchema:
+    """One AI-generated (or manually edited) version of a dictionary's
+    article structure (BH-148).
+
+    ``definition`` is a JSON field tree stored as
+    ``{"fields": [{"name", "role", "type", "repeatable", "required",
+    "children"}, ...]}``, recursively nested via each node's ``"children"``
+    to support repeating and nested elements (e.g. several ``meaning``
+    nodes, each with its own ``example``/``synonym`` children). Only one
+    version per dictionary is ever ``activated_at``-set at a time; older
+    versions remain as history.
+    """
+
+    id: UUID
+    dictionary_id: UUID
+    version: int
+    status: SchemaGenerationStatus
+    source_description: str
+    definition: dict[str, Any]
+    created_at: datetime
+    created_by: UUID
+    raw_provider_response: dict[str, Any] | None = None
+    provider_name: str | None = None
+    error_message: str | None = None
+    activated_at: datetime | None = None
+    activated_by: UUID | None = None
+
+
+@dataclass
+class DictionaryEntry:
+    """The semantic dictionary article (ADR-0006), promoted from a
+    ``COMPLETE`` ``Lexeme`` (BH-148).
+
+    ``lexeme_id`` is a unique reference to its one source lexeme -- a
+    lexeme may be promoted at most once (``DuplicateEntryError``).
+    ``schema_id`` records which ``ArticleSchema`` version, if any, was
+    active when this entry's fields were last extracted.
+    """
+
+    id: UUID
+    dictionary_id: UUID
+    lexeme_id: UUID
+    headword: str
+    status: EntryStatus
+    created_at: datetime
+    updated_at: datetime
+    created_by: UUID
+    updated_by: UUID
+    schema_id: UUID | None = None
+
+
+@dataclass
+class EntryFragment:
+    """The physical location of one part of an entry on one page (ADR-0006).
+
+    An entry may have several fragments across pages, for an article split
+    by a page break; box fields mirror ``Lexeme``'s convention (pixel
+    coordinates, top-left origin, optional second box). ``recognized_text``
+    is the immutable source text this fragment's fields are spans over --
+    it is never mutated or trimmed, so any text a field doesn't cover
+    remains visible to a reviewer by construction.
+    """
+
+    id: UUID
+    entry_id: UUID
+    page_id: UUID
+    x: float
+    y: float
+    width: float
+    height: float
+    reading_order: int
+    recognized_text: str
+    x2: float | None = None
+    y2: float | None = None
+    width2: float | None = None
+    height2: float | None = None
+
+
+@dataclass
+class EntryField:
+    """One structured field extracted (or manually added) from an entry
+    fragment (BH-148), with full ADR-0004 provenance.
+
+    ``source_start``/``source_end`` are the field's source span: character
+    offsets into its ``fragment``'s ``recognized_text``. ``parent_field_id``
+    lets fields nest (e.g. an ``example`` under a ``meaning``) and repeat
+    (several fields sharing the same ``parent_field_id`` and role, ordered
+    by ``position``). ``field_path`` is a human-readable locator into the
+    owning ``ArticleSchema.definition`` tree (e.g.
+    ``"senses[0].examples[1]"``).
+    """
+
+    id: UUID
+    entry_id: UUID
+    fragment_id: UUID
+    field_path: str
+    role: EntryFieldRole
+    position: int
+    source_text: str
+    source_start: int
+    source_end: int
+    origin: EntryFieldOrigin
+    created_at: datetime
+    created_by: UUID
+    updated_at: datetime
+    updated_by: UUID
+    parent_field_id: UUID | None = None
+    normalized_text: str | None = None
+    confidence: float | None = None
+    processing_run_id: UUID | None = None
+
+
+@dataclass(frozen=True)
+class GeneratedSchema:
+    """One AI provider's proposed article field tree, not yet an ``ArticleSchema``.
+
+    Ephemeral by design: never persisted directly -- the application layer
+    wraps it into a new ``ArticleSchema`` version.
+    """
+
+    definition: dict[str, Any]
+    raw_response: dict[str, Any]
+    provider_name: str
+
+
+@dataclass(frozen=True)
+class ExtractedField:
+    """One AI provider's proposed structured field, not yet an ``EntryField``.
+
+    Ephemeral by design: never persisted directly -- the application layer
+    wraps it into a new ``EntryField`` row (``origin=EntryFieldOrigin.MODEL``).
+    """
+
+    field_path: str
+    role: EntryFieldRole
+    value: str
+    source_start: int
+    source_end: int
+    confidence: float
+
+
+def _walk_schema_nodes(nodes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten a schema definition tree (depth-first) for validation."""
+    flattened: list[dict[str, Any]] = []
+    for node in nodes:
+        flattened.append(node)
+        children: Sequence[dict[str, Any]] = node.get("children") or []
+        flattened.extend(_walk_schema_nodes(children))
+    return flattened
+
+
+def validate_entry_against_schema(
+    entry: DictionaryEntry,
+    fields: Sequence[EntryField],
+    schema: ArticleSchema,
+) -> dict[str, str]:
+    """Check every required, non-repeatable node in ``schema`` has at least
+    one matching field, keyed by ``field_path`` (BH-148 AC: "each field has
+    a type and provenance" / "the result passes canonical schema
+    validation"). Returns an empty dict when the entry is valid.
+
+    ``entry`` is accepted for symmetry with the rest of the module's
+    validation helpers and for future entry-level checks; it plays no part
+    in today's per-field check.
+    """
+    del entry
+    errors: dict[str, str] = {}
+    present_paths = {field.field_path for field in fields}
+    for node in _walk_schema_nodes(schema.definition.get("fields", [])):
+        if not node.get("required"):
+            continue
+        path = node.get("name")
+        if not path:
+            continue
+        if node.get("repeatable"):
+            has_match = any(
+                candidate == path or candidate.startswith(f"{path}[")
+                for candidate in present_paths
+            )
+        else:
+            has_match = path in present_paths
+        if not has_match:
+            errors[str(path)] = f"Обов'язкове поле «{path}» не заповнене."
+    return errors

@@ -1,5 +1,14 @@
 name: cadmus-dictionary-studio
 
+x-notification-environment: &notification-environment
+  CADMUS_SMTP_HOST: ${CADMUS_SMTP_HOST:-mailpit}
+  CADMUS_SMTP_PORT: ${CADMUS_SMTP_PORT:-1025}
+  CADMUS_SMTP_USERNAME: ${CADMUS_SMTP_USERNAME:-}
+  CADMUS_SMTP_PASSWORD: ${CADMUS_SMTP_PASSWORD:-}
+  CADMUS_SMTP_USE_TLS: ${CADMUS_SMTP_USE_TLS:-false}
+  CADMUS_EMAIL_FROM: ${CADMUS_EMAIL_FROM:-Cadmus <noreply@cadmus.local>}
+  CADMUS_TELEGRAM_BOT_TOKEN: ${CADMUS_TELEGRAM_BOT_TOKEN:-}
+
 services:
   mailpit:
     image: axllent/mailpit:v1.30.0
@@ -149,12 +158,6 @@ services:
       CADMUS_NAME: ${CADMUS_NAME:-cadmus-api}
       CADMUS_VERSION: ${CADMUS_VERSION:-0.1.0}
       CADMUS_PUBLIC_WEB_URL: ${CADMUS_PUBLIC_WEB_URL:-http://localhost:${CADMUS_WEB_PORT:-5173}}
-      CADMUS_SMTP_HOST: ${CADMUS_SMTP_HOST:-mailpit}
-      CADMUS_SMTP_PORT: ${CADMUS_SMTP_PORT:-1025}
-      CADMUS_SMTP_USERNAME: ${CADMUS_SMTP_USERNAME:-}
-      CADMUS_SMTP_PASSWORD: ${CADMUS_SMTP_PASSWORD:-}
-      CADMUS_SMTP_USE_TLS: ${CADMUS_SMTP_USE_TLS:-false}
-      CADMUS_EMAIL_FROM: ${CADMUS_EMAIL_FROM:-Cadmus <noreply@cadmus.local>}
       CADMUS_SESSION_LIFETIME_HOURS: ${CADMUS_SESSION_LIFETIME_HOURS:-12}
       CADMUS_MAX_UPLOAD_SIZE_BYTES: ${CADMUS_MAX_UPLOAD_SIZE_BYTES:-104857600}
       CADMUS_REDIS_HOST: redis
@@ -164,7 +167,7 @@ services:
       CADMUS_GOOGLE_OAUTH_CLIENT_ID: ${CADMUS_GOOGLE_OAUTH_CLIENT_ID:-}
       CADMUS_GOOGLE_OAUTH_CLIENT_SECRET: ${CADMUS_GOOGLE_OAUTH_CLIENT_SECRET:-}
       CADMUS_GOOGLE_OAUTH_REDIRECT_URL: ${CADMUS_GOOGLE_OAUTH_REDIRECT_URL:-}
-      <<: [*database-environment, *object-storage-environment]
+      <<: [*database-environment, *object-storage-environment, *notification-environment]
     depends_on:
       mailpit:
         condition: service_healthy
@@ -243,7 +246,7 @@ services:
       CADMUS_REDIS_PORT: 6379
       CADMUS_REDIS_BROKER_DATABASE: ${CADMUS_REDIS_BROKER_DATABASE:-0}
       CADMUS_REDIS_RESULT_DATABASE: ${CADMUS_REDIS_RESULT_DATABASE:-1}
-      <<: [*database-environment, *object-storage-environment]
+      <<: [*database-environment, *object-storage-environment, *notification-environment]
     depends_on:
       postgres:
         condition: service_healthy
@@ -252,6 +255,8 @@ services:
       object-storage-init:
         condition: service_completed_successfully
       redis:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
     init: true
     networks:

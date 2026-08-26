@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
 import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
+import { LEXEME_STATUS_LABELS } from "../lexemeStatusLabels";
 
 /** BH-55/BH-56: the list of lexemes saved on the current page, editable and deletable. */
 export function LexemeList({
@@ -19,6 +20,9 @@ export function LexemeList({
   onStartAddSecondBox,
   onCancelSecondBoxDraft,
   onRemoveSecondBox,
+  onMarkComplete,
+  onPromoteToEntry,
+  promotingLexemeId = null,
 }: {
   lexemesState: LexemesForPageState;
   pageNumber: number;
@@ -34,9 +38,19 @@ export function LexemeList({
   onStartAddSecondBox?: (lexemeId: string) => void;
   onCancelSecondBoxDraft?: () => void;
   onRemoveSecondBox?: (lexemeId: string) => void;
+  onMarkComplete?: (lexemeId: string) => void;
+  onPromoteToEntry?: (lexemeId: string) => void;
+  promotingLexemeId?: string | null;
 }) {
   const [editingLexemeId, setEditingLexemeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
+  const itemRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  // BH-70: keep the selected row visible in the scrollable list, however it was selected.
+  useEffect(() => {
+    if (!selectedLexemeId) return;
+    itemRefs.current.get(selectedLexemeId)?.scrollIntoView({ block: "nearest" });
+  }, [selectedLexemeId]);
 
   if (lexemesState.status === "loading") {
     return <p role="status">Завантажуємо лексеми…</p>;
@@ -76,10 +90,15 @@ export function LexemeList({
         const isRedrawing = redrawingLexemeId === lexeme.id;
         const isDraftingSecondBox = secondBoxDraftLexemeId === lexeme.id;
         const hasSecondBox = lexeme.x2 != null;
+        const isComplete = lexeme.status === "complete";
         return (
           <li key={lexeme.id} className="lexeme-list-row">
             <button
               type="button"
+              ref={(element) => {
+                if (element) itemRefs.current.set(lexeme.id, element);
+                else itemRefs.current.delete(lexeme.id);
+              }}
               className={
                 lexeme.id === selectedLexemeId
                   ? "lexeme-list-item lexeme-list-item--selected"
@@ -111,6 +130,16 @@ export function LexemeList({
                 Сторінка {pageNumber} · x={Math.round(lexeme.x)}, y=
                 {Math.round(lexeme.y)}, {Math.round(lexeme.width)}×
                 {Math.round(lexeme.height)}
+                {" · "}
+                <span
+                  className={
+                    isComplete
+                      ? "badge badge--complete"
+                      : "badge badge--status"
+                  }
+                >
+                  {LEXEME_STATUS_LABELS[lexeme.status]}
+                </span>
               </span>
             </button>
             {updateState.status === "error" && isEditing && (
@@ -119,7 +148,21 @@ export function LexemeList({
               </p>
             )}
             <div className="lexeme-list-actions">
-              {isEditing ? (
+              {isComplete ? (
+                <>
+                  <p className="lede">Лексема завершена — редагування заблоковане.</p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => onPromoteToEntry?.(lexeme.id)}
+                    disabled={promotingLexemeId === lexeme.id}
+                  >
+                    {promotingLexemeId === lexeme.id
+                      ? "Створюємо статтю…"
+                      : "Створити статтю зі структурою"}
+                  </button>
+                </>
+              ) : isEditing ? (
                 <>
                   <button
                     type="button"
@@ -188,6 +231,13 @@ export function LexemeList({
                       Додати другу область
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => onMarkComplete?.(lexeme.id)}
+                  >
+                    Позначити завершеною
+                  </button>
                   <button
                     type="button"
                     className="danger-button"

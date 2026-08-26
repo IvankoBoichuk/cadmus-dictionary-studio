@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type RefObject,
   type SyntheticEvent,
 } from "react";
 
@@ -54,6 +55,7 @@ function LexemeBox({
   showHandles,
   onSelect,
   onHandleMouseDown,
+  boxRef,
 }: {
   rect: Rect;
   selected: boolean;
@@ -61,9 +63,13 @@ function LexemeBox({
   showHandles: boolean;
   onSelect: () => void;
   onHandleMouseDown: (handle: HandleId, event: ReactMouseEvent<HTMLDivElement>) => void;
+  boxRef?: RefObject<HTMLDivElement | null>;
 }) {
   return (
     <div
+      ref={boxRef}
+      // Focusable programmatically (not via Tab) so BH-70 can move assistive focus here.
+      tabIndex={selected ? -1 : undefined}
       className={
         selected
           ? "lexeme-box lexeme-box--selected lexeme-box--clickable"
@@ -137,6 +143,7 @@ export function LexemeCanvas({
     null,
   );
   const [handleDrag, setHandleDrag] = useState<HandleDragState | null>(null);
+  const selectedBoxRef = useRef<HTMLDivElement>(null);
 
   const { state: createState, submit, reset: resetCreate } = useCreateLexeme(
     dictionaryId,
@@ -318,6 +325,18 @@ export function LexemeCanvas({
       ? displayedSize.width / naturalSize.width
       : null;
 
+  // BH-70: once the selected lexeme's box is on screen, scroll and focus it --
+  // `scale` becomes non-null only once the image (and boxes) have actually mounted.
+  useEffect(() => {
+    if (!selectedLexemeId || !selectedBoxRef.current) return;
+    selectedBoxRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "center",
+    });
+    selectedBoxRef.current.focus({ preventScroll: true });
+  }, [selectedLexemeId, scale]);
+
   const handleAcceptSuggestion = (suggestion: LexemeSuggestion) => {
     if (!scale) return;
     setDrag(null);
@@ -402,6 +421,7 @@ export function LexemeCanvas({
               const isSelected = lexeme.id === selectedLexemeId;
               const isFullyRedrawing = lexeme.id === redrawingLexemeId;
               const isDraftingSecondBox = lexeme.id === secondBoxDraftLexemeId;
+              const isComplete = lexeme.status === "complete";
               const box1Displayed =
                 isSelected && handleDrag?.box === 1
                   ? resizeRect(
@@ -430,11 +450,12 @@ export function LexemeCanvas({
                       rect={box1Displayed}
                       selected={isSelected}
                       title={lexeme.source_text}
-                      showHandles={isSelected && !isDraftingSecondBox}
+                      showHandles={isSelected && !isDraftingSecondBox && !isComplete}
                       onSelect={() => onSelectLexeme(lexeme.id)}
                       onHandleMouseDown={(handle, event) =>
                         startHandleDrag(lexeme, 1, handle, event)
                       }
+                      boxRef={isSelected ? selectedBoxRef : undefined}
                     />
                   )}
                   {box2Displayed && !isDraftingSecondBox && (
@@ -442,7 +463,7 @@ export function LexemeCanvas({
                       rect={box2Displayed}
                       selected={isSelected}
                       title={lexeme.source_text}
-                      showHandles={isSelected}
+                      showHandles={isSelected && !isComplete}
                       onSelect={() => onSelectLexeme(lexeme.id)}
                       onHandleMouseDown={(handle, event) =>
                         startHandleDrag(lexeme, 2, handle, event)

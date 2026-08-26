@@ -570,6 +570,33 @@ h1 {
   background: rgb(37 99 235 / 22%);
 }
 
+.entry-fragment-preview {
+  display: grid;
+  gap: 0.5rem;
+  margin-block-end: 1rem;
+}
+
+.entry-fragment-crop {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #d6dbd2;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.entry-fragment-crop-image {
+  position: absolute;
+  max-width: none;
+}
+
+.entry-fragment-crop-box {
+  position: absolute;
+  border: 2px solid #d97706;
+  background: rgb(217 119 6 / 12%);
+  pointer-events: none;
+}
+
 .lexeme-box--clickable {
   pointer-events: auto;
   cursor: pointer;
@@ -943,6 +970,24 @@ h1 {
   font-size: 0.85rem;
 }
 
+.member-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.member-table th,
+.member-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #d6dbd2;
+  text-align: left;
+  vertical-align: top;
+}
+
+.member-table th {
+  color: #33443d;
+  font-size: 0.85rem;
+}
+
 .settlement-search {
   display: flex;
   flex-direction: column;
@@ -997,4 +1042,14 @@ h1 {
 .badge--error {
   color: #9a3024;
   background: #fbe9e6;
+}
+
+.badge--status {
+  color: #1d5c8a;
+  background: #e6f0f7;
+}
+
+.badge--complete {
+  color: #245847;
+  background: #eaf1ec;
 }

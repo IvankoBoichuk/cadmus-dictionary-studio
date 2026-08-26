@@ -130,7 +130,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List every dictionary draft owned by the caller */
+        /** List every dictionary draft the caller owns or is a member of */
         get: operations["list_dictionaries_dictionaries_get"];
         put?: never;
         post?: never;
@@ -263,6 +263,74 @@ export interface paths {
         patch: operations["update_abbreviation_dictionaries__dictionary_id__abbreviations__abbreviation_id__patch"];
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/article-schema/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue AI article-schema generation from article_description */
+        post: operations["enqueue_generation_dictionaries__dictionary_id__article_schema_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/article-schema/generate/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll an article-schema generation task's status and result */
+        get: operations["get_generation_task_dictionaries__dictionary_id__article_schema_generate__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/article-schemas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every article-schema version generated for a dictionary */
+        get: operations["list_article_schemas_dictionaries__dictionary_id__article_schemas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/article-schemas/{schema_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm one generated schema version as the dictionary's active one */
+        post: operations["activate_article_schema_dictionaries__dictionary_id__article_schemas__schema_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/configure": {
         parameters: {
             query?: never;
@@ -311,8 +379,61 @@ export interface paths {
         delete: operations["delete_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__delete"];
         options?: never;
         head?: never;
-        /** Edit a lexeme's text and/or bounding box (BH-56) */
+        /** Edit a lexeme's text, bounding box, and/or status (BH-56, BH-113) */
         patch: operations["update_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__patch"];
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/lexemes/{lexeme_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promote a completed lexeme into a structured dictionary entry */
+        post: operations["promote_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__promote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every member of a project, including the owner (BH-170) */
+        get: operations["list_members_dictionaries__dictionary_id__members_get"];
+        put?: never;
+        /** Invite a registered user to a project by email (BH-170) */
+        post: operations["add_member_dictionaries__dictionary_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a project member (BH-170) */
+        delete: operations["remove_member_dictionaries__dictionary_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change a project member's role (BH-170) */
+        patch: operations["change_member_role_dictionaries__dictionary_id__members__user_id__patch"];
         trace?: never;
     };
     "/dictionaries/{dictionary_id}/ocr-scan": {
@@ -642,6 +763,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a dictionary entry with its fragments and structured fields */
+        get: operations["get_entry_entries__entry_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entries/{entry_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate an entry against its schema and mark it complete */
+        post: operations["complete_entry_entries__entry_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entries/{entry_id}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enqueue AI field extraction for one entry */
+        post: operations["enqueue_extraction_entries__entry_id__extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entries/{entry_id}/extract/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Poll a field-extraction task's status and result */
+        get: operations["get_extraction_task_entries__entry_id__extract__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entries/{entry_id}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manually add a field an automatic pass missed */
+        post: operations["create_field_entries__entry_id__fields_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entries/{entry_id}/fields/{field_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a manually-added or mistakenly-extracted field */
+        delete: operations["delete_field_entries__entry_id__fields__field_id__delete"];
+        options?: never;
+        head?: never;
+        /** Edit a field; the edit flips its origin to manual */
+        patch: operations["update_field_entries__entry_id__fields__field_id__patch"];
+        trace?: never;
+    };
     "/geography/areas": {
         parameters: {
             query?: never;
@@ -857,6 +1081,15 @@ export interface components {
          */
         ActivationFailure: "invalid" | "expired" | "used";
         /**
+         * AddMemberRequest
+         * @description One BH-170 invite-by-email submission.
+         */
+        AddMemberRequest: {
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+        };
+        /**
          * AreaResponse
          * @description One synced oblast.
          */
@@ -870,6 +1103,42 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * ArticleSchemaResponse
+         * @description One version of a dictionary's AI-generated (or activated) article schema.
+         */
+        ArticleSchemaResponse: {
+            /** Activated At */
+            activated_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /**
+             * Dictionary Id
+             * Format: uuid
+             */
+            dictionary_id: string;
+            /** Error Message */
+            error_message: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Provider Name */
+            provider_name: string | null;
+            /** Source Description */
+            source_description: string;
+            status: components["schemas"]["SchemaGenerationStatus"];
+            /** Version */
+            version: number;
         };
         /**
          * AuthenticatedUserResponse
@@ -913,6 +1182,13 @@ export interface components {
         Body_upload_dictionaries_upload_post: {
             /** File */
             file: string;
+        };
+        /**
+         * ChangeMemberRoleRequest
+         * @description A BH-170 role change for an existing member.
+         */
+        ChangeMemberRoleRequest: {
+            role: components["schemas"]["Role"];
         };
         /**
          * CommunityGeometryResponse
@@ -1001,6 +1277,30 @@ export interface components {
          */
         ContributorRole: "author" | "compiler";
         /**
+         * CreateEntryFieldRequest
+         * @description A manually added field an automatic pass missed.
+         */
+        CreateEntryFieldRequest: {
+            /** Field Path */
+            field_path: string;
+            /**
+             * Fragment Id
+             * Format: uuid
+             */
+            fragment_id: string;
+            /** Normalized Text */
+            normalized_text?: string | null;
+            /** Parent Field Id */
+            parent_field_id?: string | null;
+            role: components["schemas"]["EntryFieldRole"];
+            /** Source End */
+            source_end: number;
+            /** Source Start */
+            source_start: number;
+            /** Source Text */
+            source_text: string;
+        };
+        /**
          * CreateLexemeRequest
          * @description One BH-54 lexeme submission (AC1, AC2, AC3).
          *
@@ -1048,6 +1348,8 @@ export interface components {
          * @description The dictionary draft, its structured metadata, and readiness gaps.
          */
         DictionaryResponse: {
+            /** Article Description */
+            article_description: string | null;
             /** Contributors */
             contributors: components["schemas"]["ContributorResponse"][];
             /**
@@ -1139,6 +1441,24 @@ export interface components {
             message: string;
         };
         /**
+         * DuplicateEntryResponse
+         * @description Structured duplicate warning: this lexeme was already promoted.
+         */
+        DuplicateEntryResponse: {
+            /**
+             * Code
+             * @default duplicate_entry
+             */
+            code: string;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Message */
+            message: string;
+        };
+        /**
          * DuplicateLexemeResponse
          * @description AC6: a heavily overlapping lexeme already exists; resubmit to confirm.
          */
@@ -1205,6 +1525,26 @@ export interface components {
             task_id: string;
         };
         /**
+         * EnqueueExtractionResponse
+         * @description Accepted response for a newly queued field-extraction job.
+         */
+        EnqueueExtractionResponse: {
+            /** @default queued */
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
+        };
+        /**
+         * EnqueueGenerationResponse
+         * @description Accepted response for a newly queued schema-generation job.
+         */
+        EnqueueGenerationResponse: {
+            /** @default queued */
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
+        };
+        /**
          * EnqueueSuggestionsResponse
          * @description AC: accepted response for a newly queued OCR suggestion job.
          */
@@ -1224,6 +1564,158 @@ export interface components {
             task_id: string;
         };
         /**
+         * EntryFieldOrigin
+         * @description How an entry field's value came to exist (ADR-0004 provenance model).
+         *
+         *     ``MODEL`` is AI-extracted per the dictionary's active ``ArticleSchema``
+         *     (a proposal, per AGENTS.md, until an editor reviews it). ``RULE`` is a
+         *     deterministic match against the dictionary's own abbreviation/settlement
+         *     reference data (BH-29/BH-30), not an AI call. ``MANUAL`` is a field an
+         *     editor typed or edited by hand -- editing any field flips its origin to
+         *     ``MANUAL`` and stamps the editor as ``updated_by``.
+         * @enum {string}
+         */
+        EntryFieldOrigin: "model" | "rule" | "manual";
+        /**
+         * EntryFieldResponse
+         * @description One structured field extracted (or manually added) from an entry.
+         */
+        EntryFieldResponse: {
+            /** Confidence */
+            confidence: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Field Path */
+            field_path: string;
+            /**
+             * Fragment Id
+             * Format: uuid
+             */
+            fragment_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Normalized Text */
+            normalized_text: string | null;
+            origin: components["schemas"]["EntryFieldOrigin"];
+            /** Parent Field Id */
+            parent_field_id: string | null;
+            /** Position */
+            position: number;
+            role: components["schemas"]["EntryFieldRole"];
+            /** Source End */
+            source_end: number;
+            /** Source Start */
+            source_start: number;
+            /** Source Text */
+            source_text: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * EntryFieldRole
+         * @description Semantic role of one structured field extracted from an article.
+         * @enum {string}
+         */
+        EntryFieldRole: "headword" | "part_of_speech" | "meaning" | "example" | "synonym" | "abbreviation" | "geographic_label" | "other";
+        /**
+         * EntryFragmentResponse
+         * @description The physical location of one part of an entry on one page.
+         */
+        EntryFragmentResponse: {
+            /** Height */
+            height: number;
+            /** Height2 */
+            height2: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Page Id
+             * Format: uuid
+             */
+            page_id: string;
+            /** Page Number */
+            page_number: number | null;
+            /** Reading Order */
+            reading_order: number;
+            /** Recognized Text */
+            recognized_text: string;
+            /** Width */
+            width: number;
+            /** Width2 */
+            width2: number | null;
+            /** X */
+            x: number;
+            /** X2 */
+            x2: number | null;
+            /** Y */
+            y: number;
+            /** Y2 */
+            y2: number | null;
+        };
+        /**
+         * EntryResponse
+         * @description A dictionary entry, its source fragments, and its structured fields.
+         */
+        EntryResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Dictionary Id
+             * Format: uuid
+             */
+            dictionary_id: string;
+            /** Fields */
+            fields: components["schemas"]["EntryFieldResponse"][];
+            /** Fragments */
+            fragments: components["schemas"]["EntryFragmentResponse"][];
+            /** Headword */
+            headword: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Lexeme Id
+             * Format: uuid
+             */
+            lexeme_id: string;
+            /** Schema Id */
+            schema_id: string | null;
+            status: components["schemas"]["EntryStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * EntryStatus
+         * @description A dictionary entry's structural-extraction progress (BH-148).
+         *
+         *     Mirrors ``LexemeStatus``: ``DRAFT`` is the state extraction leaves an
+         *     entry in, ``READY_TO_REVIEW`` marks it as awaiting editor review, and
+         *     ``COMPLETE`` is set only by an explicit user action after the entry
+         *     passes ``validate_entry_against_schema``.
+         * @enum {string}
+         */
+        EntryStatus: "draft" | "ready_to_review" | "complete";
+        /**
          * ErrorResponse
          * @description Stable, non-sensitive error contract for a single failure reason.
          */
@@ -1232,6 +1724,22 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /**
+         * ExtractionTaskResponse
+         * @description Poll response: task status plus how many fields it created.
+         */
+        ExtractionTaskResponse: {
+            /**
+             * Created Fields
+             * @default 0
+             */
+            created_fields: number;
+            /** Error */
+            error?: string | null;
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
         };
         /**
          * FinishScanningResponse
@@ -1260,6 +1768,19 @@ export interface components {
         ForgotPasswordResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * GenerationTaskResponse
+         * @description Poll response: task status plus the resulting schema id once succeeded.
+         */
+        GenerationTaskResponse: {
+            /** Error */
+            error?: string | null;
+            /** Schema Id */
+            schema_id?: string | null;
+            status: components["schemas"]["OcrSuggestionStatus"];
+            /** Task Id */
+            task_id: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1344,6 +1865,7 @@ export interface components {
             page_id: string;
             /** Source Text */
             source_text: string;
+            status: components["schemas"]["LexemeStatus"];
             /**
              * Updated At
              * Format: date-time
@@ -1367,6 +1889,20 @@ export interface components {
             /** Y2 */
             y2?: number | null;
         };
+        /**
+         * LexemeStatus
+         * @description A lexeme's structural-decomposition progress (BH-113).
+         *
+         *     ``DRAFT`` is the state ALTO/OCR (or a manual selection) leaves a lexeme
+         *     in. ``READY_TO_PROCESS`` and ``READY_TO_REVIEW`` mark it as being (or
+         *     having finished) further broken down into smaller structural data.
+         *     ``COMPLETE`` is the only status set exclusively by an explicit user
+         *     action, never automatically, and is the sole status that locks the
+         *     lexeme against further edits (BH-107/BH-113: a lexeme stays editable in
+         *     every other status).
+         * @enum {string}
+         */
+        LexemeStatus: "draft" | "ready_to_process" | "ready_to_review" | "complete";
         /**
          * LexemeSuggestionResponse
          * @description One OCR word candidate, not yet a lexeme.
@@ -1402,6 +1938,39 @@ export interface components {
         LogoutResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * MemberResponse
+         * @description One project member (owner or invited collaborator).
+         */
+        MemberResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            role: components["schemas"]["Role"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * MembersListResponse
+         * @description Every member of a project, plus the caller's own role.
+         */
+        MembersListResponse: {
+            /** Members */
+            members: components["schemas"]["MemberResponse"][];
+            my_role: components["schemas"]["Role"];
         };
         /**
          * OcrSuggestionStatus
@@ -1563,10 +2132,18 @@ export interface components {
             message: string;
         };
         /**
+         * Role
+         * @description A user's standing on one dictionary ("project").
+         * @enum {string}
+         */
+        Role: "owner" | "editor" | "reviewer" | "viewer";
+        /**
          * SaveMetadataRequest
          * @description Full BH-27 metadata submission; missing required fields are allowed.
          */
         SaveMetadataRequest: {
+            /** Article Description */
+            article_description?: string | null;
             /** Contributors */
             contributors?: components["schemas"]["ContributorRequest"][];
             /** Description */
@@ -1615,6 +2192,12 @@ export interface components {
             /** Total Pages */
             total_pages: number;
         };
+        /**
+         * SchemaGenerationStatus
+         * @description Lifecycle of one AI-generated article schema version (BH-148).
+         * @enum {string}
+         */
+        SchemaGenerationStatus: "pending" | "running" | "ready" | "failed";
         /**
          * SettlementMappingRequest
          * @description One BH-30 settlement mapping submission (AC7, AC11, AC12).
@@ -1799,6 +2382,17 @@ export interface components {
             value: string;
         };
         /**
+         * UpdateEntryFieldRequest
+         * @description An edit to an existing field; always flips its origin to manual.
+         */
+        UpdateEntryFieldRequest: {
+            /** Normalized Text */
+            normalized_text?: string | null;
+            role?: components["schemas"]["EntryFieldRole"] | null;
+            /** Source Text */
+            source_text?: string | null;
+        };
+        /**
          * UpdateLexemeRequest
          * @description One BH-56 lexeme edit submission: full replacement text and box.
          */
@@ -1809,6 +2403,7 @@ export interface components {
             height2?: number | null;
             /** Source Text */
             source_text: string;
+            status?: components["schemas"]["LexemeStatus"] | null;
             /** Width */
             width: number;
             /** Width2 */
@@ -1933,6 +2528,16 @@ export interface components {
          * FieldErrorsResponse
          * @description Validation errors addressable by form field.
          */
+        cadmus_api__routes__article_schemas__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
         cadmus_api__routes__auth__FieldErrorsResponse: {
             /** Errors */
             errors: {
@@ -1944,6 +2549,16 @@ export interface components {
          * @description Validation errors addressable by form field.
          */
         cadmus_api__routes__dictionaries__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__entries__FieldErrorsResponse: {
             /** Errors */
             errors: {
                 [key: string]: string;
@@ -1964,6 +2579,16 @@ export interface components {
          * @description Validation errors addressable by ``ranges.<index>.<field>`` (AC4, AC5).
          */
         cadmus_api__routes__page_ranges__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__project_members__FieldErrorsResponse: {
             /** Errors */
             errors: {
                 [key: string]: string;
@@ -2978,6 +3603,212 @@ export interface operations {
             };
         };
     };
+    enqueue_generation_dictionaries__dictionary_id__article_schema_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueGenerationResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or article schema does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_generation_task_dictionaries__dictionary_id__article_schema_generate__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                task_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationTaskResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or article schema does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_article_schemas_dictionaries__dictionary_id__article_schemas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleSchemaResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or article schema does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_article_schema_dictionaries__dictionary_id__article_schemas__schema_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                schema_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleSchemaResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or article schema does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The schema version is not READY and cannot be activated */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__article_schemas__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
     configure_dictionary_dictionaries__dictionary_id__configure_post: {
         parameters: {
             query?: never;
@@ -3119,6 +3950,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The lexeme is 'complete' and can no longer be edited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3175,6 +4015,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The lexeme is 'complete' and can no longer be edited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description The text or bounding box failed validation */
             422: {
                 headers: {
@@ -3182,6 +4031,288 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["cadmus_api__routes__lexemes__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    promote_lexeme_dictionaries__dictionary_id__lexemes__lexeme_id__promote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                lexeme_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This lexeme was already promoted to an entry */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateEntryResponse"];
+                };
+            };
+            /** @description The lexeme is not COMPLETE yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__entries__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    list_members_dictionaries__dictionary_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembersListResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_member_dictionaries__dictionary_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This user is already a member of the project */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The email or role is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__project_members__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    remove_member_dictionaries__dictionary_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                user_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_member_role_dictionaries__dictionary_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                user_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeMemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not accessible to the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4423,6 +5554,372 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_entry_entries__entry_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_entry_entries__entry_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The entry does not yet satisfy its article schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__entries__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    enqueue_extraction_entries__entry_id__extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnqueueExtractionResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_extraction_task_entries__entry_id__extract__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+                task_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractionTaskResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_field_entries__entry_id__fields_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEntryFieldRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryFieldResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Field data is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__entries__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    delete_field_entries__entry_id__fields__field_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+                field_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_field_entries__entry_id__fields__field_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+                field_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEntryFieldRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryFieldResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Field data is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__entries__FieldErrorsResponse"];
                 };
             };
         };

@@ -17,6 +17,7 @@ function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse 
     width: 200,
     height: 80,
     origin: "manual",
+    status: "draft",
     created_at: "2026-08-18T00:00:00Z",
     created_by: "user-1",
     updated_at: "2026-08-18T00:00:00Z",
@@ -43,6 +44,9 @@ function renderList(
     onStartAddSecondBox: (lexemeId: string) => void;
     onCancelSecondBoxDraft: () => void;
     onRemoveSecondBox: (lexemeId: string) => void;
+    onMarkComplete: (lexemeId: string) => void;
+    onPromoteToEntry: (lexemeId: string) => void;
+    promotingLexemeId: string | null;
   }> = {},
 ) {
   return render(
@@ -61,6 +65,9 @@ function renderList(
       onStartAddSecondBox={overrides.onStartAddSecondBox ?? vi.fn()}
       onCancelSecondBoxDraft={overrides.onCancelSecondBoxDraft ?? vi.fn()}
       onRemoveSecondBox={overrides.onRemoveSecondBox ?? vi.fn()}
+      onMarkComplete={overrides.onMarkComplete ?? vi.fn()}
+      onPromoteToEntry={overrides.onPromoteToEntry}
+      promotingLexemeId={overrides.promotingLexemeId}
     />,
   );
 }
@@ -122,6 +129,25 @@ describe("LexemeList", () => {
     expect(screen.getByRole("button", { name: /слово/ })).toHaveAttribute(
       "aria-pressed",
       "true",
+    );
+  });
+
+  it("scrolls the selected lexeme's row into view (BH-70)", () => {
+    const scrollIntoViewMock = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoViewMock,
+    );
+
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-1" }), lexemeFixture({ id: "lex-7" })],
+      },
+      selectedLexemeId: "lex-7",
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "nearest" }),
     );
   });
 
@@ -252,5 +278,68 @@ describe("LexemeList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
 
     expect(onDelete).not.toHaveBeenCalled();
+  });
+
+  it("marks a lexeme complete (BH-113)", () => {
+    const onMarkComplete = vi.fn();
+    renderList({
+      lexemesState: { status: "loaded", lexemes: [lexemeFixture({ id: "lex-7" })] },
+      onMarkComplete,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Позначити завершеною" }));
+
+    expect(onMarkComplete).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("locks editing once a lexeme is complete (BH-113)", () => {
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", status: "complete" })],
+      },
+    });
+
+    expect(screen.getByText(/редагування заблоковане/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Редагувати текст" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Видалити" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Позначити завершеною" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers to create a structured entry once a lexeme is complete (BH-148)", () => {
+    const onPromoteToEntry = vi.fn();
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", status: "complete" })],
+      },
+      onPromoteToEntry,
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Створити статтю зі структурою" }),
+    );
+
+    expect(onPromoteToEntry).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("disables the promote button while promotion is in progress", () => {
+    renderList({
+      lexemesState: {
+        status: "loaded",
+        lexemes: [lexemeFixture({ id: "lex-7", status: "complete" })],
+      },
+      promotingLexemeId: "lex-7",
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Створюємо статтю…" }),
+    ).toBeDisabled();
   });
 });

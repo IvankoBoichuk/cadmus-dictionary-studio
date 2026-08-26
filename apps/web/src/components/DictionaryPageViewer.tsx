@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-import { dictionaryPageImageUrl, type LexemeResponse, type LexemeSuggestion } from "../api";
+import {
+  API,
+  apiMessageFrom,
+  dictionaryPageImageUrl,
+  duplicateEntryFrom,
+  type LexemeResponse,
+  type LexemeSuggestion,
+} from "../api";
 import { useDeleteLexeme } from "../hooks/useDeleteLexeme";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
 import { useLexemesForPage } from "../hooks/useLexemesForPage";
@@ -20,6 +28,7 @@ export function DictionaryPageViewer({
   pageNumber: number;
   onNavigate: (pageNumber: number) => void;
 }) {
+  const navigate = useNavigate();
   const summary = useDictionaryPagesSummary(dictionaryId);
   const totalPages = summary.status === "loaded" ? summary.totalPages : null;
 
@@ -45,6 +54,8 @@ export function DictionaryPageViewer({
     reset: resetOcrSuggestions,
   } = useOcrSuggestions(dictionaryId, currentPage);
 
+  const [promotingLexemeId, setPromotingLexemeId] = useState<string | null>(null);
+  const [promoteError, setPromoteError] = useState<string | null>(null);
   const [selectedLexemeId, setSelectedLexemeId] = useState<string | null>(null);
   const [redrawingLexemeId, setRedrawingLexemeId] = useState<string | null>(null);
   const [secondBoxDraftLexemeId, setSecondBoxDraftLexemeId] = useState<string | null>(
@@ -133,6 +144,39 @@ export function DictionaryPageViewer({
     });
   };
 
+  const handleMarkComplete = (lexemeId: string) => {
+    const target = findLexeme(lexemeId);
+    if (!target) return;
+    if (!window.confirm("Позначити лексему завершеною? Її більше не можна редагувати.")) {
+      return;
+    }
+    void submitUpdate(lexemeId, {
+      ...lexemeToUpdateInput(target),
+      status: "complete",
+    }).then((updated) => {
+      if (updated) updateLexeme(updated);
+    });
+  };
+
+  const handlePromoteToEntry = (lexemeId: string) => {
+    setPromotingLexemeId(lexemeId);
+    setPromoteError(null);
+    API.lexemes.promote(dictionaryId, lexemeId).then(
+      (entry) => navigate(`/entries/${entry.id}`),
+      (error: unknown) => {
+        const duplicate = duplicateEntryFrom(error);
+        if (duplicate) {
+          navigate(`/entries/${duplicate.entry_id}`);
+          return;
+        }
+        setPromotingLexemeId(null);
+        setPromoteError(
+          apiMessageFrom(error) ?? "Не вдалося створити статтю з лексеми.",
+        );
+      },
+    );
+  };
+
   const handleDelete = (lexemeId: string) => {
     void deleteLexeme(lexemeId).then((deleted) => {
       if (!deleted) return;
@@ -176,6 +220,11 @@ export function DictionaryPageViewer({
           </span>
         )}
       </div>
+      {promoteError && (
+        <p className="form-error" role="alert">
+          {promoteError}
+        </p>
+      )}
       <div className="page-viewer-body">
         <LexemeCanvas
           dictionaryId={dictionaryId}
@@ -213,6 +262,9 @@ export function DictionaryPageViewer({
             onStartAddSecondBox={handleStartAddSecondBox}
             onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
             onRemoveSecondBox={handleRemoveSecondBox}
+            onMarkComplete={handleMarkComplete}
+            onPromoteToEntry={handlePromoteToEntry}
+            promotingLexemeId={promotingLexemeId}
           />
         </aside>
       </div>

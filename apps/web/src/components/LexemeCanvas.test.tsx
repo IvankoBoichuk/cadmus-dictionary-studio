@@ -44,6 +44,7 @@ function lexemeFixture(overrides: Partial<LexemeResponse> = {}): LexemeResponse 
     width: 200,
     height: 80,
     origin: "manual",
+    status: "draft",
     created_at: "2026-08-18T00:00:00Z",
     created_by: "user-1",
     updated_at: "2026-08-18T00:00:00Z",
@@ -343,6 +344,23 @@ describe("LexemeCanvas", () => {
 
     expect(await screen.findByTitle("перше")).toBeInTheDocument();
     expect(screen.queryByTitle("друге")).not.toBeInTheDocument();
+  });
+
+  it("scrolls to and focuses the selected lexeme's box (BH-70)", async () => {
+    stubContainerRect();
+    const scrollIntoViewMock = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(
+      scrollIntoViewMock,
+    );
+
+    renderCanvas({ lexemes: [lexemeFixture()], selectedLexemeId: "lex-1" });
+    await loadImage();
+
+    const box = await screen.findByTitle("слово");
+    expect(scrollIntoViewMock).toHaveBeenCalledWith(
+      expect.objectContaining({ block: "center" }),
+    );
+    expect(box).toHaveFocus();
   });
 
   it("dragging a resize handle resizes the selected lexeme's box", async () => {

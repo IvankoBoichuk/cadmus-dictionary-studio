@@ -71,6 +71,7 @@ dictionaries = Table(
     Column("status", String(32), nullable=False),
     Column("title", String(512), nullable=True),
     Column("description", Text, nullable=True),
+    Column("article_description", Text, nullable=True),
     Column("dictionary_type", String(255), nullable=True),
     Column("publisher", String(255), nullable=True),
     Column("publication_year", Integer, nullable=True),
