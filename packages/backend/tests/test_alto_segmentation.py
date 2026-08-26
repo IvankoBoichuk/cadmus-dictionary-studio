@@ -6,6 +6,8 @@ from io import BytesIO
 
 import pytest
 from cadmus.infrastructure.ocr import (
+    _DEFAULT_SEGMENT_MIN_PADDING,
+    _DEFAULT_SEGMENT_PADDING_RATIO,
     OcrExecutionError,
     _padded_and_clamped_box,
     _union_box,
@@ -82,7 +84,7 @@ def test_union_box_covers_all_given_boxes() -> None:
     assert box == (0.0, 10.0, 30.0, 35.0)
 
 
-def test_padded_and_clamped_box_adds_padding_around_the_box() -> None:
+def test_padded_and_clamped_box_pads_each_axis_by_its_own_size() -> None:
     box = _padded_and_clamped_box(
         (100.0, 100.0, 20.0, 10.0),
         image_width=1000,
@@ -91,8 +93,13 @@ def test_padded_and_clamped_box_adds_padding_around_the_box() -> None:
         min_padding=5.0,
     )
 
-    # larger side is 20, ratio 0.5 -> padding 10 (beats the 5px floor)
-    assert box == (90.0, 90.0, 40.0, 30.0)
+    # width 20 * 0.5 -> padding_x 10 (beats the 5px floor);
+    # height 10 * 0.5 -> padding_y 5 (equals the floor) -- NOT the width's
+    # padding applied to both axes, which is the BH-148 bug this guards:
+    # a wide-but-short box (typical dictionary entry) must not get a huge
+    # vertical margin derived from its width, or the crop swallows a
+    # neighboring entry above/below.
+    assert box == (90.0, 95.0, 40.0, 20.0)
 
 
 def test_padded_and_clamped_box_uses_the_minimum_padding_floor() -> None:
@@ -172,3 +179,24 @@ def test_crop_region_covers_the_union_of_multiple_boxes() -> None:
 def test_crop_region_requires_at_least_one_box() -> None:
     with pytest.raises(ValueError, match="at least one box"):
         crop_region(_solid_png(10, 10), [])
+
+
+def test_default_padding_stays_well_under_a_line_height_for_a_wide_entry() -> None:
+    # Regression test for a real BH-148 bug: a typical multi-line
+    # dictionary-entry box (much wider than tall) got the *same* padding
+    # on both axes, derived from its width -- vertically that's several
+    # times a line's height, so the crop (and therefore OCR segmentation
+    # handed to the AI) swallowed the entire neighboring entry above/below,
+    # and the AI extracted that neighbor's words instead of this entry's.
+    box = _padded_and_clamped_box(
+        (555.0, 515.0, 508.0, 179.0),  # a real reported entry's fragment box
+        image_width=2000,
+        image_height=2000,
+        padding_ratio=_DEFAULT_SEGMENT_PADDING_RATIO,
+        min_padding=_DEFAULT_SEGMENT_MIN_PADDING,
+    )
+
+    _left, top, _width, _height = box
+    vertical_padding = 515.0 - top
+    # well under a plausible line height (~30px for a 179px/5-line block)
+    assert vertical_padding < 20

@@ -41,8 +41,11 @@ Box = tuple[float, float, float, float]
 """``(x, y, width, height)`` in page-pixel coordinates -- the convention
 already shared by ``Lexeme``/``EntryFragment``."""
 
-_DEFAULT_SEGMENT_PADDING_RATIO: Final = 0.2
-_DEFAULT_SEGMENT_MIN_PADDING: Final = 40.0
+_DEFAULT_SEGMENT_PADDING_RATIO: Final = 0.08
+_DEFAULT_SEGMENT_MIN_PADDING: Final = 10.0
+"""Deliberately modest: padding only needs to catch an edge clipped by a
+slightly-tight box, not pull in a neighboring dictionary entry above/below
+(see ``_padded_and_clamped_box``)."""
 
 
 class OcrExecutionError(RuntimeError):
@@ -196,12 +199,25 @@ def _padded_and_clamped_box(
     padding_ratio: float,
     min_padding: float,
 ) -> Box:
+    """Pad each axis by its *own* size, not by the box's larger side.
+
+    A dictionary entry's box is typically much wider than it is tall (a
+    multi-line paragraph). Padding both axes off the wider side (as an
+    isotropic margin would) inflates the vertical padding far past a line's
+    height, and the crop swallows a whole neighboring entry above/below --
+    which then contaminates OCR segmentation with another entry's words,
+    with nothing to tell the AI which words are actually this fragment's.
+    Padding vertically by the box's own (much smaller) height keeps the
+    margin safely under a typical line height while still catching a
+    slightly clipped edge.
+    """
     x, y, width, height = box
-    padding = max(min_padding, max(width, height) * padding_ratio)
-    left = max(0.0, x - padding)
-    top = max(0.0, y - padding)
-    right = min(float(image_width), x + width + padding)
-    bottom = min(float(image_height), y + height + padding)
+    padding_x = max(min_padding, width * padding_ratio)
+    padding_y = max(min_padding, height * padding_ratio)
+    left = max(0.0, x - padding_x)
+    top = max(0.0, y - padding_y)
+    right = min(float(image_width), x + width + padding_x)
+    bottom = min(float(image_height), y + height + padding_y)
     return (left, top, max(0.0, right - left), max(0.0, bottom - top))
 
 
@@ -217,10 +233,12 @@ def crop_region(
     The crop exists only as PNG bytes in memory -- callers write it to a
     ``TemporaryDirectory`` for feeding to Tesseract and never persist it, so
     the original page image is never mutated or replaced. Padding is
-    generous by design (20% of the region's larger side, at least 40px) so
-    that a slightly-undersized manual box still lets OCR pick up text right
-    at its edges. Returns ``(png_bytes, origin_x, origin_y)`` -- the crop's
-    top-left corner in the original image's coordinate space, needed to
+    deliberately modest (8% of each box's own width/height, at least 10px --
+    see ``_padded_and_clamped_box``) so a slightly-undersized manual box
+    still lets OCR pick up text right at its edges, without pulling in a
+    neighboring dictionary entry above/below. Returns ``(png_bytes,
+    origin_x, origin_y)`` -- the crop's top-left corner in the original
+    image's coordinate space, needed to
     translate ALTO word positions back.
     """
     if not boxes:
