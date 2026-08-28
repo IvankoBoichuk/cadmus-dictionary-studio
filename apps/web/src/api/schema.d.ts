@@ -1595,6 +1595,8 @@ export interface components {
              * Format: uuid
              */
             fragment_id: string;
+            /** Height */
+            height: number | null;
             /**
              * Id
              * Format: uuid
@@ -1609,9 +1611,9 @@ export interface components {
             position: number;
             role: components["schemas"]["EntryFieldRole"];
             /** Source End */
-            source_end: number;
+            source_end: number | null;
             /** Source Start */
-            source_start: number;
+            source_start: number | null;
             /** Source Text */
             source_text: string;
             /**
@@ -1619,6 +1621,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Width */
+            width: number | null;
+            /** X */
+            x: number | null;
+            /** Y */
+            y: number | null;
         };
         /**
          * EntryFieldRole

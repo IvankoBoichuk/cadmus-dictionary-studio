@@ -1,9 +1,9 @@
-"""Celery task: AI entry field extraction (BH-148)."""
+"""Celery task: AI entry field extraction (BH-148, ALTO segmentation variant 1)."""
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import TracebackType
-from typing import cast
+from typing import BinaryIO, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -16,11 +16,18 @@ from cadmus.lexicography import (
     EntryFragment,
     EntryStatus,
     ExtractedField,
+    FragmentSegment,
     LexicographyRepository,
     RuleBasedAnnotationService,
     SchemaGenerationStatus,
 )
-from cadmus.sources import Dictionary, DictionaryStatus, SourcesRepository
+from cadmus.sources import (
+    Dictionary,
+    DictionaryPage,
+    DictionaryStatus,
+    ObjectNotFoundError,
+    SourcesRepository,
+)
 from cadmus_worker import entry_extraction_tasks
 from cadmus_worker.entry_extraction_tasks import (
     _EntryExtractionDependencies,
@@ -29,15 +36,31 @@ from cadmus_worker.entry_extraction_tasks import (
 
 NOW = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
 
+_SEGMENTS = [
+    FragmentSegment(
+        index=0, text="слово", x=0, y=0, width=40, height=10, confidence=0.9
+    ),
+    FragmentSegment(
+        index=1, text="означає", x=45, y=0, width=50, height=10, confidence=0.9
+    ),
+    FragmentSegment(
+        index=2, text="щось", x=100, y=0, width=30, height=10, confidence=0.9
+    ),
+]
+
 
 @dataclass
 class MemorySourcesRepository:
     dictionaries: dict[UUID, Dictionary] = field(default_factory=dict)
+    pages: dict[UUID, DictionaryPage] = field(default_factory=dict)
     abbreviations: dict[UUID, list[object]] = field(default_factory=dict)
     settlements: dict[UUID, list[object]] = field(default_factory=dict)
 
     def get_dictionary(self, dictionary_id: UUID) -> Dictionary | None:
         return self.dictionaries.get(dictionary_id)
+
+    def get_page_by_id(self, page_id: UUID) -> DictionaryPage | None:
+        return self.pages.get(page_id)
 
     def list_abbreviations(self, dictionary_id: UUID) -> list[object]:
         return list(self.abbreviations.get(dictionary_id, []))
@@ -116,25 +139,60 @@ class MemoryLexicographyUnitOfWork:
         pass
 
 
+@dataclass
+class FakeObjectStorage:
+    uploaded: dict[str, bytes] = field(default_factory=dict)
+
+    def upload(
+        self, key: str, source: BinaryIO, length: int, content_type: str
+    ) -> None:
+        raise AssertionError("not used by extraction")
+
+    def download(self, key: str, destination: BinaryIO) -> None:
+        if key not in self.uploaded:
+            raise ObjectNotFoundError(key)
+        destination.write(self.uploaded[key])
+
+    def delete(self, key: str) -> None:
+        raise AssertionError("not used by extraction")
+
+    def delete_prefix(self, prefix: str) -> None:
+        raise AssertionError("not used by extraction")
+
+
+class FakeOcrProvider:
+    def __init__(self, *, segments: list[FragmentSegment] | None = _SEGMENTS) -> None:
+        self.segments = segments
+        self.calls: list[tuple[bytes, object, str]] = []
+
+    def segment_region(
+        self, image_bytes: bytes, boxes: object, language: str
+    ) -> list[FragmentSegment]:
+        self.calls.append((image_bytes, boxes, language))
+        return list(self.segments or [])
+
+
 class FakeAiSchemaProvider:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
+        self.received_segments: list[FragmentSegment] | None = None
 
     def generate_schema(self, article_description: str):  # type: ignore[no-untyped-def]
         raise AssertionError("not used by extraction")
 
-    def extract_fields(self, schema: ArticleSchema, source_text: str):  # type: ignore[no-untyped-def]
+    def extract_fields(self, schema: ArticleSchema, segments):  # type: ignore[no-untyped-def]
         from cadmus.infrastructure.ai_schema import AiSchemaProviderError
 
+        self.received_segments = list(segments)
         if self.fail:
             raise AiSchemaProviderError("provider unavailable")
         return [
             ExtractedField(
                 field_path="headword",
                 role=EntryFieldRole.HEADWORD,
-                value=source_text[:5],
-                source_start=0,
-                source_end=5,
+                value=segments[0].text,
+                segment_start=0,
+                segment_end=1,
                 confidence=0.9,
             )
         ]
@@ -149,6 +207,19 @@ def _dictionary() -> Dictionary:
         created_at=NOW,
         updated_at=NOW,
         updated_by=owner_id,
+    )
+
+
+def _page() -> DictionaryPage:
+    return DictionaryPage(
+        id=uuid4(),
+        source_file_id=uuid4(),
+        page_index=0,
+        processed_asset_key="pages/0.png",
+        width=1000,
+        height=1400,
+        checksum_sha256="checksum",
+        created_at=NOW,
     )
 
 
@@ -167,11 +238,11 @@ def _entry(dictionary_id: UUID) -> DictionaryEntry:
     )
 
 
-def _fragment(entry_id: UUID) -> EntryFragment:
+def _fragment(entry_id: UUID, page_id: UUID) -> EntryFragment:
     return EntryFragment(
         id=uuid4(),
         entry_id=entry_id,
-        page_id=uuid4(),
+        page_id=page_id,
         x=0,
         y=0,
         width=100,
@@ -197,16 +268,28 @@ def _schema(dictionary_id: UUID) -> ArticleSchema:
 
 
 class Fixture:
-    def __init__(self, *, provider_fails: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        provider_fails: bool = False,
+        segments: list[FragmentSegment] | None = _SEGMENTS,
+        page_image_missing: bool = False,
+    ) -> None:
         self.sources_repository = MemorySourcesRepository()
         self.lexicography_repository = MemoryLexicographyRepository()
         self.provider = FakeAiSchemaProvider(fail=provider_fails)
+        self.ocr_provider = FakeOcrProvider(segments=segments)
+        self.object_storage = FakeObjectStorage()
 
         self.dictionary = _dictionary()
         self.sources_repository.dictionaries[self.dictionary.id] = self.dictionary
+        self.page = _page()
+        self.sources_repository.pages[self.page.id] = self.page
+        if not page_image_missing:
+            self.object_storage.uploaded[self.page.processed_asset_key] = b"fake-png"
         self.entry = _entry(self.dictionary.id)
         self.lexicography_repository.entries[self.entry.id] = self.entry
-        self.fragment = _fragment(self.entry.id)
+        self.fragment = _fragment(self.entry.id, self.page.id)
         self.lexicography_repository.fragments[self.entry.id] = [self.fragment]
         self.schema = _schema(self.dictionary.id)
         self.lexicography_repository.article_schemas[self.schema.id] = self.schema
@@ -223,6 +306,11 @@ class Fixture:
             lexicography_unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
                 self.lexicography_repository
             ),
+            sources_unit_of_work_factory=lambda: MemorySourcesUnitOfWork(
+                self.sources_repository
+            ),
+            object_storage=self.object_storage,
+            ocr_provider=self.ocr_provider,  # type: ignore[arg-type]
             ai_schema_provider=self.provider,  # type: ignore[arg-type]
             annotation_service=annotation_service,
         )
@@ -233,7 +321,7 @@ class Fixture:
         )
 
 
-def test_extract_entry_fields_persists_model_fields_and_advances_status(
+def test_extract_entry_fields_persists_model_fields_with_geometry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixture = Fixture()
@@ -246,8 +334,14 @@ def test_extract_entry_fields_persists_model_fields_and_advances_status(
     assert result["status"] == "succeeded"
     fields = fixture.lexicography_repository.list_fields_for_entry(fixture.entry.id)
     assert len(fields) == 1
-    assert fields[0].origin is EntryFieldOrigin.MODEL
-    assert fields[0].fragment_id == fixture.fragment.id
+    stored = fields[0]
+    assert stored.origin is EntryFieldOrigin.MODEL
+    assert stored.fragment_id == fixture.fragment.id
+    # union of segments 0 and 1: x in [0, 45+50) -> width 95, height 10
+    assert stored.source_text == "слово означає"
+    assert (stored.x, stored.y, stored.width, stored.height) == (0, 0, 95, 10)
+    assert stored.source_start is None
+    assert stored.source_end is None
     stored_entry = fixture.lexicography_repository.entries[fixture.entry.id]
     assert stored_entry.status is EntryStatus.READY_TO_REVIEW
     assert stored_entry.schema_id == fixture.schema.id
@@ -271,6 +365,36 @@ def test_extract_entry_fields_skips_a_failed_fragment_without_crashing(
         fixture.lexicography_repository.entries[fixture.entry.id].status
         is EntryStatus.READY_TO_REVIEW
     )
+
+
+def test_extract_entry_fields_skips_a_fragment_with_no_ocr_segments(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = Fixture(segments=[])
+    fixture.install(monkeypatch)
+
+    result = extract_entry_fields.apply(
+        args=[str(fixture.entry.id), str(fixture.entry.created_by)], task_id="task-2b"
+    ).get()
+
+    assert result["status"] == "succeeded"
+    assert result["created_fields"] == 0
+    assert fixture.provider.received_segments is None
+
+
+def test_extract_entry_fields_skips_a_fragment_with_a_missing_page_image(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = Fixture(page_image_missing=True)
+    fixture.install(monkeypatch)
+
+    result = extract_entry_fields.apply(
+        args=[str(fixture.entry.id), str(fixture.entry.created_by)], task_id="task-2c"
+    ).get()
+
+    assert result["status"] == "succeeded"
+    assert result["created_fields"] == 0
+    assert fixture.provider.received_segments is None
 
 
 def test_extract_entry_fields_missing_entry_does_not_crash(

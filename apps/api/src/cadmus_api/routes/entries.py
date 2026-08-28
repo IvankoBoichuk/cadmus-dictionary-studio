@@ -67,8 +67,12 @@ class EntryFieldResponse(BaseModel):
     role: EntryFieldRole
     position: int
     source_text: str
-    source_start: int
-    source_end: int
+    source_start: int | None
+    source_end: int | None
+    x: float | None
+    y: float | None
+    width: float | None
+    height: float | None
     normalized_text: str | None
     confidence: float | None
     origin: EntryFieldOrigin
@@ -240,6 +244,10 @@ def _entry_response(
                 source_text=field.source_text,
                 source_start=field.source_start,
                 source_end=field.source_end,
+                x=field.x,
+                y=field.y,
+                width=field.width,
+                height=field.height,
                 normalized_text=field.normalized_text,
                 confidence=field.confidence,
                 origin=field.origin,
@@ -439,6 +447,10 @@ def create_entries_router(
             source_text=field.source_text,
             source_start=field.source_start,
             source_end=field.source_end,
+            x=field.x,
+            y=field.y,
+            width=field.width,
+            height=field.height,
             normalized_text=field.normalized_text,
             confidence=field.confidence,
             origin=field.origin,
@@ -491,6 +503,10 @@ def create_entries_router(
             source_text=field.source_text,
             source_start=field.source_start,
             source_end=field.source_end,
+            x=field.x,
+            y=field.y,
+            width=field.width,
+            height=field.height,
             normalized_text=field.normalized_text,
             confidence=field.confidence,
             origin=field.origin,

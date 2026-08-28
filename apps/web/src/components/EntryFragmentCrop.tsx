@@ -1,11 +1,14 @@
 import { useState, type SyntheticEvent } from "react";
 
-import { dictionaryPageImageUrl, type EntryFragmentResponse } from "../api";
+import {
+  dictionaryPageImageUrl,
+  type EntryFieldResponse,
+  type EntryFragmentResponse,
+} from "../api";
 
 type Size = { width: number; height: number };
 type Box = { x: number; y: number; width: number; height: number };
 
-const CROP_DISPLAY_WIDTH = 480;
 const CROP_CONTEXT_PADDING_RATIO = 0.2;
 const CROP_MIN_PADDING = 40;
 
@@ -29,27 +32,25 @@ function fragmentBoxes(fragment: EntryFragmentResponse): Box[] {
   return boxes;
 }
 
-/** BH-148: a zoomed-in crop of the source page around one entry fragment,
- * so an editor can see exactly how the article was printed while filling
- * in its fields. */
-export function EntryFragmentCrop({
+/** Shared crop-math primitive: a zoomed-in view of one page's image around
+ * a padded union of `boxes`, with each box outlined. Used both for a whole
+ * fragment (BH-148) and for one field's own geometry (BH-148 ALTO
+ * segmentation, experimental variant 1). */
+function PageRegionCrop({
   dictionaryId,
-  fragment,
+  pageNumber,
+  boxes,
+  alt,
+  displayWidth = 480,
 }: {
   dictionaryId: string;
-  fragment: EntryFragmentResponse;
+  pageNumber: number;
+  boxes: Box[];
+  alt: string;
+  displayWidth?: number;
 }) {
   const [naturalSize, setNaturalSize] = useState<Size | null>(null);
 
-  if (fragment.page_number == null) {
-    return (
-      <p className="lede">
-        Не вдалося визначити сторінку джерела для цього фрагмента.
-      </p>
-    );
-  }
-
-  const boxes = fragmentBoxes(fragment);
   const minX = Math.min(...boxes.map((box) => box.x));
   const minY = Math.min(...boxes.map((box) => box.y));
   const maxX = Math.max(...boxes.map((box) => box.x + box.width));
@@ -61,7 +62,7 @@ export function EntryFragmentCrop({
   const cropY = Math.max(0, minY - padding);
   const cropWidth = maxX - minX + padding * 2;
   const cropHeight = maxY - minY + padding * 2;
-  const scale = cropWidth > 0 ? CROP_DISPLAY_WIDTH / cropWidth : 1;
+  const scale = cropWidth > 0 ? displayWidth / cropWidth : 1;
   const displayHeight = cropHeight * scale;
 
   const handleLoad = (event: SyntheticEvent<HTMLImageElement>) => {
@@ -72,12 +73,12 @@ export function EntryFragmentCrop({
   return (
     <div
       className="entry-fragment-crop"
-      style={{ width: CROP_DISPLAY_WIDTH, height: displayHeight }}
+      style={{ width: displayWidth, height: displayHeight }}
     >
       <img
         className="entry-fragment-crop-image"
-        src={dictionaryPageImageUrl(dictionaryId, fragment.page_number)}
-        alt={`Скан сторінки ${fragment.page_number}: «${fragment.recognized_text}»`}
+        src={dictionaryPageImageUrl(dictionaryId, pageNumber)}
+        alt={alt}
         draggable={false}
         onLoad={handleLoad}
         style={{
@@ -100,5 +101,67 @@ export function EntryFragmentCrop({
         />
       ))}
     </div>
+  );
+}
+
+/** BH-148: a zoomed-in crop of the source page around one entry fragment,
+ * so an editor can see exactly how the article was printed while filling
+ * in its fields. */
+export function EntryFragmentCrop({
+  dictionaryId,
+  fragment,
+}: {
+  dictionaryId: string;
+  fragment: EntryFragmentResponse;
+}) {
+  if (fragment.page_number == null) {
+    return (
+      <p className="lede">
+        Не вдалося визначити сторінку джерела для цього фрагмента.
+      </p>
+    );
+  }
+  return (
+    <PageRegionCrop
+      dictionaryId={dictionaryId}
+      pageNumber={fragment.page_number}
+      boxes={fragmentBoxes(fragment)}
+      alt={`Скан сторінки ${fragment.page_number}: «${fragment.recognized_text}»`}
+    />
+  );
+}
+
+/** BH-148 ALTO segmentation (experimental variant 1): a small crop around
+ * one field's own bounding box (the union of the OCR word segments it was
+ * extracted from), so an editor can confirm exactly where on the page a
+ * field came from -- not just which fragment. Renders nothing for fields
+ * without geometry (e.g. manually added ones, or ones from the flat-text
+ * extraction path). */
+export function EntryFieldCrop({
+  dictionaryId,
+  pageNumber,
+  field,
+}: {
+  dictionaryId: string;
+  pageNumber: number | null;
+  field: EntryFieldResponse;
+}) {
+  if (
+    pageNumber == null ||
+    field.x == null ||
+    field.y == null ||
+    field.width == null ||
+    field.height == null
+  ) {
+    return null;
+  }
+  return (
+    <PageRegionCrop
+      dictionaryId={dictionaryId}
+      pageNumber={pageNumber}
+      boxes={[{ x: field.x, y: field.y, width: field.width, height: field.height }]}
+      alt={`Розташування поля на сторінці: «${field.source_text}»`}
+      displayWidth={220}
+    />
   );
 }

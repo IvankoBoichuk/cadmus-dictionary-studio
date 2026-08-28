@@ -12,7 +12,7 @@ import {
   type EntryStatus,
 } from "../api";
 import { useAuth } from "../authContext";
-import { EntryFragmentCrop } from "../components/EntryFragmentCrop";
+import { EntryFieldCrop, EntryFragmentCrop } from "../components/EntryFragmentCrop";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
 import { useEntry } from "../hooks/useEntry";
 import { useEntryExtraction } from "../hooks/useEntryExtraction";
@@ -254,11 +254,15 @@ function AddFieldForm({
 
 function FieldRow({
   entryId,
+  dictionaryId,
+  pageNumber,
   field,
   onSaved,
   onDeleted,
 }: {
   entryId: string;
+  dictionaryId: string;
+  pageNumber: number | null;
   field: EntryFieldResponse;
   onSaved: (field: EntryFieldResponse) => void;
   onDeleted: (fieldId: string) => void;
@@ -360,6 +364,11 @@ function FieldRow({
           <button type="button" className="danger-button" onClick={() => void remove()}>
             Видалити
           </button>
+          <EntryFieldCrop
+            dictionaryId={dictionaryId}
+            pageNumber={pageNumber}
+            field={field}
+          />
         </>
       )}
       {error && (
@@ -507,6 +516,12 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
                   <FieldRow
                     key={field.id}
                     entryId={entry.id}
+                    dictionaryId={entry.dictionary_id}
+                    pageNumber={
+                      entry.fragments.find(
+                        (fragment) => fragment.id === field.fragment_id,
+                      )?.page_number ?? null
+                    }
                     field={field}
                     onSaved={handleFieldSaved}
                     onDeleted={handleFieldDeleted}
