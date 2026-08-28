@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import type { LexemeResponse, LexemeSuggestion } from "../api";
+import { isFinePointer, scrollIntoViewOptions } from "../interaction";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
 import { lexemeToUpdateInput, type UpdateLexemeInput } from "../hooks/useUpdateLexeme";
 import {
@@ -329,11 +330,9 @@ export function LexemeCanvas({
   // `scale` becomes non-null only once the image (and boxes) have actually mounted.
   useEffect(() => {
     if (!selectedLexemeId || !selectedBoxRef.current) return;
-    selectedBoxRef.current.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "center",
-    });
+    selectedBoxRef.current.scrollIntoView(
+      scrollIntoViewOptions({ block: "center", inline: "center" }),
+    );
     selectedBoxRef.current.focus({ preventScroll: true });
   }, [selectedLexemeId, scale]);
 
@@ -477,10 +476,12 @@ export function LexemeCanvas({
           suggestions
             .filter((suggestion) => suggestion !== pendingSuggestion)
             .map((suggestion, index) => (
-              <div
+              <button
+                type="button"
                 key={`${suggestion.x}-${suggestion.y}-${index}`}
                 className="lexeme-box lexeme-box--suggestion"
                 title={suggestion.source_text}
+                aria-label={`Прийняти запропоноване слово «${suggestion.source_text}»`}
                 onMouseDown={(event) => event.stopPropagation()}
                 onClick={() => handleAcceptSuggestion(suggestion)}
                 style={{
@@ -520,9 +521,10 @@ export function LexemeCanvas({
           <label htmlFor="lexeme-source-text">Текст лексеми</label>
           <input
             id="lexeme-source-text"
+            name="source_text"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            autoFocus
+            autoFocus={isFinePointer()}
             aria-invalid={Boolean(
               createState.status === "error" && createState.fieldErrors?.source_text,
             )}

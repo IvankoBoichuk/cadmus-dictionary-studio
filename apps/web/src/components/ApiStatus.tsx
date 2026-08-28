@@ -54,7 +54,7 @@ export function ApiStatus() {
   return (
     <section className="status-card" aria-labelledby="api-status-title">
       <div>
-        <p className="status-label">System status</p>
+        <p className="status-label">Стан системи</p>
         <h2 id="api-status-title">API</h2>
       </div>
       <div className={`status-indicator status-indicator--${state}`} role="status">

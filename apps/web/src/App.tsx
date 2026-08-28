@@ -23,7 +23,7 @@ function HomePage() {
   return (
     <main className="page" id="main-content">
       <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Lexicographic workspace</p>
+        <p className="eyebrow">Лексикографічний робочий простір</p>
         <h1 id="page-title">Cadmus Dictionary Studio</h1>
         <p className="lede">
           Основа інтерфейсу для перетворення сканів словників на перевірені
@@ -55,7 +55,12 @@ export function App() {
             Перейти до вмісту
           </a>
           <header className="site-header">
-            <Link className="brand" to="/" aria-label="Cadmus — головна">
+            <Link
+              className="brand"
+              to="/"
+              translate="no"
+              aria-label="Cadmus — головна"
+            >
               Cadmus
             </Link>
             <AuthActions />

@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useResetPasswordForm } from "../hooks/useResetPasswordForm";
 
 function InvalidLinkResult({ message }: { message: string }) {
@@ -21,6 +23,9 @@ export function ResetPasswordPage() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get("token");
   const form = useResetPasswordForm(token ?? "");
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
 
   if (!token) {
     return (
@@ -53,7 +58,7 @@ export function ResetPasswordPage() {
         <p className="eyebrow">Відновлення пароля</p>
         <h1 id="page-title">Встановіть новий пароль</h1>
         <p className="auth-intro">Введіть і підтвердіть новий пароль для акаунта.</p>
-        <form noValidate onSubmit={form.submit}>
+        <form noValidate ref={formRef} onSubmit={form.submit}>
           <div className="form-field">
             <label htmlFor="reset-password-new-password">Новий пароль</label>
             <input

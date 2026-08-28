@@ -1,9 +1,14 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useRegistrationForm } from "../hooks/useRegistrationForm";
 
 export function RegisterPage() {
   const form = useRegistrationForm();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
 
   if (form.message) {
     return (
@@ -29,13 +34,14 @@ export function RegisterPage() {
           Створіть акаунт за допомогою email і пароля. Після цього ми надішлемо
           посилання для підтвердження.
         </p>
-        <form noValidate onSubmit={form.submit}>
+        <form noValidate ref={formRef} onSubmit={form.submit}>
           <div className="form-field">
             <label htmlFor="email">Email</label>
             <input
               id="email"
               type="email"
               autoComplete="email"
+              spellCheck={false}
               {...form.getFieldProps("email")}
               aria-invalid={Boolean(form.errors.email)}
               aria-describedby={form.errors.email ? "email-error" : undefined}

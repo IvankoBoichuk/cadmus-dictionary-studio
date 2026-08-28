@@ -127,7 +127,9 @@ export function useDictionaryMetadataForm(
         });
         setDictionary(saved);
         setMissingRequiredFields(saved.missing_required_fields);
-        helpers.setValues(initialValuesFrom(saved));
+        // resetForm (not setValues) so `dirty` clears -- the unsaved-changes
+        // guard keys off it.
+        helpers.resetForm({ values: initialValuesFrom(saved) });
         helpers.setStatus({
           message:
             saved.missing_required_fields.length === 0

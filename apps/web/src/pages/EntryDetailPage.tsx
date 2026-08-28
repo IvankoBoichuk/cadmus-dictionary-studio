@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { useAuth } from "../authContext";
 import { EntryFieldCrop, EntryFragmentCrop } from "../components/EntryFragmentCrop";
+import { formatPercent } from "../format";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
 import { useEntry } from "../hooks/useEntry";
 import { useEntryExtraction } from "../hooks/useEntryExtraction";
@@ -204,9 +205,10 @@ function AddFieldForm({
           <label htmlFor="add-field-manual-path">Назва поля</label>
           <input
             id="add-field-manual-path"
+            name="field_path"
             value={manualPath}
             onChange={(event) => setManualPath(event.target.value)}
-            placeholder="напр. meaning[0]"
+            placeholder="напр. meaning[0]…"
           />
           <label htmlFor="add-field-manual-role">Роль</label>
           <select
@@ -228,6 +230,7 @@ function AddFieldForm({
       </label>
       <input
         id="add-field-source-text"
+        name="source_text"
         value={sourceText}
         onChange={(event) => setSourceText(event.target.value)}
         aria-invalid={sourceText.trim().length > 0 && !textFound}
@@ -330,6 +333,7 @@ function FieldRow({
           </label>
           <input
             id={`field-text-${field.id}`}
+            name="normalized_text"
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
           />
@@ -355,7 +359,7 @@ function FieldRow({
           <span className="badge badge--status">{ORIGIN_LABELS[field.origin]}</span>
           {field.confidence !== null && (
             <span className="badge badge--status">
-              {Math.round(field.confidence * 100)}%
+              {formatPercent(field.confidence)}
             </span>
           )}
           <button type="button" className="secondary-button" onClick={startEditing}>

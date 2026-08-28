@@ -1,5 +1,9 @@
+import { useRef } from "react";
+
 import type { SettlementMappingResponse } from "../api";
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useSettlementForm } from "../hooks/useSettlementForm";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { SettlementSearchCombobox } from "./SettlementSearchCombobox";
 
 export function SettlementForm({
@@ -14,10 +18,15 @@ export function SettlementForm({
   onCancel?: () => void;
 }) {
   const form = useSettlementForm(dictionaryId, editing, onSaved);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
+  useUnsavedChangesWarning(form.dirty && !form.isSubmitting);
 
   return (
     <form
       noValidate
+      ref={formRef}
       onSubmit={form.submit}
       aria-labelledby="settlement-form-heading"
       className="form-section"

@@ -36,7 +36,10 @@ export function ProjectMemberForm({
         <label htmlFor="member-email">Пошта</label>
         <input
           id="member-email"
+          name="email"
           type="email"
+          autoComplete="off"
+          spellCheck={false}
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />

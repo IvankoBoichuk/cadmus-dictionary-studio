@@ -1,6 +1,10 @@
+import { useRef } from "react";
+
 import type { AbbreviationResponse } from "../api";
 import { CATEGORY_OPTIONS } from "../abbreviationCategories";
 import { useAbbreviationForm } from "../hooks/useAbbreviationForm";
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { LANGUAGE_OPTIONS } from "../languageOptions";
 
 export function AbbreviationForm({
@@ -15,10 +19,15 @@ export function AbbreviationForm({
   onCancel?: () => void;
 }) {
   const form = useAbbreviationForm(dictionaryId, editing, onSaved);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
+  useUnsavedChangesWarning(form.dirty && !form.isSubmitting);
 
   return (
     <form
       noValidate
+      ref={formRef}
       onSubmit={form.submit}
       aria-labelledby="abbreviation-form-heading"
       className="form-section"
@@ -31,6 +40,8 @@ export function AbbreviationForm({
         <label htmlFor="abbreviation">Скорочення</label>
         <input
           id="abbreviation"
+          spellCheck={false}
+          autoComplete="off"
           {...form.getFieldProps("abbreviation")}
           aria-invalid={Boolean(form.errors.abbreviation)}
           aria-describedby={

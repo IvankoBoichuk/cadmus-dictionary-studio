@@ -1,8 +1,15 @@
+import { type FormEvent } from "react";
+
 import { usePageRangeEditor } from "../hooks/usePageRangeEditor";
 
 /** BH-28: lets the user configure one or more physical PDF page ranges. */
 export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
   const editor = usePageRangeEditor(dictionaryId);
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void editor.submit();
+  };
 
   if (editor.state.status === "loading") {
     return <p role="status">Завантажуємо діапазони сторінок…</p>;
@@ -16,7 +23,12 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
   }
 
   return (
-    <div className="form-section" aria-labelledby="page-ranges-heading">
+    <form
+      noValidate
+      className="form-section"
+      aria-labelledby="page-ranges-heading"
+      onSubmit={handleSubmit}
+    >
       <h2 id="page-ranges-heading">Діапазони сторінок</h2>
       <p className="section-hint">
         {editor.pageCount === null
@@ -99,14 +111,10 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
             {editor.submissionError}
           </p>
         )}
-        <button
-          disabled={editor.submitting}
-          type="button"
-          onClick={() => void editor.submit()}
-        >
+        <button disabled={editor.submitting} type="submit">
           {editor.submitting ? "Зберігаємо…" : "Зберегти діапазони"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

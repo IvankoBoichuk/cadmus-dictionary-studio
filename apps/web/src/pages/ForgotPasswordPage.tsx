@@ -1,9 +1,14 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useForgotPasswordForm } from "../hooks/useForgotPasswordForm";
 
 export function ForgotPasswordPage() {
   const form = useForgotPasswordForm();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
 
   if (form.message) {
     return (
@@ -28,13 +33,14 @@ export function ForgotPasswordPage() {
         <p className="auth-intro">
           Вкажіть email, і ми надішлемо посилання для встановлення нового пароля.
         </p>
-        <form noValidate onSubmit={form.submit}>
+        <form noValidate ref={formRef} onSubmit={form.submit}>
           <div className="form-field">
             <label htmlFor="forgot-password-email">Email</label>
             <input
               id="forgot-password-email"
               type="email"
               autoComplete="email"
+              spellCheck={false}
               {...form.getFieldProps("email")}
               aria-invalid={Boolean(form.errors.email)}
               aria-describedby={

@@ -1,12 +1,17 @@
+import { useRef } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 
 import { API_BASE_URL } from "../config";
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useLoginForm } from "../hooks/useLoginForm";
 import { useAuth } from "../authContext";
 
 function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
   const form = useLoginForm();
+  const formRef = useRef<HTMLFormElement>(null);
   const [searchParams] = useSearchParams();
+
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
   const googleAuthFailed = searchParams.get("error") === "google_auth_failed";
   const emailError = form.touched.email ? form.errors.email : undefined;
   const passwordError = form.touched.password ? form.errors.password : undefined;
@@ -30,13 +35,14 @@ function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
             email і паролем.
           </p>
         )}
-        <form noValidate onSubmit={form.handleSubmit}>
+        <form noValidate ref={formRef} onSubmit={form.handleSubmit}>
           <div className="form-field">
             <label htmlFor="login-email">Email</label>
             <input
               id="login-email"
               type="email"
               autoComplete="email"
+              spellCheck={false}
               {...form.getFieldProps("email")}
               aria-invalid={Boolean(emailError)}
               aria-describedby={emailError ? "login-email-error" : undefined}

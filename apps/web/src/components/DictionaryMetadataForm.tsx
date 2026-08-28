@@ -1,7 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import type { ContributorRole, DictionaryResponse, LegalStatus } from "../api";
+import { formatBytes } from "../hooks/useDictionaryUpload";
 import { useDictionaryMetadataForm } from "../hooks/useDictionaryMetadataForm";
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { LANGUAGE_OPTIONS } from "../languageOptions";
 
 const MISSING_FIELD_LABELS: Record<string, string> = {
@@ -35,13 +38,8 @@ export function DictionaryMetadataForm({
   const form = useDictionaryMetadataForm(initialDictionary, onSaved);
   const formRef = useRef<HTMLFormElement>(null);
 
-  useEffect(() => {
-    if (form.submitCount === 0 || form.isSubmitting) return;
-    const invalidField = formRef.current?.querySelector<HTMLElement>(
-      '[aria-invalid="true"]',
-    );
-    invalidField?.focus();
-  }, [form.submitCount, form.isSubmitting]);
+  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
+  useUnsavedChangesWarning(form.dirty && !form.isSubmitting);
 
   return (
     <form
@@ -54,7 +52,8 @@ export function DictionaryMetadataForm({
         <div className="form-section">
           <h2 id="metadata-heading">Джерело</h2>
           <p className="file-summary">
-            {source.original_filename} · {(source.byte_size / 1024).toFixed(0)} КБ
+            <span translate="no">{source.original_filename}</span> ·{" "}
+            {formatBytes(source.byte_size)}
             {source.inspection_status === "pending" && " · перевіряємо PDF…"}
             {source.inspection_status === "verified" &&
               source.page_count !== null &&
@@ -117,6 +116,7 @@ export function DictionaryMetadataForm({
           <input
             id="publication_year"
             inputMode="numeric"
+            spellCheck={false}
             {...form.getFieldProps("publication_year")}
             aria-invalid={Boolean(form.errors.publication_year)}
             aria-describedby={
@@ -139,6 +139,8 @@ export function DictionaryMetadataForm({
           <label htmlFor="isbn">ISBN</label>
           <input
             id="isbn"
+            spellCheck={false}
+            autoComplete="off"
             {...form.getFieldProps("isbn")}
             aria-invalid={Boolean(form.errors.isbn)}
             aria-describedby={form.errors.isbn ? "isbn-error" : undefined}
@@ -152,7 +154,11 @@ export function DictionaryMetadataForm({
 
         <div className="form-field">
           <label htmlFor="digital_source">Джерело цифрової копії</label>
-          <input id="digital_source" {...form.getFieldProps("digital_source")} />
+          <input
+            id="digital_source"
+            autoComplete="off"
+            {...form.getFieldProps("digital_source")}
+          />
         </div>
 
         <fieldset className="contributor-fieldset">

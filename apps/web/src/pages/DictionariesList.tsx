@@ -15,6 +15,8 @@ function Thumbnail({ entry }: { entry: DictionaryEntry }) {
         src={dictionaryThumbnailUrl(entry.id)}
         alt=""
         loading="lazy"
+        width={256}
+        height={224}
       />
     );
   }

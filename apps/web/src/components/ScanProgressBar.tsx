@@ -1,3 +1,4 @@
+import { formatNumber } from "../format";
 import { useDictionaryScan } from "../hooks/useDictionaryScan";
 import { useScanProgress } from "../hooks/useScanProgress";
 
@@ -46,14 +47,15 @@ export function ScanProgressBar({
       </button>
       {(scanState.status === "queued" || scanState.status === "running") && (
         <span className="lede" role="status">
-          Опрацьовано {scanState.processedPages} / {scanState.totalPages} сторінок,
-          створено лексем: {scanState.createdLexemes}
+          Опрацьовано {formatNumber(scanState.processedPages)} /{" "}
+          {formatNumber(scanState.totalPages)} сторінок, створено лексем:{" "}
+          {formatNumber(scanState.createdLexemes)}
         </span>
       )}
       {scanState.status === "succeeded" && (
         <span className="lede" role="status">
-          Чергу завершено: опрацьовано {scanState.processedPages} сторінок, створено
-          лексем: {scanState.createdLexemes}
+          Чергу завершено: опрацьовано {formatNumber(scanState.processedPages)}{" "}
+          сторінок, створено лексем: {formatNumber(scanState.createdLexemes)}
         </span>
       )}
       {scanState.status === "failed" && (
@@ -112,10 +114,14 @@ export function ScanProgressBar({
       </h3>
       {scanControls}
       <p className="scan-progress-summary" role="status">
-        Опрацьовано {progress.processed_pages} / {progress.total_pages} сторінок
+        Опрацьовано {formatNumber(progress.processed_pages)} /{" "}
+        {formatNumber(progress.total_pages)} сторінок
       </p>
       <div className="progress-track">
-        <div className="progress-bar" style={{ width: `${percent}%` }} />
+        <div
+          className="progress-bar"
+          style={{ transform: `scaleX(${percent / 100})` }}
+        />
       </div>
       <div className="scan-progress-pages">
         {progress.pages.map((page) => (

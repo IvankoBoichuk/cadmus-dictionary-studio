@@ -78,7 +78,9 @@ export function DictionarySourceUpload({
           >
             <div
               className="progress-bar"
-              style={{ width: `${Math.round(state.progress * 100)}%` }}
+              style={{
+                transform: `scaleX(${Math.min(1, Math.max(0, state.progress))})`,
+              }}
             />
           </div>
         )}

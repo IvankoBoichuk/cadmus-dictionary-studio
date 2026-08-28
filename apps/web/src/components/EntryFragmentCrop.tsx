@@ -81,6 +81,10 @@ function PageRegionCrop({
         alt={alt}
         draggable={false}
         onLoad={handleLoad}
+        width={Math.round(naturalSize ? naturalSize.width * scale : displayWidth)}
+        height={Math.round(
+          naturalSize ? naturalSize.height * scale : displayHeight,
+        )}
         style={{
           left: -cropX * scale,
           top: -cropY * scale,

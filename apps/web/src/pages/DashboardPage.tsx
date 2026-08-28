@@ -17,7 +17,7 @@ export function DashboardPage() {
   return (
     <main className="page" id="main-content">
       <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Dashboard</p>
+        <p className="eyebrow">Панель</p>
         <h1 id="page-title">Робочий простір</h1>
         <p className="lede">Ви увійшли як {session.user.email}.</p>
         <Link className="primary-link" to="/dictionaries/new">

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { isFinePointer } from "../interaction";
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
 import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
 import { LEXEME_STATUS_LABELS } from "../lexemeStatusLabels";
@@ -117,10 +118,11 @@ export function LexemeList({
                   </label>
                   <input
                     id={`lexeme-edit-text-${lexeme.id}`}
+                    name="source_text"
                     value={draftText}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => setDraftText(event.target.value)}
-                    autoFocus
+                    autoFocus={isFinePointer()}
                   />
                 </>
               ) : (
