@@ -1,107 +1,69 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-import { ApiStatus } from "./components/ApiStatus";
-import { AuthActions } from "./components/AuthActions";
+import { AppShell } from "./components/AppShell";
 import { AuthProvider } from "./components/AuthProvider";
+import { DictionaryLayout } from "./components/DictionaryLayout";
+import { DictionarySettingsLayout } from "./components/DictionarySettingsLayout";
+import { PublicLayout } from "./components/PublicLayout";
 import { AbbreviationsPage } from "./pages/AbbreviationsPage";
 import { ArticleSchemaPage } from "./pages/ArticleSchemaPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DictionariesList } from "./pages/DictionariesList";
-import { DictionaryFormPage } from "./pages/DictionaryFormPage";
-import { DictionaryViewerPage } from "./pages/DictionaryViewerPage";
+import { DictionaryMetadataPage } from "./pages/DictionaryMetadataPage";
+import { DictionaryOverviewPage } from "./pages/DictionaryOverviewPage";
+import { DictionaryWorkspacePage } from "./pages/DictionaryWorkspacePage";
 import { EntryDetailPage } from "./pages/EntryDetailPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NewDictionaryPage } from "./pages/NewDictionaryPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { PageRangesPage } from "./pages/PageRangesPage";
 import { ProjectMembersPage } from "./pages/ProjectMembersPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SettlementsPage } from "./pages/SettlementsPage";
+import { StatusPage } from "./pages/StatusPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
-
-function HomePage() {
-  return (
-    <main className="page" id="main-content">
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Lexicographic workspace</p>
-        <h1 id="page-title">Cadmus Dictionary Studio</h1>
-        <p className="lede">
-          Основа інтерфейсу для перетворення сканів словників на перевірені
-          структуровані дані.
-        </p>
-      </section>
-      <ApiStatus />
-    </main>
-  );
-}
-
-function NotFoundPage() {
-  return (
-    <main className="page" id="main-content">
-      <h1>Сторінку не знайдено</h1>
-      <p>
-        <Link to="/">Повернутися на головну</Link>
-      </p>
-    </main>
-  );
-}
 
 export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="app-shell">
-          <a className="skip-link" href="#main-content">
-            Перейти до вмісту
-          </a>
-          <header className="site-header">
-            <Link className="brand" to="/" aria-label="Cadmus — головна">
-              Cadmus
-            </Link>
-            <AuthActions />
-          </header>
-          <Routes>
+        <Routes>
+          <Route element={<PublicLayout />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/status" element={<StatusPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dictionaries/new" element={<DictionaryFormPage />} />
-            <Route path="/dictionaries" element={<DictionariesList />} />
-            <Route
-              path="/dictionaries/:dictionaryId/edit"
-              element={<DictionaryFormPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/abbreviations"
-              element={<AbbreviationsPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/settlements"
-              element={<SettlementsPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/page-ranges"
-              element={<PageRangesPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/members"
-              element={<ProjectMembersPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/view"
-              element={<DictionaryViewerPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/article-schema"
-              element={<ArticleSchemaPage />}
-            />
-            <Route path="/entries/:entryId" element={<EntryDetailPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </div>
+          </Route>
+          <Route element={<AppShell />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dictionaries" element={<DictionariesList />} />
+            <Route path="/dictionaries/new" element={<NewDictionaryPage />} />
+            <Route
+              path="/dictionaries/:dictionaryId"
+              element={<DictionaryLayout />}
+            >
+              <Route index element={<DictionaryOverviewPage />} />
+              <Route path="pages" element={<DictionaryWorkspacePage />} />
+              <Route path="settings" element={<DictionarySettingsLayout />}>
+                <Route index element={<Navigate replace to="metadata" />} />
+                <Route path="metadata" element={<DictionaryMetadataPage />} />
+                <Route path="page-ranges" element={<PageRangesPage />} />
+                <Route path="abbreviations" element={<AbbreviationsPage />} />
+                <Route path="settlements" element={<SettlementsPage />} />
+                <Route path="article-schema" element={<ArticleSchemaPage />} />
+                <Route path="members" element={<ProjectMembersPage />} />
+              </Route>
+            </Route>
+            <Route path="/entries/:entryId" element={<EntryDetailPage />} />
+          </Route>
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
 import { API, apiMessageFrom, type ArticleSchemaResponse } from "../api";
-import { useAuth } from "../authContext";
 import { useArticleSchemaGeneration } from "../hooks/useArticleSchemaGeneration";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
 
@@ -29,7 +31,7 @@ function isFieldNode(value: unknown): value is SchemaFieldNode {
 function SchemaFieldTree({ nodes }: { nodes: unknown }) {
   if (!Array.isArray(nodes) || nodes.length === 0) return null;
   return (
-    <ul className="schema-field-tree">
+    <ul className="my-2 grid list-disc gap-1 pl-5">
       {nodes.map((node, index) => {
         if (!isFieldNode(node)) return null;
         const name = typeof node.name === "string" ? node.name : "(без назви)";
@@ -37,14 +39,14 @@ function SchemaFieldTree({ nodes }: { nodes: unknown }) {
         const type = typeof node.type === "string" ? node.type : null;
         return (
           <li key={index}>
-            <span className="schema-field-name">{name}</span>
-            {role && <span className="badge badge--status"> {role}</span>}
-            {type && <span className="badge badge--status"> {type}</span>}
+            <span className="font-[650]">{name}</span>
+            {role && <Badge className="ml-2"> {role}</Badge>}
+            {type && <Badge className="ml-2"> {type}</Badge>}
             {node.repeatable === true && (
-              <span className="badge badge--status"> повторюване</span>
+              <Badge className="ml-2"> повторюване</Badge>
             )}
             {node.required === true && (
-              <span className="badge badge--status"> обов'язкове</span>
+              <Badge className="ml-2"> обов'язкове</Badge>
             )}
             <SchemaFieldTree nodes={node.children} />
           </li>
@@ -105,16 +107,16 @@ function ArticleSchemaWorkspace({ dictionaryId }: { dictionaryId: string }) {
           На основі опису структури статті (у метаданих словника) AI
           запропонує схему полів для автоматичного розбору статей.
         </p>
-        <button
+        <Button
+          variant="secondary"
           type="button"
-          className="secondary-button"
           onClick={() => void trigger()}
           disabled={generating}
         >
           {generating ? "Генеруємо схему…" : "Згенерувати схему"}
-        </button>
+        </Button>
         {generationState.status === "succeeded" && (
-          <p className="result-message--success" role="status">
+          <p className="m-0 text-[0.88rem] text-success-foreground" role="status">
             Схему згенеровано. Перегляньте та активуйте потрібну версію нижче.
           </p>
         )}
@@ -148,21 +150,21 @@ function ArticleSchemaWorkspace({ dictionaryId }: { dictionaryId: string }) {
               {schemas.map((schema) => (
                 <li key={schema.id}>
                   Версія {schema.version} —{" "}
-                  <span className="badge badge--status">
+                  <Badge className="ml-2">
                     {STATUS_LABELS[schema.status]}
-                  </span>
+                  </Badge>
                   {schema.activated_at && " · активна"}
                   {schema.error_message && (
                     <span className="field-error"> {schema.error_message}</span>
                   )}
                   {schema.status === "ready" && !schema.activated_at && (
-                    <button
+                    <Button
+                      variant="secondary"
                       type="button"
-                      className="secondary-button"
                       onClick={() => void handleActivate(schema.id)}
                     >
                       Активувати
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}
@@ -175,35 +177,21 @@ function ArticleSchemaWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function ArticleSchemaPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Схема словникової статті</h1>
-        <p className="lede">
-          Керуйте AI-згенерованою схемою полів статті та її версіями (BH-148).
-        </p>
-      </section>
+    <>
+      <h2 className="mb-2 text-[1.15rem]">Схема словникової статті</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Керуйте AI-згенерованою схемою полів статті та її версіями (BH-148).
+      </p>
       <div className="dictionary-form">
         <ArticleSchemaWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }

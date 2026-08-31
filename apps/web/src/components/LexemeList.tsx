@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+import { isFinePointer } from "../interaction";
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
 import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
 import { LEXEME_STATUS_LABELS } from "../lexemeStatusLabels";
@@ -84,7 +90,10 @@ export function LexemeList({
   };
 
   return (
-    <ul className="lexeme-list" aria-label="Лексеми на сторінці">
+    <ul
+      className="m-0 grid max-h-[70vh] list-none gap-2 overflow-y-auto overscroll-contain p-0"
+      aria-label="Лексеми на сторінці"
+    >
       {lexemesState.lexemes.map((lexeme) => {
         const isEditing = editingLexemeId === lexeme.id;
         const isRedrawing = redrawingLexemeId === lexeme.id;
@@ -92,54 +101,55 @@ export function LexemeList({
         const hasSecondBox = lexeme.x2 != null;
         const isComplete = lexeme.status === "complete";
         return (
-          <li key={lexeme.id} className="lexeme-list-row">
+          <li key={lexeme.id} className="grid gap-[0.35rem]">
             <button
               type="button"
               ref={(element) => {
                 if (element) itemRefs.current.set(lexeme.id, element);
                 else itemRefs.current.delete(lexeme.id);
               }}
-              className={
-                lexeme.id === selectedLexemeId
-                  ? "lexeme-list-item lexeme-list-item--selected"
-                  : "lexeme-list-item"
-              }
+              className={cn(
+                "grid w-full gap-[0.2rem] rounded-[0.5rem] border bg-surface px-3 py-[0.6rem] text-left text-foreground",
+                lexeme.id === selectedLexemeId &&
+                  "border-selected bg-[rgb(185_28_28_/_8%)]",
+              )}
               aria-pressed={lexeme.id === selectedLexemeId}
               onClick={() => onSelectLexeme(lexeme.id)}
             >
               {isEditing ? (
                 <>
                   <label
-                    className="visually-hidden"
+                    className="sr-only"
                     htmlFor={`lexeme-edit-text-${lexeme.id}`}
                   >
                     Текст лексеми
                   </label>
-                  <input
+                  <Input
+                    className="min-h-[2.2rem] rounded-[0.4rem] px-2 py-[0.35rem] font-[650]"
                     id={`lexeme-edit-text-${lexeme.id}`}
+                    name="source_text"
                     value={draftText}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => setDraftText(event.target.value)}
-                    autoFocus
+                    autoFocus={isFinePointer()}
                   />
                 </>
               ) : (
-                <span className="lexeme-list-item-text">{lexeme.source_text}</span>
+                <span className="font-[650] [overflow-wrap:anywhere]">
+                  {lexeme.source_text}
+                </span>
               )}
-              <span className="lexeme-list-item-meta">
+              <span className="text-[0.85rem] text-muted-foreground tabular-nums">
                 Сторінка {pageNumber} · x={Math.round(lexeme.x)}, y=
                 {Math.round(lexeme.y)}, {Math.round(lexeme.width)}×
                 {Math.round(lexeme.height)}
                 {" · "}
-                <span
-                  className={
-                    isComplete
-                      ? "badge badge--complete"
-                      : "badge badge--status"
-                  }
+                <Badge
+                  className="ml-2"
+                  variant={isComplete ? "secondary" : "info"}
                 >
                   {LEXEME_STATUS_LABELS[lexeme.status]}
-                </span>
+                </Badge>
               </span>
             </button>
             {updateState.status === "error" && isEditing && (
@@ -147,104 +157,115 @@ export function LexemeList({
                 {updateState.message}
               </p>
             )}
-            <div className="lexeme-list-actions">
+            <div className="flex flex-wrap gap-[0.4rem] [&_button]:px-[0.6rem] [&_button]:py-[0.35rem] [&_button]:text-[0.85rem]">
               {isComplete ? (
                 <>
                   <p className="lede">Лексема завершена — редагування заблоковане.</p>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
-                    className="secondary-button"
                     onClick={() => onPromoteToEntry?.(lexeme.id)}
                     disabled={promotingLexemeId === lexeme.id}
                   >
                     {promotingLexemeId === lexeme.id
                       ? "Створюємо статтю…"
                       : "Створити статтю зі структурою"}
-                  </button>
+                  </Button>
                 </>
               ) : isEditing ? (
                 <>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
-                    className="secondary-button"
                     onClick={() => submitText(lexeme.id)}
                     disabled={updateState.status === "submitting"}
                   >
                     Зберегти
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
-                    className="secondary-button"
                     onClick={() => setEditingLexemeId(null)}
                   >
                     Скасувати
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
-                    className="secondary-button"
                     onClick={() => startEditing(lexeme.id, lexeme.source_text)}
                   >
                     Редагувати текст
-                  </button>
+                  </Button>
                   {isRedrawing ? (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="secondary-button"
                       onClick={onCancelRedraw}
                     >
                       Скасувати перемальовування
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="secondary-button"
                       onClick={() => onStartRedraw(lexeme.id)}
                     >
                       Перемалювати область
-                    </button>
+                    </Button>
                   )}
                   {isDraftingSecondBox ? (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="secondary-button"
                       onClick={onCancelSecondBoxDraft}
                     >
                       Скасувати другу область
-                    </button>
+                    </Button>
                   ) : hasSecondBox ? (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="secondary-button"
                       onClick={() => onRemoveSecondBox?.(lexeme.id)}
                     >
                       Видалити другу область
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       type="button"
-                      className="secondary-button"
                       onClick={() => onStartAddSecondBox?.(lexeme.id)}
                     >
                       Додати другу область
-                    </button>
+                    </Button>
                   )}
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
-                    className="secondary-button"
                     onClick={() => onMarkComplete?.(lexeme.id)}
                   >
                     Позначити завершеною
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
                     type="button"
-                    className="danger-button"
                     onClick={() => confirmDelete(lexeme.id, lexeme.source_text)}
                   >
                     Видалити
-                  </button>
+                  </Button>
                 </>
               )}
             </div>

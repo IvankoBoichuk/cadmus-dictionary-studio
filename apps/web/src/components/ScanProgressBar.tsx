@@ -1,3 +1,8 @@
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+
+import { formatNumber } from "../format";
 import { useDictionaryScan } from "../hooks/useDictionaryScan";
 import { useScanProgress } from "../hooks/useScanProgress";
 
@@ -33,27 +38,28 @@ export function ScanProgressBar({
     scanState.status === "running";
 
   const scanControls = (
-    <div className="ocr-suggestions-controls">
-      <button
+    <div className="mb-3 flex items-center gap-3">
+      <Button
+        variant="secondary"
         type="button"
-        className="secondary-button"
         onClick={() => void triggerScan()}
         disabled={scanRunning}
       >
         {scanRunning
           ? "Опрацьовуємо чергу…"
           : "Запустити чергу OCR для всього словника"}
-      </button>
+      </Button>
       {(scanState.status === "queued" || scanState.status === "running") && (
         <span className="lede" role="status">
-          Опрацьовано {scanState.processedPages} / {scanState.totalPages} сторінок,
-          створено лексем: {scanState.createdLexemes}
+          Опрацьовано {formatNumber(scanState.processedPages)} /{" "}
+          {formatNumber(scanState.totalPages)} сторінок, створено лексем:{" "}
+          {formatNumber(scanState.createdLexemes)}
         </span>
       )}
       {scanState.status === "succeeded" && (
         <span className="lede" role="status">
-          Чергу завершено: опрацьовано {scanState.processedPages} сторінок, створено
-          лексем: {scanState.createdLexemes}
+          Чергу завершено: опрацьовано {formatNumber(scanState.processedPages)}{" "}
+          сторінок, створено лексем: {formatNumber(scanState.createdLexemes)}
         </span>
       )}
       {scanState.status === "failed" && (
@@ -106,27 +112,30 @@ export function ScanProgressBar({
   const allProcessed = progress.total_pages > 0 && progress.processed_pages === progress.total_pages;
 
   return (
-    <div className="scan-progress" aria-labelledby="scan-progress-heading">
-      <h3 id="scan-progress-heading" className="visually-hidden">
+    <div
+      className="grid w-full gap-[0.6rem]"
+      aria-labelledby="scan-progress-heading"
+    >
+      <h3 id="scan-progress-heading" className="sr-only">
         Прогрес сканування словника
       </h3>
       {scanControls}
-      <p className="scan-progress-summary" role="status">
-        Опрацьовано {progress.processed_pages} / {progress.total_pages} сторінок
+      <p className="m-0 font-[650] tabular-nums" role="status">
+        Опрацьовано {formatNumber(progress.processed_pages)} /{" "}
+        {formatNumber(progress.total_pages)} сторінок
       </p>
-      <div className="progress-track">
-        <div className="progress-bar" style={{ width: `${percent}%` }} />
-      </div>
-      <div className="scan-progress-pages">
+      <Progress value={percent} />
+
+      <div className="flex max-h-24 flex-wrap gap-[0.3rem] overflow-y-auto overscroll-contain">
         {progress.pages.map((page) => (
           <button
             key={page.page_number}
             type="button"
-            className={
-              page.has_lexemes
-                ? "scan-progress-page scan-progress-page--processed"
-                : "scan-progress-page"
-            }
+            className={cn(
+              "min-w-8 rounded-[0.35rem] border bg-surface px-[0.4rem] py-1 text-center text-[0.8rem] text-foreground tabular-nums [contain-intrinsic-size:auto_1.8rem] [content-visibility:auto] aria-[current=page]:[outline:2px_solid_var(--color-selected)] aria-[current=page]:outline-offset-1",
+              page.has_lexemes &&
+                "border-primary bg-secondary font-[650] text-primary",
+            )}
             aria-current={page.page_number === currentPage ? "page" : undefined}
             title={`Сторінка ${page.page_number}${page.has_lexemes ? " — опрацьована" : ""}`}
             onClick={() => onNavigate(page.page_number)}
@@ -135,16 +144,16 @@ export function ScanProgressBar({
           </button>
         ))}
       </div>
-      <button
+      <Button
+        variant="secondary"
         type="button"
-        className="secondary-button"
         onClick={handleJumpToUnprocessed}
         disabled={allProcessed}
       >
         {allProcessed
           ? "Усі сторінки опрацьовано"
           : "Перейти до неопрацьованої сторінки"}
-      </button>
+      </Button>
     </div>
   );
 }

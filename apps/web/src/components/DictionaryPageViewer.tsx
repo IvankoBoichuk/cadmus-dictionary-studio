@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Button } from "@/components/ui/button";
+
 import {
   API,
   apiMessageFrom,
@@ -188,14 +190,17 @@ export function DictionaryPageViewer({
   };
 
   return (
-    <div className="page-viewer" aria-labelledby="page-viewer-heading">
-      <h2 id="page-viewer-heading" className="visually-hidden">
+    <div
+      className="grid justify-items-center gap-4"
+      aria-labelledby="page-viewer-heading"
+    >
+      <h2 id="page-viewer-heading" className="sr-only">
         Перегляд сторінки словника
       </h2>
-      <div className="ocr-suggestions-controls">
-        <button
+      <div className="mb-3 flex items-center gap-3">
+        <Button
+          variant="secondary"
           type="button"
-          className="secondary-button"
           onClick={() => void triggerOcrSuggestions()}
           disabled={
             ocrState.status === "starting" ||
@@ -208,7 +213,7 @@ export function DictionaryPageViewer({
           ocrState.status === "running"
             ? "Розпізнаємо слова…"
             : "Автоматично знайти слова (OCR)"}
-        </button>
+        </Button>
         {ocrState.status === "succeeded" && (
           <span className="lede" role="status">
             Знайдено пропозицій: {ocrState.suggestions.length}
@@ -225,7 +230,7 @@ export function DictionaryPageViewer({
           {promoteError}
         </p>
       )}
-      <div className="page-viewer-body">
+      <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)] items-start gap-6 max-md:grid-cols-[1fr]">
         <LexemeCanvas
           dictionaryId={dictionaryId}
           pageNumber={currentPage}
@@ -245,8 +250,13 @@ export function DictionaryPageViewer({
           onSecondBoxDrawn={handleSecondBoxDrawn}
           onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
         />
-        <aside className="lexeme-sidebar" aria-labelledby="lexeme-list-heading">
-          <h3 id="lexeme-list-heading">Лексеми сторінки</h3>
+        <aside
+          className="grid content-start gap-[0.6rem]"
+          aria-labelledby="lexeme-list-heading"
+        >
+          <h3 id="lexeme-list-heading" className="text-base">
+            Лексеми сторінки
+          </h3>
           <LexemeList
             lexemesState={lexemesState}
             pageNumber={currentPage}
@@ -276,26 +286,29 @@ export function DictionaryPageViewer({
         }
         onNavigate={onNavigate}
       />
-      <div className="page-viewer-nav">
-        <button
+      <div className="flex items-center gap-4">
+        <Button
+          variant="secondary"
           type="button"
-          className="secondary-button"
           onClick={() => onNavigate(currentPage - 1)}
           disabled={currentPage <= 1}
         >
           ← Попередня
-        </button>
-        <span className="page-viewer-counter" role="status">
+        </Button>
+        <span
+          className="min-w-40 text-center font-[650] tabular-nums"
+          role="status"
+        >
           Сторінка {currentPage} / {summary.totalPages}
         </span>
-        <button
+        <Button
+          variant="secondary"
           type="button"
-          className="secondary-button"
           onClick={() => onNavigate(currentPage + 1)}
           disabled={currentPage >= summary.totalPages}
         >
           Наступна →
-        </button>
+        </Button>
       </div>
     </div>
   );

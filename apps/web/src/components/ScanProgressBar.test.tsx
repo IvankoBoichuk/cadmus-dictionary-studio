@@ -71,8 +71,8 @@ describe("ScanProgressBar", () => {
 
     const processed = await screen.findByRole("button", { name: "1" });
     const unprocessed = screen.getByRole("button", { name: "2" });
-    expect(processed.className).toContain("scan-progress-page--processed");
-    expect(unprocessed.className).not.toContain("scan-progress-page--processed");
+    expect(processed).toHaveAttribute("title", "Сторінка 1 — опрацьована");
+    expect(unprocessed).toHaveAttribute("title", "Сторінка 2");
   });
 
   it("jumps to the next unprocessed page after the current one (AC4)", async () => {

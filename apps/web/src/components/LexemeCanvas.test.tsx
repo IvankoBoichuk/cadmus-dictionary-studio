@@ -130,7 +130,7 @@ describe("LexemeCanvas", () => {
     await loadImage();
 
     expect((await screen.findByTitle("слово")).className).toContain(
-      "lexeme-box--selected",
+      "border-selected",
     );
   });
 
@@ -387,7 +387,7 @@ describe("LexemeCanvas", () => {
 
     // Container is 500x700 displayed, natural size 1000x1400 -> scale 0.5x,
     // so box1's displayed rect is (50,50,100,40) and its se corner is (150,90).
-    const handle = container.querySelector(".lexeme-resize-handle--se");
+    const handle = container.querySelector('[data-handle="se"]');
     expect(handle).not.toBeNull();
     fireEvent.mouseDown(handle as Element, { clientX: 150, clientY: 90 });
     fireEvent.mouseMove(canvas, { clientX: 170, clientY: 100 });
@@ -500,7 +500,7 @@ describe("LexemeCanvas", () => {
     await loadImage();
 
     const box = await screen.findByTitle("слово");
-    expect(box.className).toContain("lexeme-box--suggestion");
+    expect(box.className).toContain("border-lexeme-suggestion");
     // Container is 500x700 displayed, image natural size is 1000x1400 -> scale 0.5x.
     expect(box.style.left).toBe("50px");
     expect(box.style.top).toBe("50px");

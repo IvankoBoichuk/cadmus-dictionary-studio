@@ -90,7 +90,11 @@ dictionaries = Table(
         ForeignKey("cadmus.users.id", ondelete="CASCADE"),
         nullable=False,
     ),
-    CheckConstraint("status IN ('draft', 'configured')", name="dictionary_status"),
+    CheckConstraint(
+        "status IN ('draft', 'configured', 'scanned', 'in_progress', "
+        "'processed', 'published')",
+        name="dictionary_status",
+    ),
     CheckConstraint(
         "legal_status IS NULL OR legal_status IN "
         "('public_domain', 'licensed', 'permission_granted', 'restricted', "
@@ -387,11 +391,15 @@ dictionary_events = Table(
         name="dictionary_event_type",
     ),
     CheckConstraint(
-        "previous_status IS NULL OR previous_status IN ('draft', 'configured')",
+        "previous_status IS NULL OR previous_status IN "
+        "('draft', 'configured', 'scanned', 'in_progress', 'processed', "
+        "'published')",
         name="dictionary_event_previous_status",
     ),
     CheckConstraint(
-        "new_status IS NULL OR new_status IN ('draft', 'configured')",
+        "new_status IS NULL OR new_status IN "
+        "('draft', 'configured', 'scanned', 'in_progress', 'processed', "
+        "'published')",
         name="dictionary_event_new_status",
     ),
 )

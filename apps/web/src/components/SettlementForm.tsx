@@ -1,5 +1,21 @@
+import { useRef } from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
 import type { SettlementMappingResponse } from "../api";
+import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useSettlementForm } from "../hooks/useSettlementForm";
+import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import { SettlementSearchCombobox } from "./SettlementSearchCombobox";
 
 export function SettlementForm({
@@ -13,95 +29,136 @@ export function SettlementForm({
   onSaved: (saved: SettlementMappingResponse) => void;
   onCancel?: () => void;
 }) {
-  const form = useSettlementForm(dictionaryId, editing, onSaved);
+  const { form, onSubmit, applySuggestion, clearSuggestion } = useSettlementForm(
+    dictionaryId,
+    editing,
+    onSaved,
+  );
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const settlementId = form.watch("settlement_id");
+  const modernName = form.watch("modern_settlement_name");
+  const category = form.watch("settlement_category");
+  const submissionError = form.formState.errors.root?.message;
+
+  useFocusFirstError(
+    formRef,
+    form.formState.submitCount,
+    form.formState.isSubmitting,
+  );
+  useUnsavedChangesWarning(
+    form.formState.isDirty && !form.formState.isSubmitting,
+  );
 
   return (
-    <form
-      noValidate
-      onSubmit={form.submit}
-      aria-labelledby="settlement-form-heading"
-      className="form-section"
-    >
-      <h2 id="settlement-form-heading">
-        {editing ? "Редагувати географічну мітку" : "Додати географічну мітку"}
-      </h2>
+    <Form {...form}>
+      <form
+        noValidate
+        ref={formRef}
+        onSubmit={onSubmit}
+        aria-labelledby="settlement-form-heading"
+        className="form-section"
+      >
+        <h2 id="settlement-form-heading">
+          {editing ? "Редагувати географічну мітку" : "Додати географічну мітку"}
+        </h2>
 
-      <div className="form-field">
-        <label htmlFor="source_label">Позначка з оригіналу</label>
-        <input
-          id="source_label"
-          {...form.getFieldProps("source_label")}
-          aria-invalid={Boolean(form.errors.source_label)}
-          aria-describedby={
-            form.errors.source_label ? "source-label-error" : undefined
-          }
+        <FormField
+          control={form.control}
+          name="source_label"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Позначка з оригіналу</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {form.errors.source_label && (
-          <p className="field-error" id="source-label-error">
-            {form.errors.source_label}
+
+        <FormField
+          control={form.control}
+          name="source_note"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Примітка з оригіналу</FormLabel>
+              <FormControl>
+                <Textarea rows={2} {...field} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <fieldset className="grid gap-[0.45rem]">
+          <legend>Сучасна відповідність (AC8)</legend>
+          {settlementId ? (
+            <p className="lede">
+              Зіставлено з: {modernName || "—"} ({category || "—"}).{" "}
+              <Button
+                variant="secondary"
+                size="icon"
+                type="button"
+                onClick={clearSuggestion}
+              >
+                Скасувати зіставлення
+              </Button>
+            </p>
+          ) : (
+            <SettlementSearchCombobox
+              dictionaryId={dictionaryId}
+              onSelect={applySuggestion}
+            />
+          )}
+        </fieldset>
+
+        <FormField
+          control={form.control}
+          name="modern_settlement_name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Сучасна назва (за потреби вручну)</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="settlement_category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Категорія (за потреби вручну)</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        {submissionError && (
+          <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+            {submissionError}
           </p>
         )}
-      </div>
 
-      <div className="form-field">
-        <label htmlFor="source_note">Примітка з оригіналу</label>
-        <textarea id="source_note" rows={2} {...form.getFieldProps("source_note")} />
-      </div>
-
-      <fieldset className="form-field">
-        <legend>Сучасна відповідність (AC8)</legend>
-        {form.values.settlement_id ? (
-          <p className="lede">
-            Зіставлено з: {form.values.modern_settlement_name || "—"} (
-            {form.values.settlement_category || "—"}).{" "}
-            <button
-              type="button"
-              className="icon-button"
-              onClick={form.clearSuggestion}
-            >
-              Скасувати зіставлення
-            </button>
-          </p>
-        ) : (
-          <SettlementSearchCombobox
-            dictionaryId={dictionaryId}
-            onSelect={form.applySuggestion}
-          />
-        )}
-      </fieldset>
-
-      <div className="form-field">
-        <label htmlFor="modern_settlement_name">Сучасна назва (за потреби вручну)</label>
-        <input
-          id="modern_settlement_name"
-          {...form.getFieldProps("modern_settlement_name")}
-        />
-      </div>
-
-      <div className="form-field">
-        <label htmlFor="settlement_category">Категорія (за потреби вручну)</label>
-        <input
-          id="settlement_category"
-          {...form.getFieldProps("settlement_category")}
-        />
-      </div>
-
-      {form.submissionError && (
-        <p className="form-error" role="alert">
-          {form.submissionError}
-        </p>
-      )}
-
-      <div className="form-actions">
-        <button disabled={form.submitting} type="submit">
-          {form.submitting ? "Зберігаємо…" : editing ? "Зберегти зміни" : "Додати"}
-        </button>
-        {editing && onCancel && (
-          <button type="button" className="secondary-button" onClick={onCancel}>
-            Скасувати
-          </button>
-        )}
-      </div>
-    </form>
+        <div className="form-actions">
+          <Button disabled={form.formState.isSubmitting} type="submit">
+            {form.formState.isSubmitting
+              ? "Зберігаємо…"
+              : editing
+                ? "Зберегти зміни"
+                : "Додати"}
+          </Button>
+          {editing && onCancel && (
+            <Button variant="secondary" type="button" onClick={onCancel}>
+              Скасувати
+            </Button>
+          )}
+        </div>
+      </form>
+    </Form>
   );
 }

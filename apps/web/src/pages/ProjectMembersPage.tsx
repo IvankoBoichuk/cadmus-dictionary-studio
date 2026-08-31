@@ -1,7 +1,6 @@
 import { Navigate, useParams } from "react-router-dom";
 
 import type { MemberResponse } from "../api";
-import { useAuth } from "../authContext";
 import { ProjectMemberForm } from "../components/ProjectMemberForm";
 import { ProjectMembersTable } from "../components/ProjectMembersTable";
 import { useDictionaryMembers } from "../hooks/useDictionaryMembers";
@@ -48,35 +47,21 @@ function ProjectMembersWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function ProjectMembersPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Учасники проєкту</h1>
-        <p className="lede">
-          Керуйте тим, хто має доступ до словника, і якою є їхня роль.
-        </p>
-      </section>
+    <>
+      <h2 className="mb-2 text-[1.15rem]">Учасники проєкту</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Керуйте тим, хто має доступ до словника, і якою є їхня роль.
+      </p>
       <div className="dictionary-form">
         <ProjectMembersWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }

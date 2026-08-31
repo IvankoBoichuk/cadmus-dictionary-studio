@@ -1,15 +1,190 @@
+/* Порядок каскадних шарів: legacy-стилі нижче за utility Tailwind, тож
+ * мігровані компоненти зі своїми utility-класами перекривають старий CSS.
+ * Старий CSS прибирається покомпонентно — див. MIGRATION_PLAN.md, Крок 4. */
+@layer theme, base, components, legacy, utilities;
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Міграція на Tailwind v4 + shadcn/ui — див. apps/web/MIGRATION_PLAN.md.
+ *   Крок 1: токени Cadmus витягнуто з літералів у @theme.
+ *   Крок 2: семантичний шар shadcn (--background, --primary, ...) прив'язано
+ *           до існуючої палітри Cadmus, без дублювання значень.
+ * Старий CSS нижче лишається робочим і прибирається покомпонентно у Кроці 3.
+ * Dark mode не використовується (застосунок light-only); .dark ніколи не додається.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 1rem;
+
+  /* shadcn-семантичні токени → значення палітри Cadmus */
+  --background: #f3f5ef;
+  --foreground: #1d2925;
+  --card: #ffffff;
+  --card-foreground: #1d2925;
+  --popover: #ffffff;
+  --popover-foreground: #1d2925;
+  --primary: #245847;
+  --primary-foreground: #ffffff;
+  --secondary: #eaf1ec;
+  --secondary-foreground: #245847;
+  --muted: #eaf1ec;
+  --muted-foreground: #61726b;
+  --accent: #eaf1ec;
+  --accent-foreground: #1d2925;
+  --destructive: #9a3024;
+  --border: #d6dbd2;
+  --input: #9aa7a1;
+  --ring: #d58d36;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Додаткові токени Cadmus, яких немає в наборі shadcn */
+@theme {
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+
+  --color-surface: #ffffff;
+  --color-primary-strong: #33443d;
+  --color-ring-subtle: #dcebe5;
+
+  --color-success: #ddf3e8;
+  --color-success-foreground: #175c3a;
+  --color-warning: #fbf1da;
+  --color-warning-foreground: #7a5b12;
+  --color-info: #e6f0f7;
+  --color-info-foreground: #1d5c8a;
+  --color-danger-soft: #fbe9e6;
+  --color-danger-soft-foreground: #9a3024;
+
+  --color-track: #e3e8e0;
+  --color-selected: #b91c1c;
+  --color-lexeme: #d97706;
+  --color-lexeme-suggestion: #2563eb;
+  --color-muted-dot: #8e9692;
+
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1rem 3rem rgb(35 57 49 / 8%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* Колишні layout-класи styles.css → Tailwind-утиліти (Крок 3, оболонка). */
+@utility form-section {
+  @apply grid gap-[1.1rem] rounded-lg border bg-card p-[clamp(1.25rem,4vw,2rem)];
+}
+@utility page {
+  @apply mx-auto w-[min(100%-2rem,68rem)] py-[clamp(3rem,9vw,7rem)];
+}
+@utility hero {
+  @apply max-w-[48rem];
+}
+@utility lede {
+  @apply max-w-[42rem] text-[clamp(1rem,2vw,1.25rem)] leading-[1.7] text-muted-foreground [text-wrap:pretty];
+}
+@utility eyebrow {
+  @apply mt-0 mb-2 text-[0.75rem] font-[750] tracking-[0.12em] text-muted-foreground uppercase;
+}
+@utility status-label {
+  @apply mt-0 mb-2 text-[0.75rem] font-[750] tracking-[0.12em] text-muted-foreground uppercase;
+}
+@utility auth-page {
+  @apply grid min-h-[calc(100vh-4.5rem)] place-items-center px-4 py-8;
+}
+@utility auth-card {
+  @apply w-[min(100%,34rem)] rounded-[1.25rem] border bg-surface p-[clamp(1.5rem,5vw,3rem)] shadow-card;
+}
+@utility dictionary-form {
+  @apply mt-8 grid gap-6;
+}
+@utility section-hint {
+  @apply mt-[-0.6rem] text-[0.92rem] text-muted-foreground;
+}
+@utility form-actions {
+  @apply flex flex-wrap gap-3;
+}
+@utility form-field {
+  @apply grid gap-[0.45rem];
+}
+@utility field-hint {
+  @apply mb-0 text-[0.88rem] text-muted-foreground;
+}
+@utility field-error {
+  @apply mb-0 text-[0.88rem] text-destructive;
+}
+@utility form-error {
+  @apply mb-0 text-[0.88rem] text-destructive;
+}
+
+/* ==== LEGACY (pre-Tailwind) — прибирається покомпонентно, MIGRATION_PLAN.md Крок 4 ==== */
+@layer legacy {
 :root {
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   color: #1d2925;
   background: #f3f5ef;
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {
@@ -20,6 +195,7 @@ body {
 
 a {
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button {
@@ -31,10 +207,17 @@ button {
   cursor: pointer;
   font: inherit;
   font-weight: 650;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 0.12s ease;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(0.93);
 }
 
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.68;
 }
 
@@ -44,88 +227,22 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-.app-shell {
-  min-height: 100vh;
-}
+/* .primary-link / .secondary-link → мертві (жодного вжитку в JSX) — видалено */
 
-.skip-link {
-  position: fixed;
-  top: 1rem;
-  left: 1rem;
-  z-index: 2;
-  padding: 0.75rem 1rem;
-  color: #fff;
-  background: #1d2925;
-  transform: translateY(-180%);
-}
-
-.skip-link:focus {
-  transform: translateY(0);
-}
-
-.site-header {
-  display: flex;
-  align-items: center;
-  min-height: 4.5rem;
-  padding: 0 6vw;
-  border-bottom: 1px solid #d6dbd2;
-  background: rgb(255 255 255 / 72%);
-}
-
-.brand {
-  text-decoration: none;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.45rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-left: auto;
-}
-
-.header-actions .primary-link {
-  margin-top: 0;
-}
-
-.header-actions .secondary-link {
-  margin-left: 0;
-}
-
-.logout-error {
-  max-width: 28rem;
-  margin: 0;
-  color: #8a2e22;
-  font-size: 0.9rem;
-}
-
-.page {
-  width: min(100% - 2rem, 68rem);
-  margin: 0 auto;
-  padding: clamp(3rem, 9vw, 7rem) 0;
-}
-
-.hero {
-  max-width: 48rem;
-}
-
-.eyebrow,
-.status-label {
-  margin: 0 0 0.5rem;
-  color: #527064;
-  font-size: 0.75rem;
-  font-weight: 750;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+/* .app-shell / .skip-link / .site-header / .brand / .header-actions / .logout-error
+ * → інлайн utility-класи в App.tsx та AuthActions.tsx (Крок 3, оболонка).
+ * .page / .hero / .eyebrow / .status-label / .lede → @utility (див. вгорі файлу). */
 
 h1,
 h2,
 p {
   margin-top: 0;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 h1 {
@@ -137,47 +254,11 @@ h1 {
   line-height: 0.98;
 }
 
-.lede {
-  max-width: 42rem;
-  color: #50605a;
-  font-size: clamp(1rem, 2vw, 1.25rem);
-  line-height: 1.7;
-}
 
-.primary-link {
-  display: inline-block;
-  margin-top: 1rem;
-  padding: 0.75rem 1.1rem;
-  border-radius: 999px;
-  color: #fff;
-  background: #245847;
-  text-decoration: none;
-  font-weight: 650;
-}
-
-.secondary-link {
-  display: inline-block;
-  margin-left: 1rem;
-  color: #245847;
-  font-weight: 650;
-}
-
-.auth-page {
-  display: grid;
-  min-height: calc(100vh - 4.5rem);
-  padding: 2rem 1rem;
-  place-items: center;
-}
-
-.auth-card {
-  width: min(100%, 34rem);
-  padding: clamp(1.5rem, 5vw, 3rem);
-  border: 1px solid #d6dbd2;
-  border-radius: 1.25rem;
-  background: #fff;
-  box-shadow: 0 1rem 3rem rgb(35 57 49 / 8%);
-}
-
+/* .auth-page / .auth-card → @utility (див. вгорі файлу).
+ * .auth-intro / .result-message / .auth-card form (+ button) / .auth-card--result (+ h1)
+ *   / .result-message--success/--error → Tailwind-утиліти в auth-сторінках
+ *   (Login/Register/ForgotPassword/ResetPassword/VerifyEmailPage). */
 .auth-card h1 {
   max-width: none;
   margin-bottom: 1rem;
@@ -185,23 +266,10 @@ h1 {
   line-height: 1.03;
 }
 
-.auth-intro,
-.result-message {
-  color: #50605a;
-  line-height: 1.6;
-}
-
-.auth-card form {
-  display: grid;
-  gap: 1.25rem;
-  margin-top: 2rem;
-}
-
-.form-field {
-  display: grid;
-  gap: 0.45rem;
-}
-
+/* .form-field / .field-hint / .field-error / .form-error → @utility (див. вгорі файлу).
+ * Лишаються лише descendant-правила для БЕЗкласових <input>/<select>/<textarea>
+ * всередині .form-field (shadcn <Input>/<Textarea> перекривають їх власними
+ * utility-класами; це фолбек для полів, які ще не на компонентах). */
 .form-field label {
   font-weight: 700;
 }
@@ -236,820 +304,55 @@ h1 {
   border-color: #b43c2d;
 }
 
-.field-hint,
-.field-error,
-.form-error {
-  margin-bottom: 0;
-  font-size: 0.88rem;
-}
+/* .oauth-divider / .google-oauth-button (+ hover/focus) → Tailwind-утиліти в LoginPage.tsx */
 
-.field-hint {
-  color: #61726b;
-}
+/* .status-card / .status-indicator / .status-dot → Tailwind utilities in ApiStatus.tsx (+ <Card asChild>) */
 
-.field-error,
-.form-error,
-.result-message--error {
-  color: #9a3024;
-}
+/* .visually-hidden → замінено вбудованою утилітою Tailwind `sr-only`. */
 
-.auth-card form button {
-  justify-self: start;
-  margin-top: 0.5rem;
-}
-
-.oauth-divider {
-  margin: 1.5rem 0;
-  color: #61726b;
-  font-size: 0.88rem;
-  text-align: center;
-}
-
-.google-oauth-button {
-  display: flex;
-  justify-content: center;
-  padding: 0.65rem 0.8rem;
-  border: 1px solid #9aa7a1;
-  border-radius: 0.55rem;
-  color: #1d2925;
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.google-oauth-button:hover,
-.google-oauth-button:focus-visible {
-  border-color: #245847;
-  background: #f4f7f4;
-}
-
-.google-oauth-button:focus-visible {
-  outline: 3px solid #dcebe5;
-}
-
-.auth-card--result {
-  text-align: center;
-}
-
-.auth-card--result h1 {
-  margin-inline: auto;
-}
-
-.result-message--success {
-  color: #17663f;
-}
-
-.status-card {
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) auto auto;
-  gap: 1.5rem;
-  align-items: center;
-  margin-top: clamp(3rem, 8vw, 6rem);
-  padding: 1.5rem;
-  border: 1px solid #d6dbd2;
-  border-radius: 1rem;
-  background: #fff;
-  box-shadow: 0 1rem 3rem rgb(35 57 49 / 8%);
-}
-
-.status-card h2 {
-  margin-bottom: 0;
-  font-size: 1.25rem;
-}
-
-.status-indicator {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-  font-weight: 650;
-}
-
-.status-dot {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-  background: #8e9692;
-}
-
-.status-indicator--available .status-dot {
-  background: #158052;
-  box-shadow: 0 0 0 0.3rem #dff3e9;
-}
-
-.status-indicator--unavailable .status-dot {
-  background: #b43c2d;
-  box-shadow: 0 0 0 0.3rem #f9e3df;
-}
-
-@media (max-width: 38rem) {
-  .status-card {
-    grid-template-columns: 1fr;
-  }
-
-  .status-card button {
-    justify-self: start;
-  }
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.dictionary-form {
-  display: grid;
-  gap: 1.5rem;
-  margin-top: 2rem;
-}
-
-.form-section {
-  display: grid;
-  gap: 1.1rem;
-  padding: clamp(1.25rem, 4vw, 2rem);
-  border: 1px solid #d6dbd2;
-  border-radius: 1rem;
-  background: #fff;
-}
-
+/* .dictionary-form / .section-hint / .form-actions → @utility (див. вгорі файлу). */
+/* .form-section → @utility. Лишається тільки descendant-твік заголовка: */
 .form-section h2 {
   font-size: 1.15rem;
 }
 
-.section-hint {
-  margin-top: -0.6rem;
-  color: #61726b;
-  font-size: 0.92rem;
-}
-
-.file-summary {
-  margin: 0;
-  color: #33443d;
-  font-weight: 650;
-}
-
-.form-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.secondary-button {
-  color: #245847;
-  background: #eaf1ec;
-}
-
-.progress-track {
-  width: 100%;
-  height: 0.6rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e3e8e0;
-}
-
-.progress-bar {
-  height: 100%;
-  background: #245847;
-  transition: width 0.2s ease;
-}
-
-.contributor-fieldset {
-  padding: 0;
-  border: 0;
-}
-
-.contributor-fieldset legend {
-  padding: 0;
-  font-weight: 700;
-}
-
-.contributor-list {
-  display: grid;
-  gap: 0.6rem;
-  margin: 0.75rem 0;
-  padding: 0;
-  list-style: none;
-}
-
-.contributor-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.contributor-row input,
-.contributor-row select {
-  min-height: 2.6rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #9aa7a1;
-  border-radius: 0.5rem;
-  font: inherit;
-}
-
-.icon-button {
-  min-width: 2.4rem;
-  padding: 0.4rem;
-  color: #245847;
-  background: #eaf1ec;
-  font-weight: 700;
-}
-
-.icon-button:disabled {
-  opacity: 0.4;
-}
-
-.page-range-list {
-  display: grid;
-  gap: 0.6rem;
-  margin: 0.75rem 0;
-  padding: 0;
-  list-style: none;
-}
-
-.page-range-row {
-  display: grid;
-  grid-template-columns: 6rem auto 6rem auto;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.page-range-row input {
-  min-height: 2.6rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #9aa7a1;
-  border-radius: 0.5rem;
-  font: inherit;
-}
-
-.page-range-row .field-error {
-  grid-column: 1 / -1;
-}
-
-.page-viewer {
-  display: grid;
-  gap: 1rem;
-  justify-items: center;
-}
-
-.page-viewer-image {
-  max-width: 100%;
-  max-height: 80vh;
-  border: 1px solid #d6dbd2;
-  border-radius: 0.75rem;
-  background: #fff;
-}
-
-.page-viewer-nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.page-viewer-counter {
-  min-width: 10rem;
-  font-weight: 650;
-  text-align: center;
-}
-
-.lexeme-canvas-wrap {
-  display: grid;
-  gap: 0.75rem;
-  justify-items: center;
-}
-
-.lexeme-canvas {
-  position: relative;
-  display: inline-block;
-  cursor: crosshair;
-  user-select: none;
-}
-
-.lexeme-canvas .page-viewer-image {
-  display: block;
-}
-
-.lexeme-box {
-  position: absolute;
-  border: 2px solid #d97706;
-  background: rgb(217 119 6 / 15%);
-  pointer-events: none;
-}
-
-.lexeme-box--draft {
-  border-color: #245847;
-  background: rgb(36 88 71 / 12%);
-  border-style: dashed;
-}
-
-.lexeme-box--pending {
-  border-color: #245847;
-  background: rgb(36 88 71 / 18%);
-}
-
-.lexeme-box--selected {
-  border-color: #b91c1c;
-  border-width: 3px;
-  background: rgb(185 28 28 / 18%);
-}
-
-.lexeme-box--suggestion {
-  border-color: #2563eb;
-  border-style: dashed;
-  background: rgb(37 99 235 / 10%);
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.lexeme-box--suggestion:hover {
-  background: rgb(37 99 235 / 22%);
-}
-
-.entry-fragment-preview {
-  display: grid;
-  gap: 0.5rem;
-  margin-block-end: 1rem;
-}
-
-.entry-fragment-crop {
-  position: relative;
-  max-width: 100%;
-  overflow: hidden;
-  border: 1px solid #d6dbd2;
-  border-radius: 0.75rem;
-  background: #fff;
-}
-
-.entry-fragment-crop-image {
-  position: absolute;
-  max-width: none;
-}
-
-.entry-fragment-crop-box {
-  position: absolute;
-  border: 2px solid #d97706;
-  background: rgb(217 119 6 / 12%);
-  pointer-events: none;
-}
-
-.lexeme-box--clickable {
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.lexeme-resize-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #b91c1c;
-  border: 1px solid white;
-  border-radius: 2px;
-  pointer-events: auto;
-}
-
-.lexeme-resize-handle--nw {
-  left: -5px;
-  top: -5px;
-  cursor: nwse-resize;
-}
-
-.lexeme-resize-handle--n {
-  left: 50%;
-  top: -5px;
-  transform: translateX(-50%);
-  cursor: ns-resize;
-}
-
-.lexeme-resize-handle--ne {
-  right: -5px;
-  top: -5px;
-  cursor: nesw-resize;
-}
-
-.lexeme-resize-handle--w {
-  left: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  cursor: ew-resize;
-}
-
-.lexeme-resize-handle--e {
-  right: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  cursor: ew-resize;
-}
-
-.lexeme-resize-handle--sw {
-  left: -5px;
-  bottom: -5px;
-  cursor: nesw-resize;
-}
-
-.lexeme-resize-handle--s {
-  left: 50%;
-  bottom: -5px;
-  transform: translateX(-50%);
-  cursor: ns-resize;
-}
-
-.lexeme-resize-handle--se {
-  right: -5px;
-  bottom: -5px;
-  cursor: nwse-resize;
-}
-
-.ocr-suggestions-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.page-viewer-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
-  gap: 1.5rem;
-  align-items: start;
-  width: 100%;
-}
-
-@media (max-width: 768px) {
-  .page-viewer-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-.lexeme-sidebar {
-  display: grid;
-  gap: 0.6rem;
-  align-content: start;
-}
-
-.lexeme-sidebar h3 {
-  font-size: 1rem;
-}
-
-.lexeme-list {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.lexeme-list-item {
-  display: grid;
-  gap: 0.2rem;
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #d6dbd2;
-  border-radius: 0.5rem;
-  background: #fff;
-  text-align: left;
-  font: inherit;
-}
-
-.lexeme-list-item--selected {
-  border-color: #b91c1c;
-  background: rgb(185 28 28 / 8%);
-}
-
-.lexeme-list-item-text {
-  font-weight: 650;
-}
-
-.lexeme-list-item-meta {
-  color: #61726b;
-  font-size: 0.85rem;
-}
-
-.lexeme-list-item input {
-  min-height: 2.2rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid #9aa7a1;
-  border-radius: 0.4rem;
-  font: inherit;
-  font-weight: 650;
-}
-
-.lexeme-list-row {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.lexeme-list-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.lexeme-list-actions button {
-  padding: 0.35rem 0.6rem;
-  font-size: 0.85rem;
-}
-
-.lexeme-form {
-  display: grid;
-  gap: 0.5rem;
-  width: min(100%, 24rem);
-}
-
-.lexeme-form input {
-  min-height: 2.6rem;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #9aa7a1;
-  border-radius: 0.5rem;
-  font: inherit;
-}
-
-.scan-progress {
-  display: grid;
-  gap: 0.6rem;
-  width: 100%;
-}
-
-.scan-progress-summary {
-  margin: 0;
-  font-weight: 650;
-}
-
-.scan-progress-pages {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  max-height: 6rem;
-  overflow-y: auto;
-}
-
-.scan-progress-page {
-  min-width: 2rem;
-  padding: 0.25rem 0.4rem;
-  border: 1px solid #d6dbd2;
-  border-radius: 0.35rem;
-  background: #fff;
-  font-size: 0.8rem;
-  text-align: center;
-}
-
-.scan-progress-page--processed {
-  border-color: #245847;
-  background: #eaf1ec;
-  color: #245847;
-  font-weight: 650;
-}
-
-.scan-progress-page[aria-current="page"] {
-  outline: 2px solid #b91c1c;
-  outline-offset: 1px;
-}
-
-.language-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
-  gap: 0.6rem;
-}
-
-.language-option {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  font-weight: 600;
-}
-
-.missing-fields {
-  padding: 0.75rem 1rem;
-  border-radius: 0.6rem;
-  color: #7a5b12;
-  background: #fbf1da;
-  font-size: 0.92rem;
-}
-
-.status-badge {
-  display: inline-flex;
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  width: fit-content;
-}
-
-.status-badge--draft {
-  color: #7a5b12;
-  background: #fbf1da;
-}
-
-.status-badge--configured {
-  color: #175c3a;
-  background: #ddf3e8;
-}
-
-.readiness-blockers {
-  margin: 0.5rem 0 0;
-  padding-left: 1.25rem;
-  font-size: 0.92rem;
-}
-
-.dictionary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: 1.25rem;
-  margin: 2rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dictionary-card {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid #d6dbd2;
-  border-radius: 1rem;
-  background: #fff;
-  box-shadow: 0 1rem 3rem rgb(35 57 49 / 8%);
-}
-
-.dictionary-thumbnail {
-  display: block;
-  width: 100%;
-  height: 14rem;
-  object-fit: cover;
-  object-position: top;
-  background: #eaf1ec;
-}
-
-.dictionary-thumbnail--placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  color: #61726b;
-  font-size: 0.88rem;
-  text-align: center;
-}
-
-.dictionary-card-body {
-  display: grid;
-  gap: 0.5rem;
-  padding: 1.25rem;
-}
-
-.dictionary-card-body h2 {
-  margin-bottom: 0;
-  font-size: 1.2rem;
-}
-
-.dictionary-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.dictionary-card-actions .secondary-link {
-  margin-left: 0;
-}
-
-.danger-button {
-  color: #9a3024;
-  background: #fbe9e6;
-}
-
-.checkbox-field {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  font-weight: 600;
-}
-
-.table-wrapper {
-  overflow-x: auto;
-}
-
-.abbreviation-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.abbreviation-table th,
-.abbreviation-table td {
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid #d6dbd2;
-  text-align: left;
-  vertical-align: top;
-}
-
-.abbreviation-table th {
-  color: #33443d;
-  font-size: 0.85rem;
-}
-
-.settlement-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.settlement-table th,
-.settlement-table td {
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid #d6dbd2;
-  text-align: left;
-  vertical-align: top;
-}
+/* .secondary-button / .danger-button / .icon-button → <Button variant=… size="icon"> */
+/* .progress-track / .progress-bar → <Progress> (shadcn, src/components/ui/progress.tsx) */
+/* .contributor-fieldset (+ legend) / .contributor-list / .contributor-row (+ input/select)
+   → Tailwind utilities in DictionaryMetadataForm.tsx & AbbreviationForm.tsx */
 
-.settlement-table th {
-  color: #33443d;
-  font-size: 0.85rem;
-}
-
-.member-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+/* .page-range-* → migrated to Tailwind utilities in PageRangeEditor.tsx */
 
-.member-table th,
-.member-table td {
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid #d6dbd2;
-  text-align: left;
-  vertical-align: top;
-}
+/* .page-viewer / -nav / -counter → Tailwind utilities in DictionaryPageViewer.tsx */
 
-.member-table th {
-  color: #33443d;
-  font-size: 0.85rem;
-}
+/* .page-viewer-image / .lexeme-canvas* / .lexeme-box* / .lexeme-resize-handle* / .lexeme-form*
+   → Tailwind utilities in LexemeCanvas.tsx (resize-handle offsets via HANDLE_CLASSES map) */
 
-.settlement-search {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
+/* .entry-fragment-preview / -crop / -crop-image / -crop-box → Tailwind utilities in EntryFragmentCrop.tsx (+ EntryDetailPage) */
 
-.settlement-search-results {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
+/* .ocr-suggestions-controls / .page-viewer-body / .lexeme-sidebar (+ h3) → Tailwind utilities in DictionaryPageViewer.tsx */
 
-.table-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
+/* .lexeme-list* → Tailwind utilities in LexemeList.tsx
+   (item <button> gained `text-foreground`: it had no `color`, so global `button{color:#fff}`
+    made the lexeme text white-on-white — pre-existing, fixed on this audit branch) */
 
-.badge {
-  display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 650;
-}
+/* .scan-progress* → інлайн utility в ScanProgressBar.tsx (Крок 3). */
 
-.badge--unresolved,
-.badge--warning {
-  color: #7a5b12;
-  background: #fbf1da;
-}
+/* .language-grid / .language-option / .missing-fields → Tailwind utilities in DictionaryMetadataForm.tsx */
 
-.badge--suggested {
-  color: #1d5c8a;
-  background: #e6f0f7;
-}
+/* .status-badge* → replaced by <Badge>; .readiness-blockers → Tailwind utilities in DictionaryReadiness.tsx */
 
-.badge--confirmed {
-  color: #245847;
-  background: #eaf1ec;
-}
+/* .dictionary-grid / .dictionary-card (→ <Card>) / .dictionary-thumbnail(+--placeholder)
+ * / .dictionary-card-body (+ h2) / .dictionary-card-actions → Tailwind-утиліти в DictionariesList.tsx */
 
-.badge--ok {
-  color: #245847;
-  background: #eaf1ec;
-}
+/* .danger-button → <Button variant="danger">; .checkbox-field → `flex items-center gap-2` inline */
 
-.badge--error {
-  color: #9a3024;
-  background: #fbe9e6;
-}
+/* .table-wrapper / .abbreviation-table / .settlement-table / .member-table
+   → <Table> (shadcn, src/components/ui/table.tsx) — legacy rules removed */
 
-.badge--status {
-  color: #1d5c8a;
-  background: #e6f0f7;
-}
+/* .settlement-search* → Tailwind utilities in SettlementSearchCombobox.tsx */
 
-.badge--complete {
-  color: #245847;
-  background: #eaf1ec;
+/* .table-actions → `flex flex-wrap gap-2` in AbbreviationsTable/SettlementsTable */
+/* .badge / .badge--* → <Badge variant=…> (shadcn) — legacy rules removed */
 }
+/* ==== /LEGACY ==== */

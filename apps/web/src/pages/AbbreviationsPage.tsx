@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
 import { abbreviationsExportUrl, type AbbreviationResponse } from "../api";
-import { useAuth } from "../authContext";
 import { AbbreviationForm } from "../components/AbbreviationForm";
 import { AbbreviationImportPanel } from "../components/AbbreviationImportPanel";
 import { AbbreviationsTable } from "../components/AbbreviationsTable";
@@ -34,13 +33,13 @@ function AbbreviationsWorkspace({ dictionaryId }: { dictionaryId: string }) {
         </p>
         <div className="form-actions">
           <a
-            className="secondary-link"
+            className="ml-4 inline-block font-[650] text-primary hover:underline"
             href={abbreviationsExportUrl(dictionaryId, "json")}
           >
             Експортувати JSON
           </a>
           <a
-            className="secondary-link"
+            className="ml-4 inline-block font-[650] text-primary hover:underline"
             href={abbreviationsExportUrl(dictionaryId, "csv")}
           >
             Експортувати CSV
@@ -79,36 +78,22 @@ function AbbreviationsWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function AbbreviationsPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Скорочення словника</h1>
-        <p className="lede">
-          Налаштуйте структурований список скорочень, який Cadmus
-          використовуватиме під час виділення полів статей.
-        </p>
-      </section>
+    <>
+      <h2 className="mb-2 text-[1.15rem]">Скорочення словника</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Налаштуйте структурований список скорочень, який Cadmus
+        використовуватиме під час виділення полів статей.
+      </p>
       <div className="dictionary-form">
         <AbbreviationsWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }

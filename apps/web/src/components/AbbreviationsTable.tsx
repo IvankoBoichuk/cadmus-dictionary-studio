@@ -1,3 +1,14 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 import type { AbbreviationResponse } from "../api";
 import { LANGUAGE_OPTIONS } from "../languageOptions";
 import { CATEGORY_LABELS } from "../abbreviationCategories";
@@ -22,63 +33,61 @@ export function AbbreviationsTable({
   }
 
   return (
-    <div className="table-wrapper">
-      <table className="abbreviation-table">
-        <caption className="visually-hidden">Список скорочень словника</caption>
-        <thead>
-          <tr>
-            <th scope="col">Скорочення</th>
-            <th scope="col">Повна форма</th>
-            <th scope="col">Категорія</th>
-            <th scope="col">Мова</th>
-            <th scope="col">Варіанти</th>
-            <th scope="col">Дії</th>
-          </tr>
-        </thead>
-        <tbody>
-          {abbreviations.map((item) => {
-            const rowDeleteState = deleteState[item.id];
-            return (
-              <tr key={item.id}>
-                <td>
-                  {item.abbreviation}
-                  {item.unresolved && (
-                    <span className="badge badge--unresolved">нерозшифроване</span>
-                  )}
-                </td>
-                <td>{item.full_form ?? "—"}</td>
-                <td>{CATEGORY_LABELS[item.category]}</td>
-                <td>{item.language_code ? LANGUAGE_NAMES[item.language_code] ?? item.language_code : "—"}</td>
-                <td>{item.variants.length > 0 ? item.variants.join(", ") : "—"}</td>
-                <td>
-                  <div className="table-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => onEdit(item)}
-                    >
-                      Редагувати
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={rowDeleteState?.pending}
-                      onClick={() => onDelete(item)}
-                    >
-                      {rowDeleteState?.pending ? "Видаляємо…" : "Видалити"}
-                    </button>
-                  </div>
-                  {rowDeleteState?.error && (
-                    <p className="field-error" role="alert">
-                      {rowDeleteState.error}
-                    </p>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <Table>
+      <caption className="sr-only">Список скорочень словника</caption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">Скорочення</TableHead>
+          <TableHead scope="col">Повна форма</TableHead>
+          <TableHead scope="col">Категорія</TableHead>
+          <TableHead scope="col">Мова</TableHead>
+          <TableHead scope="col">Варіанти</TableHead>
+          <TableHead scope="col">Дії</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {abbreviations.map((item) => {
+          const rowDeleteState = deleteState[item.id];
+          return (
+            <TableRow key={item.id}>
+              <TableCell>
+                {item.abbreviation}
+                {item.unresolved && (
+                  <Badge className="ml-2" variant="warning">нерозшифроване</Badge>
+                )}
+              </TableCell>
+              <TableCell>{item.full_form ?? "—"}</TableCell>
+              <TableCell>{CATEGORY_LABELS[item.category]}</TableCell>
+              <TableCell>{item.language_code ? LANGUAGE_NAMES[item.language_code] ?? item.language_code : "—"}</TableCell>
+              <TableCell>{item.variants.length > 0 ? item.variants.join(", ") : "—"}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => onEdit(item)}
+                  >
+                    Редагувати
+                  </Button>
+                  <Button
+                    variant="danger"
+                    type="button"
+                    disabled={rowDeleteState?.pending}
+                    onClick={() => onDelete(item)}
+                  >
+                    {rowDeleteState?.pending ? "Видаляємо…" : "Видалити"}
+                  </Button>
+                </div>
+                {rowDeleteState?.error && (
+                  <p className="field-error" role="alert">
+                    {rowDeleteState.error}
+                  </p>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+      </Table>
   );
 }

@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
 import { API_BASE_URL } from "../config";
 
 type ApiState = "checking" | "available" | "unavailable";
@@ -52,27 +56,47 @@ export function ApiStatus() {
   };
 
   return (
-    <section className="status-card" aria-labelledby="api-status-title">
-      <div>
-        <p className="status-label">System status</p>
-        <h2 id="api-status-title">API</h2>
-      </div>
-      <div className={`status-indicator status-indicator--${state}`} role="status">
-        <span className="status-dot" aria-hidden="true" />
-        {state === "checking" && "Перевіряємо доступність…"}
-        {state === "available" && "Доступний"}
-        {state === "unavailable" && "Недоступний"}
-      </div>
-      {state === "unavailable" && (
-        <button
-          type="button"
-          onClick={() => {
-            void retry();
-          }}
+    <Card
+      asChild
+      className="mt-[clamp(3rem,8vw,6rem)] grid grid-cols-[minmax(8rem,1fr)_auto_auto] items-center gap-6 p-6 max-[38rem]:grid-cols-[1fr]"
+    >
+      <section aria-labelledby="api-status-title">
+        <div>
+          <p className="status-label">Стан системи</p>
+          <h2 id="api-status-title" className="mb-0 text-xl">
+            API
+          </h2>
+        </div>
+        <div
+          className="flex items-center gap-[0.6rem] font-[650]"
+          role="status"
         >
-          Спробувати знову
-        </button>
-      )}
-    </section>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-[0.7rem] rounded-full bg-muted-dot",
+              state === "available" &&
+                "bg-[#158052] shadow-[0_0_0_0.3rem_#dff3e9]",
+              state === "unavailable" &&
+                "bg-[#b43c2d] shadow-[0_0_0_0.3rem_#f9e3df]",
+            )}
+          />
+          {state === "checking" && "Перевіряємо доступність…"}
+          {state === "available" && "Доступний"}
+          {state === "unavailable" && "Недоступний"}
+        </div>
+        {state === "unavailable" && (
+          <Button
+            type="button"
+            className="max-[38rem]:justify-self-start"
+            onClick={() => {
+              void retry();
+            }}
+          >
+            Спробувати знову
+          </Button>
+        )}
+      </section>
+    </Card>
   );
 }

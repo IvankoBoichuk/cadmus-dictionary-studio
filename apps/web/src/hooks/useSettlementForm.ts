@@ -1,5 +1,7 @@
-import { useFormik } from "formik";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 
 import {
   API,
@@ -9,15 +11,25 @@ import {
   type SettlementSuggestionResponse,
 } from "../api";
 
-export type SettlementFormValues = {
-  source_label: string;
-  source_note: string;
-  modern_settlement_name: string;
-  settlement_category: string;
-  settlement_id: string | null;
-};
+const settlementSchema = z
+  .object({
+    source_label: z.string(),
+    source_note: z.string(),
+    modern_settlement_name: z.string(),
+    settlement_category: z.string(),
+    settlement_id: z.string().nullable(),
+  })
+  .superRefine((values, ctx) => {
+    if (!values.source_label.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["source_label"],
+        message: "Вкажіть географічну позначку з оригіналу.",
+      });
+    }
+  });
 
-type FormErrors = Partial<Record<keyof SettlementFormValues, string>>;
+export type SettlementFormValues = z.infer<typeof settlementSchema>;
 
 const EMPTY_VALUES: SettlementFormValues = {
   source_label: "",
@@ -40,14 +52,6 @@ function valuesFrom(
   };
 }
 
-function validate(values: SettlementFormValues): FormErrors {
-  const errors: FormErrors = {};
-  if (!values.source_label.trim()) {
-    errors.source_label = "Вкажіть географічну позначку з оригіналу.";
-  }
-  return errors;
-}
-
 /**
  * Drives BH-30's single-mapping add/edit form (AC7, AC11, AC12).
  *
@@ -62,70 +66,77 @@ export function useSettlementForm(
   editing: SettlementMappingResponse | null,
   onSaved: (saved: SettlementMappingResponse) => void,
 ) {
-  const formik = useFormik<SettlementFormValues>({
-    initialValues: valuesFrom(editing),
-    validate,
-    validateOnBlur: true,
-    validateOnChange: false,
-    onSubmit: async (values, helpers) => {
-      helpers.setStatus(undefined);
-      const body = {
-        source_label: values.source_label.trim(),
-        source_note: values.source_note.trim() || null,
-        modern_settlement_name: values.modern_settlement_name.trim() || null,
-        settlement_category: values.settlement_category.trim() || null,
-        settlement_id: values.settlement_id,
-      };
-      try {
-        const saved = editing
-          ? await API.settlements.update(dictionaryId, editing.id, body)
-          : await API.settlements.create(dictionaryId, body);
-        onSaved(saved);
-        if (!editing) helpers.resetForm();
-      } catch (error) {
-        const duplicate = duplicateSettlementMappingFrom(error);
-        if (duplicate) {
-          helpers.setStatus({ submissionError: duplicate.message });
-          return;
-        }
-        const apiErrors = fieldErrorsFrom(error);
-        if (apiErrors) {
-          helpers.setErrors(apiErrors as FormErrors);
-          helpers.setStatus({
-            submissionError: "Перевірте поля, позначені помилками.",
-          });
-          return;
-        }
-        helpers.setStatus({
-          submissionError: "Не вдалося зберегти географічну мітку. Спробуйте ще раз.",
-        });
-      }
-    },
+  const form = useForm<SettlementFormValues>({
+    resolver: zodResolver(settlementSchema),
+    defaultValues: valuesFrom(editing),
+    mode: "onBlur",
   });
 
+  // `reset` clears field values, errors (including the form-level `root`), and
+  // `isDirty` together -- so switching the row being edited also drops a stale
+  // save error, the way Formik's `resetForm` used to.
   useEffect(() => {
-    formik.resetForm({ values: valuesFrom(editing) });
+    form.reset(valuesFrom(editing));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
+  const onSubmit = form.handleSubmit(async (values) => {
+    form.clearErrors("root");
+    const body = {
+      source_label: values.source_label.trim(),
+      source_note: values.source_note.trim() || null,
+      modern_settlement_name: values.modern_settlement_name.trim() || null,
+      settlement_category: values.settlement_category.trim() || null,
+      settlement_id: values.settlement_id,
+    };
+    try {
+      const saved = editing
+        ? await API.settlements.update(dictionaryId, editing.id, body)
+        : await API.settlements.create(dictionaryId, body);
+      onSaved(saved);
+      if (!editing) form.reset(EMPTY_VALUES);
+    } catch (error) {
+      const duplicate = duplicateSettlementMappingFrom(error);
+      if (duplicate) {
+        form.setError("root", { message: duplicate.message });
+        return;
+      }
+      const apiErrors = fieldErrorsFrom(error);
+      if (apiErrors) {
+        for (const [field, message] of Object.entries(apiErrors)) {
+          form.setError(field as keyof SettlementFormValues, { message });
+        }
+        form.setError("root", {
+          message: "Перевірте поля, позначені помилками.",
+        });
+        return;
+      }
+      form.setError("root", {
+        message: "Не вдалося зберегти географічну мітку. Спробуйте ще раз.",
+      });
+    }
+  });
+
   const applySuggestion = (suggestion: SettlementSuggestionResponse) => {
-    void formik.setFieldValue("settlement_id", suggestion.settlement_id);
-    void formik.setFieldValue("modern_settlement_name", suggestion.title);
-    void formik.setFieldValue("settlement_category", suggestion.category);
+    form.setValue("settlement_id", suggestion.settlement_id, {
+      shouldDirty: true,
+    });
+    form.setValue("modern_settlement_name", suggestion.title, {
+      shouldDirty: true,
+    });
+    form.setValue("settlement_category", suggestion.category, {
+      shouldDirty: true,
+    });
   };
 
   const clearSuggestion = () => {
-    void formik.setFieldValue("settlement_id", null);
+    form.setValue("settlement_id", null, { shouldDirty: true });
   };
 
-  const status = formik.status as { submissionError?: string } | undefined;
-
   return {
-    ...formik,
-    submit: formik.handleSubmit,
-    submitting: formik.isSubmitting,
-    submissionError: status?.submissionError ?? null,
+    form,
+    onSubmit,
     applySuggestion,
     clearSuggestion,
-  } as const;
+  };
 }

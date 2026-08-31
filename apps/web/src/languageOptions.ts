@@ -34,3 +34,15 @@ export const LANGUAGE_OPTIONS: readonly { code: string; name: string }[] = [
   { code: "zh", name: "中文" },
   { code: "ja", name: "日本語" },
 ];
+
+const LANGUAGE_NAME_BY_CODE = new Map(
+  LANGUAGE_OPTIONS.map((option) => [option.code, option.name]),
+);
+
+/** `["uk", "grc"]` -> `"Українська, GRC"`. Unknown codes fall back to the
+ * upper-cased code (the backend accepts the full ISO 639-1 set). */
+export function formatLanguages(codes: readonly string[]): string {
+  return codes
+    .map((code) => LANGUAGE_NAME_BY_CODE.get(code) ?? code.toUpperCase())
+    .join(", ");
+}
