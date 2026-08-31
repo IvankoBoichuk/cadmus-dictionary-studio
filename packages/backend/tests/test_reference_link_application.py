@@ -16,7 +16,6 @@ from cadmus.lexicography import (
 )
 from cadmus.lexicography.ports import (
     LexicographyUnitOfWork,
-    LexicographyUnitOfWorkFactory,
 )
 from cadmus.lexicography.reference_link_ports import (
     EntryReferenceLinkUnitOfWorkFactory,
@@ -95,10 +94,9 @@ class _ReferenceLexiconQueryStub:
 
 
 def test_standard_equivalent_rejects_non_standard_reference_before_write() -> None:
-    lexicography_factory = cast(
-        LexicographyUnitOfWorkFactory,
-        lambda: cast(LexicographyUnitOfWork, _LexicographyUnitOfWorkStub()),
-    )
+    def lexicography_factory() -> LexicographyUnitOfWork:
+        return cast(LexicographyUnitOfWork, _LexicographyUnitOfWorkStub())
+
     link_factory = cast(
         EntryReferenceLinkUnitOfWorkFactory,
         lambda: (_ for _ in ()).throw(

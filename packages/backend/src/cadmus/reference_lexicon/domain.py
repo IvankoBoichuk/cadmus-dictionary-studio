@@ -52,9 +52,7 @@ _PRONOUN_KEY_TAGS = frozenset(
 )
 _XP_RE = re.compile(r"^xp[1-9]$")
 
-_CASE_TAGS = frozenset(
-    {"v_naz", "v_rod", "v_dav", "v_zna", "v_oru", "v_mis", "v_kly"}
-)
+_CASE_TAGS = frozenset({"v_naz", "v_rod", "v_dav", "v_zna", "v_oru", "v_mis", "v_kly"})
 _NUMBER_TAGS = frozenset({"s", "p"})
 _GENDER_TAGS = frozenset({"m", "f", "n"})
 _ANIMACY_TAGS = frozenset({"anim", "inanim", "unanim"})
@@ -176,7 +174,7 @@ def normalize_ukrainian_text(value: str) -> str:
     """Normalize for lookup without changing the imported source spelling."""
 
     normalized = unicodedata.normalize("NFC", value.strip())
-    normalized = normalized.replace("’", "'").replace("ʼ", "'")
+    normalized = normalized.replace("’", "'").replace("ʼ", "'")  # noqa: RUF001
     return " ".join(normalized.split()).casefold()
 
 

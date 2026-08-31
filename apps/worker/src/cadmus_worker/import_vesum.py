@@ -66,9 +66,7 @@ def _release_asset_from_payload(payload: _ReleasePayload) -> VesumReleaseAsset:
             download_url=asset["browser_download_url"],
             sha256=sha256,
         )
-    raise RuntimeError(
-        f"VESUM release does not contain {VESUM_RELEASE_ASSET_NAME}"
-    )
+    raise RuntimeError(f"VESUM release does not contain {VESUM_RELEASE_ASSET_NAME}")
 
 
 def _resolve_release_asset(release: str) -> VesumReleaseAsset:
@@ -135,9 +133,7 @@ def main() -> None:
 
     settings = Settings()
     engine = create_database_engine(settings)
-    service = VesumImportService(
-        create_reference_lexicon_unit_of_work_factory(engine)
-    )
+    service = VesumImportService(create_reference_lexicon_unit_of_work_factory(engine))
 
     compressed = _download_verified_asset(asset)
     try:

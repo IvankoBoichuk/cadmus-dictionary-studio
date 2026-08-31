@@ -883,6 +883,41 @@ export interface paths {
         patch: operations["update_field_entries__entry_id__fields__field_id__patch"];
         trace?: never;
     };
+    "/entries/{entry_id}/reference-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List confirmed reference lemmas linked to a dictionary entry */
+        get: operations["list_entry_links_entries__entry_id__reference_links_get"];
+        put?: never;
+        /** Confirm a reference lemma as an equivalent or related lemma */
+        post: operations["create_entry_link_entries__entry_id__reference_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/entries/{entry_id}/reference-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a confirmed reference-lemma link */
+        delete: operations["delete_entry_link_entries__entry_id__reference_links__link_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/geography/areas": {
         parameters: {
             query?: never;
@@ -977,6 +1012,40 @@ export interface paths {
         };
         /** Check API liveness */
         get: operations["get_health_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reference-lexicons/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read metadata for an imported reference lexicon */
+        get: operations["get_lexicon_reference_lexicons__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reference-lexicons/{code}/lemmas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search reference lemmas by lemma or generated word form */
+        get: operations["search_lemmas_reference_lexicons__code__lemmas_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1316,6 +1385,16 @@ export interface components {
             source_start: number;
             /** Source Text */
             source_text: string;
+        };
+        /** CreateEntryReferenceLinkRequest */
+        CreateEntryReferenceLinkRequest: {
+            /**
+             * Reference Lemma Id
+             * Format: uuid
+             */
+            reference_lemma_id: string;
+            /** @default standard_equivalent */
+            relation_type: components["schemas"]["ReferenceRelationType"];
         };
         /**
          * CreateLexemeRequest
@@ -1695,6 +1774,37 @@ export interface components {
             /** Y2 */
             y2: number | null;
         };
+        /** EntryReferenceLinkResponse */
+        EntryReferenceLinkResponse: {
+            /** Confidence */
+            confidence: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            lemma: components["schemas"]["ReferenceLemmaResponse"];
+            /** Origin */
+            origin: string;
+            /**
+             * Reference Lemma Id
+             * Format: uuid
+             */
+            reference_lemma_id: string;
+            relation_type: components["schemas"]["ReferenceRelationType"];
+            /** Validation Status */
+            validation_status: string;
+        };
         /**
          * EntryResponse
          * @description A dictionary entry, its source fragments, and its structured fields.
@@ -2003,6 +2113,10 @@ export interface components {
             members: components["schemas"]["MemberResponse"][];
             my_role: components["schemas"]["Role"];
         };
+        MorphologyFeatureValue: string | boolean | string[];
+        MorphologyFeatures: {
+            [key: string]: components["schemas"]["MorphologyFeatureValue"];
+        };
         /**
          * OcrSuggestionStatus
          * @description Transport-neutral state of an in-flight OCR word-suggestion task.
@@ -2113,6 +2227,73 @@ export interface components {
             /** Blockers */
             blockers: components["schemas"]["ReadinessBlockerResponse"][];
         };
+        /** ReferenceLemmaResponse */
+        ReferenceLemmaResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Standard */
+            is_standard: boolean;
+            /** Key Tags */
+            key_tags: string[];
+            /** Lemma */
+            lemma: string;
+            match_type?: components["schemas"]["ReferenceMatchType"] | null;
+            /** Matched Form */
+            matched_form?: string | null;
+            matched_form_features?: components["schemas"]["MorphologyFeatures"] | null;
+            /** Matched Form Morphology */
+            matched_form_morphology?: string | null;
+            /** Matched Form Tags */
+            matched_form_tags?: string[] | null;
+            /** Normalized Lemma */
+            normalized_lemma: string;
+            /** Part Of Speech */
+            part_of_speech: string;
+        };
+        /** ReferenceLexiconResponse */
+        ReferenceLexiconResponse: {
+            /** Checksum */
+            checksum: string;
+            /** Code */
+            code: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Language Code */
+            language_code: string;
+            /** License Id */
+            license_id: string;
+            /** Name */
+            name: string;
+            /** Source Commit */
+            source_commit: string | null;
+            /** Source Url */
+            source_url: string;
+            /** Version */
+            version: string;
+        };
+        /**
+         * ReferenceMatchType
+         * @description Why a reference lemma matched a user's search query.
+         * @enum {string}
+         */
+        ReferenceMatchType: "lemma" | "word_form";
+        /**
+         * ReferenceRelationType
+         * @description Semantic relationship asserted between a dictionary entry and a lemma.
+         * @enum {string}
+         */
+        ReferenceRelationType: "standard_equivalent" | "synonym" | "approximate_equivalent" | "hypernym" | "related";
         /**
          * RegionResponse
          * @description One synced raion.
@@ -6029,6 +6210,135 @@ export interface operations {
             };
         };
     };
+    list_entry_links_entries__entry_id__reference_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryReferenceLinkResponse"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_entry_link_entries__entry_id__reference_links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEntryReferenceLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryReferenceLinkResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_entry_link_entries__entry_id__reference_links__link_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+                link_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_areas_geography_areas_get: {
         parameters: {
             query?: never;
@@ -6272,6 +6582,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    get_lexicon_reference_lexicons__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferenceLexiconResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_lemmas_reference_lexicons__code__lemmas_get: {
+        parameters: {
+            query: {
+                q: string;
+                standard_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferenceLemmaResponse"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

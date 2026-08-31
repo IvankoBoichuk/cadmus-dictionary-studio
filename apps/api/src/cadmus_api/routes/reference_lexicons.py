@@ -38,6 +38,8 @@ SESSION_COOKIE_NAME = "cadmus_session"
 
 
 class ErrorResponse(BaseModel):
+    """Stable, non-sensitive error contract for a single failure reason."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     code: str
@@ -239,7 +241,7 @@ def create_reference_lexicons_router(
                 status_code=404,
                 content={
                     "code": "not_found",
-                    "message": "Статтю або відповідник не знайдено.",
+                    "message": "Статтю або відповідник не знайдено.",  # noqa: RUF001
                 },
             )
         return [
@@ -284,7 +286,7 @@ def create_reference_lexicons_router(
                 status_code=404,
                 content={
                     "code": "not_found",
-                    "message": "Статтю або відповідник не знайдено.",
+                    "message": "Статтю або відповідник не знайдено.",  # noqa: RUF001
                 },
             )
         except ReferenceLemmaNotStandardError:

@@ -278,10 +278,10 @@ def test_delete_reference_link_returns_204() -> None:
 
 def test_reference_router_openapi_declares_empty_204_response() -> None:
     with client_for() as client:
-        schema = client.app.openapi()
+        schema = cast(FastAPI, client.app).openapi()
 
-    operation = schema["paths"][
-        "/entries/{entry_id}/reference-links/{link_id}"
-    ]["delete"]
+    operation = schema["paths"]["/entries/{entry_id}/reference-links/{link_id}"][
+        "delete"
+    ]
     no_content = operation["responses"]["204"]
     assert "content" not in no_content

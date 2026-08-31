@@ -19,7 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, registry
 
-import cadmus.infrastructure.lexicography  # noqa: F401
+import cadmus.infrastructure.lexicography
 import cadmus.infrastructure.reference_lexicon  # noqa: F401
 from cadmus.infrastructure.database import metadata
 from cadmus.lexicography.reference_link_domain import (

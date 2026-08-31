@@ -43,9 +43,7 @@ class ManageEntryReferenceLinksService:
         self,
         *,
         lexicography_unit_of_work_factory: LexicographyUnitOfWorkFactory,
-        reference_link_unit_of_work_factory: (
-            EntryReferenceLinkUnitOfWorkFactory
-        ),
+        reference_link_unit_of_work_factory: (EntryReferenceLinkUnitOfWorkFactory),
         dictionary_pages: GetDictionaryService,
         reference_lexicon: ReferenceLexiconQueryService,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
