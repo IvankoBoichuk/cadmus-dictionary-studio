@@ -23,7 +23,8 @@ def test_release_asset_uses_github_digest() -> None:
                     ),
                     "digest": (
                         "sha256:"
-                        "e33803783ac138e6f3af2cf0e9428ba146c0ecfda7f5c41fe83ae00c7af24be9"
+                        "e33803783ac138e6f3af2cf0e9428ba"
+                        "146c0ecfda7f5c41fe83ae00c7af24be9"
                     ),
                 }
             ],

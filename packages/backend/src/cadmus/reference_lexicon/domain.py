@@ -29,18 +29,10 @@ _NOUN_KEY_TAGS = frozenset(
         "fname",
         "lname",
         "pname",
-        "prop",
         "geo",
-        "m",
-        "f",
-        "n",
-        "ns",
-        "np",
-        "nv",
     }
 )
 _VERB_KEY_TAGS = frozenset({"imperf", "perf", "rev"})
-_ADJP_KEY_TAGS = frozenset({"actv", "pasv", "imperf", "perf"})
 _ADVP_KEY_TAGS = frozenset({"imperf", "perf"})
 _PRONOUN_KEY_TAGS = frozenset(
     {
@@ -201,8 +193,6 @@ def _lemma_key_tags(tags: list[str]) -> list[str]:
         allowed = _NOUN_KEY_TAGS
     elif pos == "verb":
         allowed = _VERB_KEY_TAGS
-    elif pos == "adjp":
-        allowed = _ADJP_KEY_TAGS
     elif pos == "advp":
         allowed = _ADVP_KEY_TAGS
     else:
