@@ -1469,6 +1469,10 @@ export function dictionaryThumbnailUrl(dictionaryId: string): string {
   return `${API_BASE_URL}/dictionaries/${dictionaryId}/thumbnail`;
 }
 
+export function dictionarySourceDownloadUrl(dictionaryId: string): string {
+  return `${API_BASE_URL}/dictionaries/${dictionaryId}/source/download`;
+}
+
 export function dictionaryPageImageUrl(
   dictionaryId: string,
   pageNumber: number,

@@ -58,30 +58,29 @@ export function DictionaryReadiness({
   };
 
   return (
-    <div className="form-section" aria-labelledby="readiness-heading">
-      <h2 id="readiness-heading">Готовність словника</h2>
-      <Badge
-        size="lg"
-        variant={DICTIONARY_STATUS_BADGE_VARIANT[dictionary.status]}
-        role="status"
-      >
-        {DICTIONARY_STATUS_LABELS[dictionary.status]}
-      </Badge>
-      {blockers.length > 0 && (
-        <ul className="mt-2 mb-0 list-disc pl-5 text-[0.92rem]">
-          {blockers.map((blocker) => (
-            <li key={blocker.code}>{blocker.message}</li>
-          ))}
-        </ul>
-      )}
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+    <div
+      className="flex flex-col items-start gap-1.5 sm:items-end"
+      aria-labelledby="readiness-heading"
+    >
+      <div className="flex items-center gap-2">
+        <span
+          id="readiness-heading"
+          className="text-[0.7rem] font-[750] tracking-[0.12em] text-muted-foreground uppercase"
+        >
+          Статус словника
+        </span>
+        <Badge
+          size="lg"
+          variant={DICTIONARY_STATUS_BADGE_VARIANT[dictionary.status]}
+          role="status"
+        >
+          {DICTIONARY_STATUS_LABELS[dictionary.status]}
+        </Badge>
+      </div>
       {dictionary.status === "draft" && (
         <Button
           type="button"
+          size="sm"
           disabled={!isReady || submitting}
           onClick={() => void handleConfigure()}
         >
@@ -91,11 +90,27 @@ export function DictionaryReadiness({
       {dictionary.status === "configured" && (
         <Button
           type="button"
+          size="sm"
           disabled={submitting}
           onClick={() => void handleFinishScanning()}
         >
           {submitting ? "Завершуємо…" : "Завершити сканування"}
         </Button>
+      )}
+      {blockers.length > 0 && (
+        <ul className="m-0 max-w-[24rem] list-disc pl-5 text-left text-[0.8rem] text-warning-foreground">
+          {blockers.map((blocker) => (
+            <li key={blocker.code}>{blocker.message}</li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <p
+          className="m-0 max-w-[24rem] text-[0.82rem] text-destructive"
+          role="alert"
+        >
+          {error}
+        </p>
       )}
     </div>
   );

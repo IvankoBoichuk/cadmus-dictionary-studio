@@ -14,15 +14,16 @@ import { useDictionaries } from "../hooks/useDictionaries";
 
 type DictionaryEntry = DictionaryListResponse[number];
 
-/** Cover art box — the whole cover is shown (`object-contain`), never cropped. */
-function Cover({ entry }: { entry: DictionaryEntry }) {
+/** Cover art box — the whole cover is shown (`object-contain`), never cropped.
+ * The card has no text title, so the cover image carries its name via `alt`. */
+function Cover({ entry, title }: { entry: DictionaryEntry; title: string }) {
   const pagesStatus = entry.source?.pages_status;
   if (pagesStatus === "completed") {
     return (
       <img
         className="h-full w-full object-contain"
         src={dictionaryThumbnailUrl(entry.id)}
-        alt=""
+        alt={title}
         loading="lazy"
         width={264}
         height={352}
@@ -67,7 +68,7 @@ function DictionaryCard({
     <Card asChild className="group relative flex flex-col overflow-hidden">
       <li>
         <div className="relative aspect-3/4 w-full bg-secondary">
-          <Cover entry={entry} />
+          <Cover entry={entry} title={title} />
           <Badge
             className="absolute top-2 left-2 shadow-sm"
             variant={DICTIONARY_STATUS_BADGE_VARIANT[entry.status]}

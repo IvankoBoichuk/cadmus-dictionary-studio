@@ -738,10 +738,9 @@ it("shows a thumbnail image once page splitting has completed", async () => {
 
   render(<App />);
 
-  expect(
-    await screen.findByRole("heading", { name: "Словник української мови" }),
-  ).toBeInTheDocument();
-  const image = screen.getByRole("presentation") as HTMLImageElement;
+  const image = (await screen.findByRole("img", {
+    name: "Словник української мови",
+  })) as HTMLImageElement;
   expect(image.src).toContain(`/api/dictionaries/${entry.id}/thumbnail`);
 });
 
@@ -772,8 +771,9 @@ it("shows a placeholder instead of a thumbnail while pages are still splitting",
 
   render(<App />);
 
-  await screen.findByRole("heading", { name: "Словник української мови" });
-  expect(screen.getByText("Розбивається на сторінки…")).toBeInTheDocument();
+  expect(
+    await screen.findByText("Розбивається на сторінки…"),
+  ).toBeInTheDocument();
   expect(screen.queryByRole("img")).not.toBeInTheDocument();
 });
 
@@ -800,13 +800,13 @@ it("deletes a dictionary after confirmation and removes it from the list", async
   );
 
   render(<App />);
-  await screen.findByRole("heading", { name: "Словник української мови" });
+  await screen.findByRole("img", { name: "Словник української мови" });
   fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
 
   await waitFor(() => expect(deleteCalled).toBe(true));
   await waitFor(() =>
     expect(
-      screen.queryByRole("heading", { name: "Словник української мови" }),
+      screen.queryByRole("img", { name: "Словник української мови" }),
     ).not.toBeInTheDocument(),
   );
   confirmSpy.mockRestore();
@@ -826,7 +826,7 @@ it("keeps the dictionary when the delete confirmation is dismissed", async () =>
   vi.stubGlobal("fetch", fetchMock);
 
   render(<App />);
-  await screen.findByRole("heading", { name: "Словник української мови" });
+  await screen.findByRole("img", { name: "Словник української мови" });
   fireEvent.click(screen.getByRole("button", { name: "Видалити" }));
 
   expect(confirmSpy).toHaveBeenCalled();
@@ -834,7 +834,7 @@ it("keeps the dictionary when the delete confirmation is dismissed", async () =>
     fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
   ).toBe(false);
   expect(
-    screen.getByRole("heading", { name: "Словник української мови" }),
+    screen.getByRole("img", { name: "Словник української мови" }),
   ).toBeInTheDocument();
   confirmSpy.mockRestore();
 });

@@ -46,7 +46,7 @@ export function AppShell() {
       />
       <main
         id="main-content"
-        className="mx-auto w-full max-w-[72rem] px-[clamp(1rem,4vw,2.5rem)] py-[clamp(2rem,6vw,3.5rem)]"
+        className="w-full min-w-0 px-[clamp(1rem,4vw,2.5rem)] py-[clamp(2rem,6vw,3.5rem)]"
       >
         <Outlet />
       </main>
