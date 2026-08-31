@@ -144,8 +144,10 @@ quality -> processing, document, lexicography, review
 `lexicography -> sources` (BH-54): лексема — ручне, доOCR-виділення (bounding box + текст) на зображенні сторінки, тобто майбутній прекурсор `headword`/`entry`. Вона посилається на `sources.Dictionary`/`sources.DictionaryPage` напряму, а не через `document`, бо `document` (нормалізована геометрія, отримана з OCR) на цьому етапі pipeline ще не існує й не має існувати — лексема створюється до запуску OCR. Коли реальний OCR/`document`-шар з'явиться, він продовжить використовувати `document -> sources`; ручний шлях лексем через `sources` лишається окремим і не є обхідним шляхом навколо `document`.
 
 `reference_lexicon` — незалежний leaf-модуль для зовнішніх еталонних
-лексичних даних. VESUM імпортується як versioned local cache із фіксацією
-version, source commit, checksum і license. Дані reference lexicon не є
+лексичних даних. VESUM імпортується як versioned local cache з pinned GitHub
+Release asset із фіксацією version, asset URL, SHA-256 checksum і license.
+Morphology зберігається як raw tag string, повний ordered tag list і
+консервативно розпарсені JSONB features. Дані reference lexicon не є
 `sources.Dictionary`, не проходять OCR і не змінюють `source_text`.
 `lexicography` може створювати лише явні підтверджені зв'язки з reference
 lemma. Через відсутність окремої сутності sense у поточній MVP-моделі такий

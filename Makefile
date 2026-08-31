@@ -9,7 +9,7 @@ help:
 	@echo "  make worker        Run the Celery worker"
 	@echo "  make backfill-pages  Enqueue page splitting for dictionaries verified before this feature existed"
 	@echo "  make sync-geography  Sync areas/regions/communities from decentralization.ua into the local cache"
-	@echo "  make import-vesum VESUM_FILE=... VESUM_VERSION=... [VESUM_COMMIT=...]  Import a pinned VESUM flat export"
+	@echo "  make import-vesum VESUM_VERSION=6.8.5  Import a pinned VESUM release"
 	@echo "  make web           Run the Vite frontend development server"
 	@echo "  make dev           Run the API and frontend dev servers together"
 	@echo "  make web-build     Build the production frontend"
@@ -58,14 +58,9 @@ sync-geography:
 	$(UV) run --locked --package cadmus-worker python -m cadmus_worker.sync_geography
 
 import-vesum:
-	test -n "$(VESUM_FILE)"
 	test -n "$(VESUM_VERSION)"
-	test -f "$(VESUM_FILE)"
-	docker compose run --rm \
-		-v "$(abspath $(VESUM_FILE)):/tmp/cadmus-vesum.txt:ro" \
-		worker python -m cadmus_worker.import_vesum \
-		/tmp/cadmus-vesum.txt --version "$(VESUM_VERSION)" \
-		$(if $(VESUM_COMMIT),--source-commit "$(VESUM_COMMIT)",)
+	docker compose run --rm worker python -m cadmus_worker.import_vesum \
+		--release "$(VESUM_VERSION)"
 
 web:
 	cd apps/web && bun run dev

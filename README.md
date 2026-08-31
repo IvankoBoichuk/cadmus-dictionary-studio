@@ -322,46 +322,55 @@ Cadmus can keep VESUM (the Large Electronic Dictionary of Ukrainian) as a
 versioned reference lexicon for linking a digitized dictionary entry to a
 modern Ukrainian lemma. VESUM is reference data, not a Cadmus source
 dictionary: it does not enter the OCR pipeline and its text never replaces an
-entry's source_text.
+entry's `source_text`.
 
-Cadmus imports the flat out/dict_corp_lt.txt produced by the upstream
-brown-uk/dict_uk project. Each row contains a word form, its lemma, and VESUM
-morphological tags. The importer stores both lemmas and generated forms, so
-search can resolve a user-entered inflected form back to a candidate lemma.
+Cadmus does **not** run `./gradlew expand`. The upstream build explicitly
+allocates roughly 4-5.2 GiB of JVM heap, while GitHub Releases already publish
+the generated visual dictionary. The importer downloads the pinned
+`dict_corp_vis.txt.bz2` asset for the requested release, verifies the SHA-256
+digest exposed by GitHub, streams bzip2 decompression, and imports directly
+into PostgreSQL.
 
-Build a pinned upstream revision outside this repository, then import the
-generated file through the existing Compose worker image:
+For example:
 
 ~~~bash
-git clone https://github.com/brown-uk/dict_uk.git
-cd dict_uk
-git checkout <pinned-commit>
-./gradlew expand
-cd ../cadmus-dictionary-studio
-
-make import-vesum \
-  VESUM_FILE=../dict_uk/out/dict_corp_lt.txt \
-  VESUM_VERSION=6.7.8 \
-  VESUM_COMMIT=<pinned-commit>
+make import-vesum VESUM_VERSION=6.8.5
 ~~~
 
-Cadmus stores the upstream version, commit, SHA-256 checksum, import timestamp,
-source URL, and license identifier. Re-import is atomic. Existing rows that
-disappear upstream are deactivated rather than deleted, preserving already
-confirmed links and their provenance.
+Release `v6.8.5` publishes `dict_corp_vis.txt.bz2` as a compressed asset. A
+top-level row starts a lemma and the following two-space-indented rows are its
+word forms. Cadmus uses that grouping directly, so a form inherits the exact
+lemma identity from its group rather than reconstructing it heuristically.
+
+For every word form Cadmus preserves the raw VESUM morphology string and also
+stores two structured representations:
+
+- `morphology_tags`: every upstream tag, unchanged and ordered;
+- `morphology_features`: conservative derived fields such as case, number,
+  gender, animacy, aspect, voice, tense, person, degree, pronoun type,
+  governed cases and qualifiers.
+
+Unknown/future VESUM tags are retained in `other_tags`, so schema evolution
+does not discard source information. Search results matched through an
+inflected form expose the matching form's raw and parsed morphology.
+
+Cadmus stores the release version, exact release-asset URL, asset SHA-256,
+import timestamp and license identifier. Re-import is atomic. Existing rows
+that disappear upstream are deactivated rather than deleted, preserving
+already confirmed links and their provenance.
 
 VESUM contains non-standard material intentionally. Cadmus imports it for
-research, but by default excludes rows tagged bad, subst, alt, arch, slang,
-vulg, obsc, or rare from literary-standard search results. A user must
-explicitly confirm every entry-to-lemma mapping; the imported reference data
-never rewrites OCR source text or normalized entry fields.
+research, but by default excludes rows tagged `bad`, `subst`, `alt`, `arch`,
+`slang`, `vulg`, `obsc`, or `rare` from literary-standard search results. A
+user must explicitly confirm every entry-to-lemma mapping; the imported
+reference data never rewrites OCR source text or normalized entry fields.
 
 Important licensing constraint: VESUM dictionary data are licensed
-CC BY-NC-SA 4.0. No VESUM dataset is committed to this repository. Deployment,
-redistribution, or commercial use of the imported data must independently
-satisfy that license or use a separately obtained permission. The integration
-therefore remains an optional external reference provider rather than bundled
-Cadmus product data.
+CC BY-NC-SA 4.0. No VESUM dataset is committed to this repository or baked into
+the Cadmus application image. Deployment, redistribution, or commercial use of
+the imported data must independently satisfy that license or use a separately
+obtained permission. The integration therefore remains an optional external
+reference provider rather than bundled Cadmus product data.
 
 ## Root commands
 
