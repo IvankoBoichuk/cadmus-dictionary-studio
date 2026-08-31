@@ -29,6 +29,12 @@ from cadmus.infrastructure.ocr import (
     CeleryDictionaryScanQueue,
     CeleryOcrSuggestionQueue,
 )
+from cadmus.infrastructure.reference_lexicon import (
+    create_reference_lexicon_unit_of_work_factory,
+)
+from cadmus.infrastructure.reference_links import (
+    create_entry_reference_link_unit_of_work_factory,
+)
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
     SecurePasswordResetTokenProvider,
@@ -46,6 +52,7 @@ from cadmus.lexicography import (
     DeleteLexemeService,
     FinishScanningService,
     LexemeQueryService,
+    ManageEntryReferenceLinksService,
     PromoteLexemeToEntryService,
     QueueArticleSchemaGenerationService,
     QueueDictionaryScanService,
@@ -57,6 +64,7 @@ from cadmus.lexicography import (
     ValidateEntryService,
 )
 from cadmus.processing import TaskQueue
+from cadmus.reference_lexicon import ReferenceLexiconQueryService
 from cadmus.sources import (
     AbbreviationCrudService,
     AbbreviationImportService,
@@ -97,6 +105,7 @@ from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
 from cadmus_api.routes.project_members import create_project_members_router
 from cadmus_api.routes.publish_dictionary import create_publish_dictionary_router
+from cadmus_api.routes.reference_lexicons import create_reference_lexicons_router
 from cadmus_api.routes.scan_progress import create_scan_progress_router
 from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
@@ -148,6 +157,10 @@ def create_app(
     update_entry_field_service: UpdateEntryFieldService | None = None,
     delete_entry_field_service: DeleteEntryFieldService | None = None,
     validate_entry_service: ValidateEntryService | None = None,
+    reference_lexicon_query_service: ReferenceLexiconQueryService | None = None,
+    manage_entry_reference_links_service: (
+        ManageEntryReferenceLinksService | None
+    ) = None,
     authorization_service: AuthorizationService | None = None,
     manage_members_service: ManageMembersService | None = None,
     list_members_service: ListMembersService | None = None,
@@ -323,6 +336,27 @@ def create_app(
         )
     )
     lexicography_unit_of_work_factory = create_lexicography_unit_of_work_factory(engine)
+    reference_lexicon_unit_of_work_factory = (
+        create_reference_lexicon_unit_of_work_factory(engine)
+    )
+    app.state.reference_lexicon_query_service = (
+        reference_lexicon_query_service
+        if reference_lexicon_query_service is not None
+        else ReferenceLexiconQueryService(reference_lexicon_unit_of_work_factory)
+    )
+    reference_link_unit_of_work_factory = (
+        create_entry_reference_link_unit_of_work_factory(engine)
+    )
+    app.state.manage_entry_reference_links_service = (
+        manage_entry_reference_links_service
+        if manage_entry_reference_links_service is not None
+        else ManageEntryReferenceLinksService(
+            lexicography_unit_of_work_factory=lexicography_unit_of_work_factory,
+            reference_link_unit_of_work_factory=reference_link_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            reference_lexicon=app.state.reference_lexicon_query_service,
+        )
+    )
     app.state.create_lexeme_service = (
         create_lexeme_service
         if create_lexeme_service is not None
@@ -609,6 +643,13 @@ def create_app(
             app.state.delete_entry_field_service,
             app.state.validate_entry_service,
             app.state.get_dictionary_service,
+        )
+    )
+    app.include_router(
+        create_reference_lexicons_router(
+            app.state.authentication_service,
+            app.state.reference_lexicon_query_service,
+            app.state.manage_entry_reference_links_service,
         )
     )
     geography_unit_of_work_factory = create_geography_unit_of_work_factory(engine)

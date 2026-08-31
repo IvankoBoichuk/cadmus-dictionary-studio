@@ -52,6 +52,8 @@ Jira: **BH-175**
 - автоматичне донавчання моделей та active learning loop;
 - підтримка всіх типів словникових полів;
 - семантичний пошук, embeddings, RAG і knowledge graph;
+- автоматичне cross-dictionary linking; ручне підтверджене зіставлення з
+  reference lexicon дозволене;
 - автоматична нормалізація історичного правопису без підтвердження;
 - повноцінний crowdsourcing і publisher workflow;
 - нативні мобільні застосунки;
@@ -102,6 +104,7 @@ Web-клієнт не звертається напряму до БД, Redis а�
 | `review` | annotations, validation status, corrections, audit trail | автоматичне розпізнавання |
 | `exports` | snapshots та serializers JSON/TEI | редагування записів |
 | `quality` | gold samples, measurements, run statistics | production decisions без експериментів |
+| `reference_lexicon` | versioned external lexical reference data, lemmas, word forms, license/provenance | OCR, source dictionaries, automatic semantic decisions |
 | `geography` | синхронізований з decentralization.ua кеш areas/regions/communities/settlements, geometry громад, sync runs | зіставлення геолейблів словника з населеними пунктами |
 | `notifications` | канали доставки сповіщень (email/Telegram) та їхній fan-out (`NotificationService`) | вирішення, коли й кого сповіщати -- це рішення викликача (worker entrypoint) |
 
@@ -124,12 +127,13 @@ flowchart TD
 ```text
 identity
 geography
+reference_lexicon
 notifications
 projects -> identity
 sources -> projects, geography
 processing -> sources
 document -> sources
-lexicography -> document, sources
+lexicography -> document, sources, reference_lexicon
 review -> lexicography, identity
 exports -> lexicography, review
 quality -> processing, document, lexicography, review
@@ -138,6 +142,17 @@ quality -> processing, document, lexicography, review
 Зворотні імпорти заборонені. Наприклад, `document` не знає про `lexicography`, а `lexicography` не запускає `processing`. Взаємодія між модулями відбувається через application services, IDs, DTO та доменні події після commit.
 
 `lexicography -> sources` (BH-54): лексема — ручне, доOCR-виділення (bounding box + текст) на зображенні сторінки, тобто майбутній прекурсор `headword`/`entry`. Вона посилається на `sources.Dictionary`/`sources.DictionaryPage` напряму, а не через `document`, бо `document` (нормалізована геометрія, отримана з OCR) на цьому етапі pipeline ще не існує й не має існувати — лексема створюється до запуску OCR. Коли реальний OCR/`document`-шар з'явиться, він продовжить використовувати `document -> sources`; ручний шлях лексем через `sources` лишається окремим і не є обхідним шляхом навколо `document`.
+
+`reference_lexicon` — незалежний leaf-модуль для зовнішніх еталонних
+лексичних даних. VESUM імпортується як versioned local cache з pinned GitHub
+Release asset із фіксацією version, asset URL, SHA-256 checksum і license.
+Morphology зберігається як raw tag string, повний ordered tag list і
+консервативно розпарсені JSONB features. Дані reference lexicon не є
+`sources.Dictionary`, не проходять OCR і не змінюють `source_text`.
+`lexicography` може створювати лише явні підтверджені зв'язки з reference
+lemma. Через відсутність окремої сутності sense у поточній MVP-моделі такий
+зв'язок належить `DictionaryEntry`; після введення sense його можна
+деталізувати без зміни reference-lexicon модуля.
 
 `geography` — незалежний leaf-модуль без залежностей на будь-який інший предметний модуль: це спільний, tenant-independent кеш довідкових даних (areas/regions/communities/settlements), синхронізований окремим CLI-процесом. `sources` імпортує з нього лише для пошуку/зіставлення населених пунктів (`SettlementSearchService`, `SettlementMappingCrudService`, `SettlementConfirmationService`); зворотного імпорту `geography -> sources` немає.
 
@@ -236,6 +251,7 @@ cadmus-dictionary-studio/
 │           ├── exports/
 │           ├── quality/
 │           ├── geography/
+│           ├── reference_lexicon/
 │           └── infrastructure/
 │               ├── geography.py
 │               └── geography_client.py

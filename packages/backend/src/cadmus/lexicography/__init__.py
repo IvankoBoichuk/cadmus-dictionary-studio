@@ -88,6 +88,23 @@ from cadmus.lexicography.ports import (
     OcrSuggestionQueue,
     OcrSuggestionQueueUnavailableError,
 )
+from cadmus.lexicography.reference_link_application import (
+    LinkedReferenceLemma,
+    ManageEntryReferenceLinksService,
+    ReferenceLemmaNotStandardError,
+    ReferenceLinkAccessError,
+)
+from cadmus.lexicography.reference_link_domain import (
+    EntryReferenceLink,
+    ReferenceLinkOrigin,
+    ReferenceLinkStatus,
+    ReferenceRelationType,
+)
+from cadmus.lexicography.reference_link_ports import (
+    EntryReferenceLinkRepository,
+    EntryReferenceLinkUnitOfWork,
+    EntryReferenceLinkUnitOfWorkFactory,
+)
 
 __all__ = [
     "DEFAULT_TESSERACT_LANGUAGE",
@@ -126,6 +143,10 @@ __all__ = [
     "EntryFieldRole",
     "EntryFieldValidationError",
     "EntryFragment",
+    "EntryReferenceLink",
+    "EntryReferenceLinkRepository",
+    "EntryReferenceLinkUnitOfWork",
+    "EntryReferenceLinkUnitOfWorkFactory",
     "EntryStatus",
     "EntryValidationError",
     "ExtractedField",
@@ -148,6 +169,8 @@ __all__ = [
     "LexicographyRepository",
     "LexicographyUnitOfWork",
     "LexicographyUnitOfWorkFactory",
+    "LinkedReferenceLemma",
+    "ManageEntryReferenceLinksService",
     "OcrSuggestionQueue",
     "OcrSuggestionQueueUnavailableError",
     "OcrSuggestionStatus",
@@ -157,6 +180,11 @@ __all__ = [
     "QueueArticleSchemaGenerationService",
     "QueueDictionaryScanService",
     "QueueEntryFieldExtractionService",
+    "ReferenceLemmaNotStandardError",
+    "ReferenceLinkAccessError",
+    "ReferenceLinkOrigin",
+    "ReferenceLinkStatus",
+    "ReferenceRelationType",
     "RuleBasedAnnotationService",
     "ScanProgress",
     "ScanProgressService",
