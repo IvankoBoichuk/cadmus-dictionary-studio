@@ -312,6 +312,8 @@ def create_reference_lexicons_router(
     @router.delete(
         "/entries/{entry_id}/reference-links/{link_id}",
         status_code=status.HTTP_204_NO_CONTENT,
+        response_class=Response,
+        response_model=None,
         responses={404: {"model": ErrorResponse}},
         summary="Remove a confirmed reference-lemma link",
     )
@@ -319,7 +321,7 @@ def create_reference_lexicons_router(
         user: AuthenticatedUser,
         entry_id: Annotated[UUID, Path()],
         link_id: Annotated[UUID, Path()],
-    ) -> Response | JSONResponse:
+    ) -> Response:
         try:
             link_service.delete(entry_id, link_id, user.id)
         except (EntryAccessError, ReferenceLinkAccessError):
