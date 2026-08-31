@@ -136,6 +136,7 @@ class VesumImportService:
         with self._unit_of_work_factory() as unit_of_work:
             unit_of_work.reference_lexicon.upsert_lexicon(snapshot)
             unit_of_work.reference_lexicon.deactivate_content(lexicon_id)
+            unit_of_work.reference_lexicon.begin_bulk_load()
 
             for line_number, line in enumerate(lines, start=1):
                 rows_read += 1
@@ -151,6 +152,8 @@ class VesumImportService:
 
             if batch:
                 unit_of_work.reference_lexicon.upsert_records(batch)
+
+            unit_of_work.reference_lexicon.finish_bulk_load()
             unit_of_work.commit()
 
         return VesumImportSummary(

@@ -17,6 +17,7 @@ from sqlalchemy import (
     Uuid,
     case,
     select,
+    text,
     update,
 )
 from sqlalchemy.dialects.postgresql import JSONB, insert
@@ -99,6 +100,29 @@ reference_word_forms = Table(
 reference_lexicon_registry.map_imperatively(ReferenceLexicon, reference_lexicons)
 reference_lexicon_registry.map_imperatively(ReferenceLemma, reference_lemmas)
 reference_lexicon_registry.map_imperatively(ReferenceWordForm, reference_word_forms)
+
+
+# Plain (non-PK, non-unique) lookup indexes: cheap to rebuild in one sorted
+# pass, but expensive to maintain row-by-row while a full VESUM reload inserts
+# millions of rows. Dropped for the load, recreated before commit.
+_BULK_LOAD_INDEXES: tuple[tuple[str, str, str], ...] = (
+    ("ix_cadmus_reference_lemmas_lexicon_id", "reference_lemmas", "lexicon_id"),
+    (
+        "ix_cadmus_reference_lemmas_normalized_lemma",
+        "reference_lemmas",
+        "normalized_lemma",
+    ),
+    (
+        "ix_cadmus_reference_word_forms_lemma_id",
+        "reference_word_forms",
+        "lemma_id",
+    ),
+    (
+        "ix_cadmus_reference_word_forms_normalized_form",
+        "reference_word_forms",
+        "normalized_form",
+    ),
+)
 
 
 class SqlAlchemyReferenceLexiconRepository:
@@ -249,6 +273,25 @@ class SqlAlchemyReferenceLexiconRepository:
             .where(reference_lemmas.c.lexicon_id == lexicon_id)
             .values(is_active=False, is_standard=False)
         )
+
+    def begin_bulk_load(self) -> None:
+        """Prepare the transaction for a full VESUM reload: skip per-commit
+        WAL fsync and drop the plain lookup indexes so the row inserts do not
+        pay btree-maintenance cost that degrades as the tables grow.
+        ``finish_bulk_load`` must run before the commit."""
+        self._session.execute(text("SET LOCAL synchronous_commit = off"))
+        for name, _table, _column in _BULK_LOAD_INDEXES:
+            self._session.execute(text(f'DROP INDEX IF EXISTS cadmus."{name}"'))
+
+    def finish_bulk_load(self) -> None:
+        """Recreate the indexes dropped by ``begin_bulk_load`` (one sorted
+        build each, far cheaper than incremental maintenance)."""
+        for name, table, column in _BULK_LOAD_INDEXES:
+            self._session.execute(
+                text(
+                    f'CREATE INDEX IF NOT EXISTS "{name}" ON cadmus.{table} ({column})'
+                )
+            )
 
     def upsert_records(self, records: Sequence[VesumRecord]) -> None:
         if not records:
