@@ -1,4 +1,4 @@
-.PHONY: help install api worker backfill-pages sync-geography web dev web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade pull-prod-db-to-dev test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
+.PHONY: help install api worker backfill-pages sync-geography import-vesum web dev web-build web-test web-lint web-type-check web-api-types web-api-types-check postgres-up redis-up minio-up mailpit-up db-upgrade db-revision db-current db-history db-downgrade pull-prod-db-to-dev test-integration compose-build compose-up compose-down compose-logs compose-reset test lint format-check type-check lock-check diff-check structure-check verify
 
 UV ?= uv
 
@@ -9,6 +9,7 @@ help:
 	@echo "  make worker        Run the Celery worker"
 	@echo "  make backfill-pages  Enqueue page splitting for dictionaries verified before this feature existed"
 	@echo "  make sync-geography  Sync areas/regions/communities from decentralization.ua into the local cache"
+	@echo "  make import-vesum VESUM_FILE=... VESUM_VERSION=... [VESUM_COMMIT=...]  Import a pinned VESUM flat export"
 	@echo "  make web           Run the Vite frontend development server"
 	@echo "  make dev           Run the API and frontend dev servers together"
 	@echo "  make web-build     Build the production frontend"
@@ -55,6 +56,13 @@ backfill-pages:
 
 sync-geography:
 	$(UV) run --locked --package cadmus-worker python -m cadmus_worker.sync_geography
+
+import-vesum:
+	test -n "$(VESUM_FILE)"
+	test -n "$(VESUM_VERSION)"
+	$(UV) run --locked --package cadmus-worker python -m cadmus_worker.import_vesum \
+		"$(VESUM_FILE)" --version "$(VESUM_VERSION)" \
+		$(if $(VESUM_COMMIT),--source-commit "$(VESUM_COMMIT)",)
 
 web:
 	cd apps/web && bun run dev

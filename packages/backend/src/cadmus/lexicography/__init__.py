@@ -70,6 +70,23 @@ from cadmus.lexicography.domain import (
     validate_lexeme_fields,
     validate_second_box_fields,
 )
+from cadmus.lexicography.reference_link_application import (
+    LinkedReferenceLemma,
+    ManageEntryReferenceLinksService,
+    ReferenceLemmaNotStandardError,
+    ReferenceLinkAccessError,
+)
+from cadmus.lexicography.reference_link_domain import (
+    EntryReferenceLink,
+    ReferenceLinkOrigin,
+    ReferenceLinkStatus,
+    ReferenceRelationType,
+)
+from cadmus.lexicography.reference_link_ports import (
+    EntryReferenceLinkRepository,
+    EntryReferenceLinkUnitOfWork,
+    EntryReferenceLinkUnitOfWorkFactory,
+)
 from cadmus.lexicography.ports import (
     EXTRACT_ENTRY_FIELDS_TASK_NAME,
     GENERATE_ARTICLE_SCHEMA_TASK_NAME,
@@ -126,6 +143,10 @@ __all__ = [
     "EntryFieldRole",
     "EntryFieldValidationError",
     "EntryFragment",
+    "EntryReferenceLink",
+    "EntryReferenceLinkRepository",
+    "EntryReferenceLinkUnitOfWork",
+    "EntryReferenceLinkUnitOfWorkFactory",
     "EntryStatus",
     "EntryValidationError",
     "ExtractedField",
@@ -145,6 +166,8 @@ __all__ = [
     "LexemeStatus",
     "LexemeSuggestion",
     "LexemeValidationError",
+    "LinkedReferenceLemma",
+    "ManageEntryReferenceLinksService",
     "LexicographyRepository",
     "LexicographyUnitOfWork",
     "LexicographyUnitOfWorkFactory",
@@ -157,6 +180,11 @@ __all__ = [
     "QueueArticleSchemaGenerationService",
     "QueueDictionaryScanService",
     "QueueEntryFieldExtractionService",
+    "ReferenceLemmaNotStandardError",
+    "ReferenceLinkAccessError",
+    "ReferenceLinkOrigin",
+    "ReferenceLinkStatus",
+    "ReferenceRelationType",
     "RuleBasedAnnotationService",
     "ScanProgress",
     "ScanProgressService",
