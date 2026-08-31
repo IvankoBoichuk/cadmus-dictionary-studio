@@ -24,16 +24,16 @@ from cadmus.infrastructure.geography import create_geography_unit_of_work_factor
 from cadmus.infrastructure.google_oauth import AuthlibGoogleOAuthClient
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
 from cadmus.infrastructure.lexicography import create_lexicography_unit_of_work_factory
+from cadmus.infrastructure.object_storage import create_object_storage
+from cadmus.infrastructure.ocr import (
+    CeleryDictionaryScanQueue,
+    CeleryOcrSuggestionQueue,
+)
 from cadmus.infrastructure.reference_lexicon import (
     create_reference_lexicon_unit_of_work_factory,
 )
 from cadmus.infrastructure.reference_links import (
     create_entry_reference_link_unit_of_work_factory,
-)
-from cadmus.infrastructure.object_storage import create_object_storage
-from cadmus.infrastructure.ocr import (
-    CeleryDictionaryScanQueue,
-    CeleryOcrSuggestionQueue,
 )
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,

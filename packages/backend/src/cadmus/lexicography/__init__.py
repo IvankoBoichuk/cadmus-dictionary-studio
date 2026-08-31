@@ -70,23 +70,6 @@ from cadmus.lexicography.domain import (
     validate_lexeme_fields,
     validate_second_box_fields,
 )
-from cadmus.lexicography.reference_link_application import (
-    LinkedReferenceLemma,
-    ManageEntryReferenceLinksService,
-    ReferenceLemmaNotStandardError,
-    ReferenceLinkAccessError,
-)
-from cadmus.lexicography.reference_link_domain import (
-    EntryReferenceLink,
-    ReferenceLinkOrigin,
-    ReferenceLinkStatus,
-    ReferenceRelationType,
-)
-from cadmus.lexicography.reference_link_ports import (
-    EntryReferenceLinkRepository,
-    EntryReferenceLinkUnitOfWork,
-    EntryReferenceLinkUnitOfWorkFactory,
-)
 from cadmus.lexicography.ports import (
     EXTRACT_ENTRY_FIELDS_TASK_NAME,
     GENERATE_ARTICLE_SCHEMA_TASK_NAME,
@@ -104,6 +87,23 @@ from cadmus.lexicography.ports import (
     LexicographyUnitOfWorkFactory,
     OcrSuggestionQueue,
     OcrSuggestionQueueUnavailableError,
+)
+from cadmus.lexicography.reference_link_application import (
+    LinkedReferenceLemma,
+    ManageEntryReferenceLinksService,
+    ReferenceLemmaNotStandardError,
+    ReferenceLinkAccessError,
+)
+from cadmus.lexicography.reference_link_domain import (
+    EntryReferenceLink,
+    ReferenceLinkOrigin,
+    ReferenceLinkStatus,
+    ReferenceRelationType,
+)
+from cadmus.lexicography.reference_link_ports import (
+    EntryReferenceLinkRepository,
+    EntryReferenceLinkUnitOfWork,
+    EntryReferenceLinkUnitOfWorkFactory,
 )
 
 __all__ = [

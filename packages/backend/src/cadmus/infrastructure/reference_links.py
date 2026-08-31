@@ -24,8 +24,6 @@ import cadmus.infrastructure.reference_lexicon  # noqa: F401
 from cadmus.infrastructure.database import metadata
 from cadmus.lexicography.reference_link_domain import (
     EntryReferenceLink,
-    ReferenceLinkOrigin,
-    ReferenceLinkStatus,
     ReferenceRelationType,
 )
 from cadmus.lexicography.reference_link_ports import EntryReferenceLinkUnitOfWorkFactory
@@ -69,7 +67,8 @@ entry_reference_links = Table(
     ),
     CheckConstraint(
         "relation_type IN "
-        "('standard_equivalent', 'synonym', 'approximate_equivalent', 'hypernym', 'related')",
+        "('standard_equivalent', 'synonym', 'approximate_equivalent', "
+        "'hypernym', 'related')",
         name="entry_reference_link_relation_type",
     ),
     CheckConstraint("origin IN ('manual')", name="entry_reference_link_origin"),

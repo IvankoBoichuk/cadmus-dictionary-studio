@@ -25,7 +25,7 @@ class ReferenceLinkAccessError(LookupError):
 
 
 class ReferenceLemmaNotStandardError(ValueError):
-    """Raised when a non-standard VESUM lemma is selected as a standard equivalent."""
+    """Raised when a non-standard lemma is selected as a standard equivalent."""
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,9 @@ class ManageEntryReferenceLinksService:
         self,
         *,
         lexicography_unit_of_work_factory: LexicographyUnitOfWorkFactory,
-        reference_link_unit_of_work_factory: EntryReferenceLinkUnitOfWorkFactory,
+        reference_link_unit_of_work_factory: (
+            EntryReferenceLinkUnitOfWorkFactory
+        ),
         dictionary_pages: GetDictionaryService,
         reference_lexicon: ReferenceLexiconQueryService,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -91,7 +93,9 @@ class ManageEntryReferenceLinksService:
         actor_id: UUID,
         reference_lemma_id: UUID,
         *,
-        relation_type: ReferenceRelationType = ReferenceRelationType.STANDARD_EQUIVALENT,
+        relation_type: ReferenceRelationType = (
+            ReferenceRelationType.STANDARD_EQUIVALENT
+        ),
     ) -> LinkedReferenceLemma:
         self._authorize(entry_id, actor_id, Permission.EDIT)
         lemma = self._reference_lexicon.get_lemma(reference_lemma_id)
