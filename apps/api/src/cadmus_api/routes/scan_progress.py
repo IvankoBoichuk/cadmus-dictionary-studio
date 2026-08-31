@@ -5,6 +5,7 @@ from uuid import UUID
 
 from cadmus.identity import AuthenticationError, AuthenticationService, User
 from cadmus.lexicography import LexemeAccessError, ScanProgress, ScanProgressService
+from cadmus.sources import DictionaryStatus
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -22,13 +23,20 @@ class PageProgressResponse(BaseModel):
 
 
 class ScanProgressResponse(BaseModel):
-    """AC2: aggregate scan progress alongside each page's status."""
+    """AC2: aggregate scan progress alongside each page's status, plus
+    lexeme- and entry-level completion and the current dictionary status
+    (kept in sync with that completion)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    status: DictionaryStatus
     total_pages: int
     processed_pages: int
     pages: list[PageProgressResponse]
+    total_lexemes: int
+    completed_lexemes: int
+    total_entries: int
+    completed_entries: int
 
 
 class ErrorResponse(BaseModel):
@@ -56,6 +64,7 @@ NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
 
 def _scan_progress_response(progress: ScanProgress) -> ScanProgressResponse:
     return ScanProgressResponse(
+        status=progress.status,
         total_pages=progress.total_pages,
         processed_pages=progress.processed_pages,
         pages=[
@@ -64,6 +73,10 @@ def _scan_progress_response(progress: ScanProgress) -> ScanProgressResponse:
             )
             for page in progress.pages
         ],
+        total_lexemes=progress.total_lexemes,
+        completed_lexemes=progress.completed_lexemes,
+        total_entries=progress.total_entries,
+        completed_entries=progress.completed_entries,
     )
 
 

@@ -1,3 +1,14 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 import type { SettlementMappingResponse } from "../api";
 
 const STATUS_LABELS: Record<SettlementMappingResponse["status"], string> = {
@@ -6,10 +17,13 @@ const STATUS_LABELS: Record<SettlementMappingResponse["status"], string> = {
   confirmed: "підтверджено",
 };
 
-const STATUS_BADGE_CLASS: Record<SettlementMappingResponse["status"], string> = {
-  unresolved: "badge--unresolved",
-  suggested: "badge--suggested",
-  confirmed: "badge--confirmed",
+const STATUS_BADGE_VARIANT: Record<
+  SettlementMappingResponse["status"],
+  "warning" | "info" | "secondary"
+> = {
+  unresolved: "warning",
+  suggested: "info",
+  confirmed: "secondary",
 };
 
 export function SettlementsTable({
@@ -32,80 +46,78 @@ export function SettlementsTable({
   }
 
   return (
-    <div className="table-wrapper">
-      <table className="settlement-table">
-        <caption className="visually-hidden">
-          Список географічних міток словника
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Позначка з оригіналу</th>
-            <th scope="col">Сучасна відповідність</th>
-            <th scope="col">Громада</th>
-            <th scope="col">Статус</th>
-            <th scope="col">Дії</th>
-          </tr>
-        </thead>
-        <tbody>
-          {mappings.map((item) => {
-            const rowDeleteState = deleteState[item.id];
-            return (
-              <tr key={item.id}>
-                <td>{item.source_label}</td>
-                <td>{item.modern_settlement_name ?? "—"}</td>
-                <td>{item.community_name ?? "—"}</td>
-                <td>
-                  <span className={`badge ${STATUS_BADGE_CLASS[item.status]}`}>
-                    {STATUS_LABELS[item.status]}
-                  </span>
-                </td>
-                <td>
-                  <div className="table-actions">
-                    <button
+    <Table>
+      <caption className="sr-only">
+        Список географічних міток словника
+      </caption>
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">Позначка з оригіналу</TableHead>
+          <TableHead scope="col">Сучасна відповідність</TableHead>
+          <TableHead scope="col">Громада</TableHead>
+          <TableHead scope="col">Статус</TableHead>
+          <TableHead scope="col">Дії</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {mappings.map((item) => {
+          const rowDeleteState = deleteState[item.id];
+          return (
+            <TableRow key={item.id}>
+              <TableCell>{item.source_label}</TableCell>
+              <TableCell>{item.modern_settlement_name ?? "—"}</TableCell>
+              <TableCell>{item.community_name ?? "—"}</TableCell>
+              <TableCell>
+                <Badge className="ml-2" variant={STATUS_BADGE_VARIANT[item.status]}>
+                  {STATUS_LABELS[item.status]}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => onEdit(item)}
+                  >
+                    Редагувати
+                  </Button>
+                  {item.status === "suggested" && (
+                    <Button
+                      variant="secondary"
                       type="button"
-                      className="secondary-button"
-                      onClick={() => onEdit(item)}
+                      onClick={() => onConfirm(item)}
                     >
-                      Редагувати
-                    </button>
-                    {item.status === "suggested" && (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => onConfirm(item)}
-                      >
-                        Підтвердити
-                      </button>
-                    )}
-                    {item.status === "confirmed" && (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() => onUnconfirm(item)}
-                      >
-                        Скасувати підтвердження
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={rowDeleteState?.pending}
-                      onClick={() => onDelete(item)}
-                    >
-                      {rowDeleteState?.pending ? "Видаляємо…" : "Видалити"}
-                    </button>
-                  </div>
-                  {rowDeleteState?.error && (
-                    <p className="field-error" role="alert">
-                      {rowDeleteState.error}
-                    </p>
+                      Підтвердити
+                    </Button>
                   )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  {item.status === "confirmed" && (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => onUnconfirm(item)}
+                    >
+                      Скасувати підтвердження
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    type="button"
+                    disabled={rowDeleteState?.pending}
+                    onClick={() => onDelete(item)}
+                  >
+                    {rowDeleteState?.pending ? "Видаляємо…" : "Видалити"}
+                  </Button>
+                </div>
+                {rowDeleteState?.error && (
+                  <p className="field-error" role="alert">
+                    {rowDeleteState.error}
+                  </p>
+                )}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+      </Table>
   );
 }

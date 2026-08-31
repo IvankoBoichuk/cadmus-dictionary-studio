@@ -192,9 +192,51 @@ describe("DictionaryReadiness", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Сканування завершено");
+    expect(screen.getByRole("status")).toHaveTextContent("Скановано");
     expect(
       screen.queryByRole("button", { name: "Завершити сканування" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers no action while the dictionary is auto-advancing", () => {
+    render(
+      <DictionaryReadiness
+        dictionary={baseDictionary({ status: "in_progress" })}
+        onConfigured={vi.fn()}
+        onScanned={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("В опрацюванні");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("publishes a processed dictionary and reports the new status", async () => {
+    const published = baseDictionary({ status: "published" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, { id: published.id, status: "published" }),
+      ),
+    );
+    const onPublished = vi.fn();
+
+    render(
+      <DictionaryReadiness
+        dictionary={baseDictionary({ status: "processed" })}
+        onConfigured={vi.fn()}
+        onScanned={vi.fn()}
+        onPublished={onPublished}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Опублікувати словник" }),
+    );
+
+    await waitFor(() =>
+      expect(onPublished).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "published" }),
+      ),
+    );
   });
 });

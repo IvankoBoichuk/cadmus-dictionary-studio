@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     delete,
+    func,
     select,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -28,6 +29,7 @@ from cadmus.lexicography.domain import (
     DictionaryEntry,
     EntryField,
     EntryFragment,
+    EntryStatus,
     Lexeme,
     LexemeEvent,
     LexemeStatus,
@@ -370,6 +372,22 @@ class SqlAlchemyLexicographyRepository:
             )
             is not None
         )
+
+    def count_lexemes_by_status(self, dictionary_id: UUID) -> dict[LexemeStatus, int]:
+        rows = self._session.execute(
+            select(lexemes.c.status, func.count())
+            .where(lexemes.c.dictionary_id == dictionary_id)
+            .group_by(lexemes.c.status)
+        )
+        return {LexemeStatus(status): count for status, count in rows}
+
+    def count_entries_by_status(self, dictionary_id: UUID) -> dict[EntryStatus, int]:
+        rows = self._session.execute(
+            select(dictionary_entries.c.status, func.count())
+            .where(dictionary_entries.c.dictionary_id == dictionary_id)
+            .group_by(dictionary_entries.c.status)
+        )
+        return {EntryStatus(status): count for status, count in rows}
 
     def add_article_schema(self, schema: ArticleSchema) -> None:
         self._session.add(schema)

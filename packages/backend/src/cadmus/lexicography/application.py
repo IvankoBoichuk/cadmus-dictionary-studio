@@ -54,11 +54,13 @@ from cadmus.lexicography.ports import (
     OcrSuggestionQueue,
 )
 from cadmus.sources import (
+    AdvanceDictionaryProcessingStatusService,
     Dictionary,
     DictionaryAccessError,
     DictionaryPage,
     DictionaryStatus,
     MarkDictionaryScannedService,
+    ProcessingSignals,
     SourcesUnitOfWorkFactory,
 )
 from cadmus.sources.application import GetDictionaryService
@@ -395,11 +397,18 @@ class PageProgress:
 
 @dataclass(frozen=True)
 class ScanProgress:
-    """BH-57 AC1/AC2: how much of a dictionary's pages have been scanned."""
+    """BH-57 AC1/AC2: how much of a dictionary's pages have been scanned,
+    plus lexeme- and entry-level completion and the current dictionary
+    status (kept in sync by :meth:`ScanProgressService.get_progress`)."""
 
+    status: DictionaryStatus
     total_pages: int
     processed_pages: int
     pages: tuple[PageProgress, ...]
+    total_lexemes: int
+    completed_lexemes: int
+    total_entries: int
+    completed_entries: int
 
 
 class ScanProgressService:
@@ -408,17 +417,23 @@ class ScanProgressService:
     "Processed" means "has at least one lexeme" (the Story's own
     definition) -- a page is never marked processed by any other signal.
     Combines ``sources`` (page ordering) and ``lexicography`` (lexeme
-    presence) with exactly two extra queries beyond the viewable-page
-    lookup, regardless of how many pages the dictionary has.
+    presence).
+
+    Reading progress also keeps the dictionary's post-scanning status in
+    step with lexeme/entry completion (``scanned`` -> ``in_progress`` ->
+    ``processed``) for editors; viewers get the current status without a
+    write.
     """
 
     def __init__(
         self,
         unit_of_work_factory: LexicographyUnitOfWorkFactory,
         dictionary_pages: GetDictionaryService,
+        status_service: AdvanceDictionaryProcessingStatusService,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._dictionary_pages = dictionary_pages
+        self._status_service = status_service
 
     def get_progress(self, dictionary_id: UUID, actor_id: UUID) -> ScanProgress:
         try:
@@ -430,6 +445,32 @@ class ScanProgressService:
             pages_with_lexemes = unit_of_work.lexicography.list_page_ids_with_lexemes(
                 dictionary_id
             )
+            lexeme_counts = unit_of_work.lexicography.count_lexemes_by_status(
+                dictionary_id
+            )
+            entry_counts = unit_of_work.lexicography.count_entries_by_status(
+                dictionary_id
+            )
+
+        total_lexemes = sum(lexeme_counts.values())
+        draft_lexemes = lexeme_counts.get(LexemeStatus.DRAFT, 0)
+        completed_lexemes = lexeme_counts.get(LexemeStatus.COMPLETE, 0)
+        total_entries = sum(entry_counts.values())
+        completed_entries = entry_counts.get(EntryStatus.COMPLETE, 0)
+
+        signals = ProcessingSignals(
+            has_any_lexeme=total_lexemes > 0,
+            has_processing_work=(total_lexemes - draft_lexemes) > 0
+            or total_entries > 0,
+            all_lexemes_complete=total_lexemes > 0
+            and completed_lexemes == total_lexemes,
+            all_entries_complete=completed_entries == total_entries,
+        )
+        try:
+            dictionary = self._status_service.advance(dictionary_id, actor_id, signals)
+        except DictionaryAccessError:
+            # Viewer without edit rights: report the status, do not change it.
+            dictionary = self._dictionary_pages.get(dictionary_id, actor_id)
 
         entries = tuple(
             PageProgress(page_number=index, has_lexemes=page.id in pages_with_lexemes)
@@ -437,7 +478,14 @@ class ScanProgressService:
         )
         processed = sum(1 for entry in entries if entry.has_lexemes)
         return ScanProgress(
-            total_pages=len(entries), processed_pages=processed, pages=entries
+            status=DictionaryStatus(dictionary.status),
+            total_pages=len(entries),
+            processed_pages=processed,
+            pages=entries,
+            total_lexemes=total_lexemes,
+            completed_lexemes=completed_lexemes,
+            total_entries=total_entries,
+            completed_entries=completed_entries,
         )
 
 

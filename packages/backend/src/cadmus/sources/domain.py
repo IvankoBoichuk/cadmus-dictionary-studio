@@ -30,11 +30,64 @@ ISO_639_1_CODES: frozenset[str] = frozenset(
 
 
 class DictionaryStatus(StrEnum):
-    """Dictionary lifecycle status (BH-27, BH-31, and BH-58)."""
+    """Dictionary lifecycle status.
+
+    ``draft`` -> ``configured`` -> ``scanned`` are the setup and page-scanning
+    stages (BH-27, BH-31, BH-58). After ``scanned`` the status tracks the
+    lexicographic work automatically: ``in_progress`` once decomposition has
+    begun, ``processed`` once every lexeme and entry is ``complete``.
+    ``published`` is the only status reached by an explicit editor action.
+    """
 
     DRAFT = "draft"
     CONFIGURED = "configured"
     SCANNED = "scanned"
+    IN_PROGRESS = "in_progress"
+    PROCESSED = "processed"
+    PUBLISHED = "published"
+
+
+AUTO_PROCESSING_STATUSES: frozenset[DictionaryStatus] = frozenset(
+    {
+        DictionaryStatus.SCANNED,
+        DictionaryStatus.IN_PROGRESS,
+        DictionaryStatus.PROCESSED,
+    }
+)
+"""Statuses the post-scanning auto-sync is allowed to move between."""
+
+
+@dataclass(frozen=True)
+class ProcessingSignals:
+    """Lexicography facts that decide the post-scanning auto-status."""
+
+    has_any_lexeme: bool
+    has_processing_work: bool
+    all_lexemes_complete: bool
+    all_entries_complete: bool
+
+
+def next_processing_status(
+    current: DictionaryStatus, signals: ProcessingSignals
+) -> DictionaryStatus:
+    """Where a ``scanned``/``in_progress``/``processed`` dictionary should sit
+    given lexeme/entry completion.
+
+    Statuses outside :data:`AUTO_PROCESSING_STATUSES` are returned unchanged:
+    ``draft``/``configured`` are pre-scan, and ``published`` is released by an
+    explicit act and never auto-reverted.
+    """
+    if current not in AUTO_PROCESSING_STATUSES:
+        return current
+    if (
+        signals.has_any_lexeme
+        and signals.all_lexemes_complete
+        and signals.all_entries_complete
+    ):
+        return DictionaryStatus.PROCESSED
+    if signals.has_processing_work:
+        return DictionaryStatus.IN_PROGRESS
+    return DictionaryStatus.SCANNED
 
 
 class LegalStatus(StrEnum):

@@ -68,11 +68,13 @@ from cadmus.reference_lexicon import ReferenceLexiconQueryService
 from cadmus.sources import (
     AbbreviationCrudService,
     AbbreviationImportService,
+    AdvanceDictionaryProcessingStatusService,
     DeleteDictionaryService,
     DictionaryReadinessService,
     GetDictionaryService,
     MarkDictionaryScannedService,
     ObjectStorage,
+    PublishDictionaryService,
     SaveDictionaryMetadataService,
     SavePageRangesService,
     SettlementConfirmationService,
@@ -102,6 +104,7 @@ from cadmus_api.routes.ocr_suggestions import create_ocr_suggestions_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
 from cadmus_api.routes.project_members import create_project_members_router
+from cadmus_api.routes.publish_dictionary import create_publish_dictionary_router
 from cadmus_api.routes.reference_lexicons import create_reference_lexicons_router
 from cadmus_api.routes.scan_progress import create_scan_progress_router
 from cadmus_api.routes.settlements import create_settlements_router
@@ -136,6 +139,10 @@ def create_app(
     delete_lexeme_service: DeleteLexemeService | None = None,
     scan_progress_service: ScanProgressService | None = None,
     mark_dictionary_scanned_service: MarkDictionaryScannedService | None = None,
+    advance_dictionary_processing_status_service: (
+        AdvanceDictionaryProcessingStatusService | None
+    ) = None,
+    publish_dictionary_service: PublishDictionaryService | None = None,
     finish_scanning_service: FinishScanningService | None = None,
     suggest_lexemes_service: SuggestLexemesService | None = None,
     queue_dictionary_scan_service: QueueDictionaryScanService | None = None,
@@ -312,6 +319,22 @@ def create_app(
             authorization=app.state.authorization_service,
         )
     )
+    app.state.advance_dictionary_processing_status_service = (
+        advance_dictionary_processing_status_service
+        if advance_dictionary_processing_status_service is not None
+        else AdvanceDictionaryProcessingStatusService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
+        )
+    )
+    app.state.publish_dictionary_service = (
+        publish_dictionary_service
+        if publish_dictionary_service is not None
+        else PublishDictionaryService(
+            unit_of_work_factory=sources_unit_of_work_factory,
+            authorization=app.state.authorization_service,
+        )
+    )
     lexicography_unit_of_work_factory = create_lexicography_unit_of_work_factory(engine)
     reference_lexicon_unit_of_work_factory = (
         create_reference_lexicon_unit_of_work_factory(engine)
@@ -372,6 +395,7 @@ def create_app(
         else ScanProgressService(
             unit_of_work_factory=lexicography_unit_of_work_factory,
             dictionary_pages=app.state.get_dictionary_service,
+            status_service=app.state.advance_dictionary_processing_status_service,
         )
     )
     app.state.finish_scanning_service = (
@@ -575,6 +599,12 @@ def create_app(
         create_finish_scanning_router(
             app.state.authentication_service,
             app.state.finish_scanning_service,
+        )
+    )
+    app.include_router(
+        create_publish_dictionary_router(
+            app.state.authentication_service,
+            app.state.publish_dictionary_service,
         )
     )
     app.include_router(

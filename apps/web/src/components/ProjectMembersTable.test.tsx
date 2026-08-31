@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { MemberResponse } from "../api";
@@ -34,7 +35,8 @@ describe("ProjectMembersTable", () => {
     expect(screen.getByText("editor@example.com")).toBeInTheDocument();
   });
 
-  it("lets the owner change a member's role", () => {
+  it("lets the owner change a member's role", async () => {
+    const user = userEvent.setup();
     const onChangeRole = vi.fn();
     render(
       <ProjectMembersTable
@@ -46,9 +48,10 @@ describe("ProjectMembersTable", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText(/Роль учасника editor@example.com/), {
-      target: { value: "reviewer" },
-    });
+    await user.click(
+      screen.getByRole("combobox", { name: /Роль учасника editor@example.com/ }),
+    );
+    await user.click(screen.getByRole("option", { name: "Рецензент" }));
 
     expect(onChangeRole).toHaveBeenCalledWith("u2", "reviewer");
   });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AbbreviationResponse } from "../api";
@@ -50,6 +51,7 @@ describe("AbbreviationForm", () => {
   });
 
   it("allows saving an unresolved entry without a full form (AC2)", async () => {
+    const user = userEvent.setup();
     const created = existing({ unresolved: true, full_form: null });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(201, created)));
     const onSaved = vi.fn();
@@ -60,9 +62,8 @@ describe("AbbreviationForm", () => {
     fireEvent.change(screen.getByLabelText("Скорочення"), {
       target: { value: "??" },
     });
-    fireEvent.change(screen.getByLabelText("Категорія"), {
-      target: { value: "other" },
-    });
+    await user.click(screen.getByRole("combobox", { name: "Категорія" }));
+    await user.click(screen.getByRole("option", { name: "Інше" }));
     fireEvent.click(
       screen.getByLabelText("Розшифрування поки невідоме (нерозшифрований запис)"),
     );
@@ -98,15 +99,15 @@ describe("AbbreviationForm", () => {
       ),
     );
 
+    const user = userEvent.setup();
     render(
       <AbbreviationForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
     );
     fireEvent.change(screen.getByLabelText("Скорочення"), {
       target: { value: "розм." },
     });
-    fireEvent.change(screen.getByLabelText("Категорія"), {
-      target: { value: "usage" },
-    });
+    await user.click(screen.getByRole("combobox", { name: "Категорія" }));
+    await user.click(screen.getByRole("option", { name: "Вживання" }));
     fireEvent.change(screen.getByLabelText("Повна форма"), {
       target: { value: "розмовне" },
     });

@@ -72,15 +72,19 @@ function PageRegionCrop({
 
   return (
     <div
-      className="entry-fragment-crop"
+      className="relative max-w-full overflow-hidden rounded-[0.75rem] border bg-surface"
       style={{ width: displayWidth, height: displayHeight }}
     >
       <img
-        className="entry-fragment-crop-image"
+        className="absolute max-w-none"
         src={dictionaryPageImageUrl(dictionaryId, pageNumber)}
         alt={alt}
         draggable={false}
         onLoad={handleLoad}
+        width={Math.round(naturalSize ? naturalSize.width * scale : displayWidth)}
+        height={Math.round(
+          naturalSize ? naturalSize.height * scale : displayHeight,
+        )}
         style={{
           left: -cropX * scale,
           top: -cropY * scale,
@@ -91,7 +95,7 @@ function PageRegionCrop({
       {boxes.map((box) => (
         <div
           key={`${box.x}-${box.y}`}
-          className="entry-fragment-crop-box"
+          className="pointer-events-none absolute border-2 border-lexeme bg-[rgb(217_119_6_/_12%)]"
           style={{
             left: (box.x - cropX) * scale,
             top: (box.y - cropY) * scale,

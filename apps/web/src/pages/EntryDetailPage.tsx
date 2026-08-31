@@ -11,8 +11,12 @@ import {
   type EntryFragmentResponse,
   type EntryStatus,
 } from "../api";
-import { useAuth } from "../authContext";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
 import { EntryFieldCrop, EntryFragmentCrop } from "../components/EntryFragmentCrop";
+import { formatPercent } from "../format";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
 import { useEntry } from "../hooks/useEntry";
 import { useEntryExtraction } from "../hooks/useEntryExtraction";
@@ -204,9 +208,10 @@ function AddFieldForm({
           <label htmlFor="add-field-manual-path">Назва поля</label>
           <input
             id="add-field-manual-path"
+            name="field_path"
             value={manualPath}
             onChange={(event) => setManualPath(event.target.value)}
-            placeholder="напр. meaning[0]"
+            placeholder="напр. meaning[0]…"
           />
           <label htmlFor="add-field-manual-role">Роль</label>
           <select
@@ -228,6 +233,7 @@ function AddFieldForm({
       </label>
       <input
         id="add-field-source-text"
+        name="source_text"
         value={sourceText}
         onChange={(event) => setSourceText(event.target.value)}
         aria-invalid={sourceText.trim().length > 0 && !textFound}
@@ -239,9 +245,9 @@ function AddFieldForm({
       )}
 
       <div className="form-actions">
-        <button type="submit" disabled={saving || !textFound}>
+        <Button type="submit" disabled={saving || !textFound}>
           {saving ? "Зберігаємо…" : "Додати поле"}
-        </button>
+        </Button>
       </div>
       {error && (
         <p className="form-error" role="alert">
@@ -308,10 +314,10 @@ function FieldRow({
   };
 
   return (
-    <li className="entry-field-row">
+    <li className="grid gap-2">
       {editing ? (
         <>
-          <label className="visually-hidden" htmlFor={`field-role-${field.id}`}>
+          <label className="sr-only" htmlFor={`field-role-${field.id}`}>
             Роль
           </label>
           <select
@@ -325,45 +331,46 @@ function FieldRow({
               </option>
             ))}
           </select>
-          <label className="visually-hidden" htmlFor={`field-text-${field.id}`}>
+          <label className="sr-only" htmlFor={`field-text-${field.id}`}>
             Текст поля
           </label>
           <input
             id={`field-text-${field.id}`}
+            name="normalized_text"
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
           />
-          <button
+          <Button
+            variant="secondary"
             type="button"
-            className="secondary-button"
             onClick={() => void save()}
             disabled={saving}
           >
             Зберегти
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
             type="button"
-            className="secondary-button"
             onClick={() => setEditing(false)}
           >
             Скасувати
-          </button>
+          </Button>
         </>
       ) : (
         <>
           <span>{field.normalized_text ?? field.source_text}</span>
-          <span className="badge badge--status">{ORIGIN_LABELS[field.origin]}</span>
+          <Badge className="ml-2">{ORIGIN_LABELS[field.origin]}</Badge>
           {field.confidence !== null && (
-            <span className="badge badge--status">
-              {Math.round(field.confidence * 100)}%
-            </span>
+            <Badge className="ml-2">
+              {formatPercent(field.confidence)}
+            </Badge>
           )}
-          <button type="button" className="secondary-button" onClick={startEditing}>
+          <Button variant="secondary" type="button" onClick={startEditing}>
             Редагувати
-          </button>
-          <button type="button" className="danger-button" onClick={() => void remove()}>
+          </Button>
+          <Button variant="danger" type="button" onClick={() => void remove()}>
             Видалити
-          </button>
+          </Button>
           <EntryFieldCrop
             dictionaryId={dictionaryId}
             pageNumber={pageNumber}
@@ -459,10 +466,10 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
       <div className="form-section">
         <h2>{entry.headword}</h2>
         <p className="lede">
-          Статус: <span className="badge badge--status">{STATUS_LABELS[entry.status]}</span>
+          Статус: <Badge className="ml-2">{STATUS_LABELS[entry.status]}</Badge>
         </p>
         {entry.fragments.map((fragment) => (
-          <div key={fragment.id} className="entry-fragment-preview">
+          <div key={fragment.id} className="grid gap-2 mb-4">
             <EntryFragmentCrop dictionaryId={entry.dictionary_id} fragment={fragment} />
             <p className="section-hint">{fragment.recognized_text}</p>
           </div>
@@ -471,16 +478,16 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
 
       <div className="form-section" aria-labelledby="extract-heading">
         <h2 id="extract-heading">Автоматичний розбір</h2>
-        <button
+        <Button
+          variant="secondary"
           type="button"
-          className="secondary-button"
           onClick={() => void triggerExtraction()}
           disabled={extracting}
         >
           {extracting ? "Розпізнаємо структуру…" : "Розпізнати структуру"}
-        </button>
+        </Button>
         {extractionState.status === "succeeded" && (
-          <p className="result-message--success" role="status">
+          <p className="m-0 text-[0.88rem] text-success-foreground" role="status">
             Знайдено полів: {extractionState.createdFields}
           </p>
         )}
@@ -511,7 +518,7 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
           Array.from(fieldsByRole.entries()).map(([role, fields]) => (
             <div key={role}>
               <h3>{ROLE_LABELS[role]}</h3>
-              <ul className="entry-field-list">
+              <ul className="grid list-none gap-4 p-0">
                 {fields.map((field) => (
                   <FieldRow
                     key={field.id}
@@ -535,15 +542,15 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
 
       <div className="form-section" aria-labelledby="complete-heading">
         <h2 id="complete-heading">Завершення</h2>
-        <button
+        <Button
           type="button"
           disabled={completing || entry.status === "complete"}
           onClick={() => void handleComplete()}
         >
           {completing ? "Перевіряємо…" : "Позначити статтю завершеною"}
-        </button>
+        </Button>
         {completeMessage && (
-          <p className="result-message--success" role="status">
+          <p className="m-0 text-[0.88rem] text-success-foreground" role="status">
             {completeMessage}
           </p>
         )}
@@ -560,25 +567,14 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
 }
 
 export function EntryDetailPage() {
-  const { session } = useAuth();
   const { entryId } = useParams<{ entryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!entryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Стаття</p>
         <h1 id="page-title">Структура словникової статті</h1>
@@ -589,6 +585,6 @@ export function EntryDetailPage() {
       <div className="dictionary-form">
         <EntryWorkspace entryId={entryId} />
       </div>
-    </main>
+    </>
   );
 }

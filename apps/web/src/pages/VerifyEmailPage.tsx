@@ -11,6 +11,12 @@ const TITLES: Record<VerificationState["kind"], string> = {
   error: "Не вдалося активувати акаунт",
 };
 
+const RESULT_TONE: Record<VerificationState["kind"], string> = {
+  loading: "text-muted-foreground",
+  success: "text-success-foreground",
+  error: "text-destructive",
+};
+
 export function VerifyEmailPage() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get("token");
@@ -18,11 +24,13 @@ export function VerifyEmailPage() {
 
   return (
     <main className="auth-page" id="main-content">
-      <section className="auth-card auth-card--result" aria-labelledby="page-title">
+      <section className="auth-card text-center" aria-labelledby="page-title">
         <p className="eyebrow">Підтвердження email</p>
-        <h1 id="page-title">{TITLES[state.kind]}</h1>
+        <h1 id="page-title" className="mx-auto">
+          {TITLES[state.kind]}
+        </h1>
         <p
-          className={`result-message result-message--${state.kind}`}
+          className={`leading-relaxed ${RESULT_TONE[state.kind]}`}
           role="status"
         >
           {state.message}

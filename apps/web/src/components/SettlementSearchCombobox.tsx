@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import {
   API,
   type AreaResponse,
@@ -8,6 +19,9 @@ import {
   type SettlementSuggestionResponse,
 } from "../api";
 import { useSettlementSearch } from "../hooks/useSettlementSearch";
+
+/** Radix `Select` не приймає порожнє значення, тож "усі …" кодуємо сентинелом. */
+const ALL = "__all__";
 
 /**
  * AC8: search the local settlement cache for a modern equivalent of a
@@ -41,10 +55,10 @@ export function SettlementSearchCombobox({
   }, [filters.areaId, filters.regionId]);
 
   return (
-    <div className="settlement-search">
+    <div className="flex flex-col gap-3">
       <div className="form-field">
-        <label htmlFor="settlement-search-query">Пошук населеного пункту</label>
-        <input
+        <Label htmlFor="settlement-search-query">Пошук населеного пункту</Label>
+        <Input
           id="settlement-search-query"
           value={filters.query ?? ""}
           onChange={(event) =>
@@ -55,69 +69,81 @@ export function SettlementSearchCombobox({
       </div>
 
       <div className="form-field">
-        <label htmlFor="settlement-search-area">Область</label>
-        <select
-          id="settlement-search-area"
-          value={filters.areaId ?? ""}
-          onChange={(event) =>
+        <Label htmlFor="settlement-search-area">Область</Label>
+        <Select
+          value={filters.areaId ?? ALL}
+          onValueChange={(value) =>
             setFilters((current) => ({
               ...current,
-              areaId: event.target.value || undefined,
+              areaId: value === ALL ? undefined : value,
               regionId: undefined,
               communityId: undefined,
             }))
           }
         >
-          <option value="">Усі області</option>
-          {areas.map((area) => (
-            <option key={area.id} value={area.id}>
-              {area.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="settlement-search-area">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Усі області</SelectItem>
+            {areas.map((area) => (
+              <SelectItem key={area.id} value={area.id}>
+                {area.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="form-field">
-        <label htmlFor="settlement-search-region">Район</label>
-        <select
-          id="settlement-search-region"
-          value={filters.regionId ?? ""}
-          onChange={(event) =>
+        <Label htmlFor="settlement-search-region">Район</Label>
+        <Select
+          value={filters.regionId ?? ALL}
+          onValueChange={(value) =>
             setFilters((current) => ({
               ...current,
-              regionId: event.target.value || undefined,
+              regionId: value === ALL ? undefined : value,
               communityId: undefined,
             }))
           }
         >
-          <option value="">Усі райони</option>
-          {regions.map((region) => (
-            <option key={region.id} value={region.id}>
-              {region.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="settlement-search-region">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Усі райони</SelectItem>
+            {regions.map((region) => (
+              <SelectItem key={region.id} value={region.id}>
+                {region.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="form-field">
-        <label htmlFor="settlement-search-community">Громада</label>
-        <select
-          id="settlement-search-community"
-          value={filters.communityId ?? ""}
-          onChange={(event) =>
+        <Label htmlFor="settlement-search-community">Громада</Label>
+        <Select
+          value={filters.communityId ?? ALL}
+          onValueChange={(value) =>
             setFilters((current) => ({
               ...current,
-              communityId: event.target.value || undefined,
+              communityId: value === ALL ? undefined : value,
             }))
           }
         >
-          <option value="">Усі громади</option>
-          {communities.map((community) => (
-            <option key={community.id} value={community.id}>
-              {community.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="settlement-search-community">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Усі громади</SelectItem>
+            {communities.map((community) => (
+              <SelectItem key={community.id} value={community.id}>
+                {community.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {state.status === "searching" && <p role="status">Шукаємо…</p>}
@@ -127,17 +153,17 @@ export function SettlementSearchCombobox({
         </p>
       )}
       {state.status === "results" && (
-        <ul className="settlement-search-results">
+        <ul className="m-0 flex list-none flex-col gap-[0.4rem] p-0">
           {state.results.length === 0 && <li className="lede">Нічого не знайдено.</li>}
           {state.results.map((suggestion) => (
             <li key={suggestion.settlement_id}>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary-button"
                 onClick={() => onSelect(suggestion)}
               >
                 {suggestion.title} ({suggestion.category}) — {suggestion.community_name}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
