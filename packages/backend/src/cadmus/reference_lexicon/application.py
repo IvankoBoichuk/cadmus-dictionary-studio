@@ -14,10 +14,9 @@ from cadmus.reference_lexicon.domain import (
     ReferenceLemma,
     ReferenceLemmaMatch,
     ReferenceLexicon,
-    VesumParseError,
     VesumRecord,
+    VesumVisualParser,
     normalize_ukrainian_text,
-    parse_vesum_line,
     reference_lexicon_id,
 )
 from cadmus.reference_lexicon.ports import ReferenceLexiconUnitOfWorkFactory
@@ -33,7 +32,7 @@ class ReferenceLemmaNotFoundError(LookupError):
 
 @dataclass(frozen=True)
 class VesumImportSummary:
-    """Counters for one atomic VESUM import."""
+    """Counters for one atomic VESUM release import."""
 
     lexicon_id: UUID
     version: str
@@ -85,12 +84,7 @@ class ReferenceLexiconQueryService:
 
 
 class VesumImportService:
-    """Atomically replace the active VESUM snapshot from dict_corp_lt.txt.
-
-    Old rows are deactivated rather than deleted so already-confirmed Cadmus
-    links retain referential integrity across upstream versions. Deterministic
-    UUIDs reactivate unchanged lemmas and forms on the next import.
-    """
+    """Atomically replace VESUM from a release visual-format stream."""
 
     def __init__(
         self,
@@ -103,12 +97,13 @@ class VesumImportService:
         self._unit_of_work_factory = unit_of_work_factory
         self._batch_size = batch_size
 
-    def import_lines(
+    def import_visual_lines(
         self,
         lines: Iterable[str],
         *,
         version: str,
         checksum: str,
+        source_url: str = VESUM_SOURCE_URL,
         source_commit: str | None = None,
         imported_at: datetime | None = None,
     ) -> VesumImportSummary:
@@ -124,7 +119,7 @@ class VesumImportService:
             name=VESUM_NAME,
             language_code=VESUM_LANGUAGE_CODE,
             version=version.strip(),
-            source_url=VESUM_SOURCE_URL,
+            source_url=source_url,
             license_id=VESUM_LICENSE_ID,
             source_commit=source_commit.strip() if source_commit else None,
             checksum=checksum.strip().lower(),
@@ -136,6 +131,7 @@ class VesumImportService:
         rows_imported = 0
         blank_rows = 0
         batch: list[VesumRecord] = []
+        parser = VesumVisualParser(lexicon_id)
 
         with self._unit_of_work_factory() as unit_of_work:
             unit_of_work.reference_lexicon.upsert_lexicon(snapshot)
@@ -143,10 +139,7 @@ class VesumImportService:
 
             for line_number, line in enumerate(lines, start=1):
                 rows_read += 1
-                try:
-                    record = parse_vesum_line(line, lexicon_id)
-                except VesumParseError as error:
-                    raise VesumParseError(f"line {line_number}: {error}") from error
+                record = parser.parse_line(line, line_number=line_number)
                 if record is None:
                     blank_rows += 1
                     continue
