@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
 import { settlementsExportUrl, type SettlementMappingResponse } from "../api";
-import { useAuth } from "../authContext";
 import { SettlementForm } from "../components/SettlementForm";
 import { SettlementImportPanel } from "../components/SettlementImportPanel";
 import { SettlementsTable } from "../components/SettlementsTable";
@@ -83,25 +82,14 @@ function SettlementsWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function SettlementsPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Словник</p>
         <h1 id="page-title">Географічні мітки словника</h1>
@@ -114,6 +102,6 @@ export function SettlementsPage() {
       <div className="dictionary-form">
         <SettlementsWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }

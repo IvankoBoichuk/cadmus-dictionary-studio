@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
-import { useAuth } from "../authContext";
 import { DictionaryMetadataForm } from "../components/DictionaryMetadataForm";
 import { DictionaryReadiness } from "../components/DictionaryReadiness";
 import { DictionarySourceUpload } from "../components/DictionarySourceUpload";
@@ -92,22 +91,10 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function DictionaryFormPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId?: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
-
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Словник</p>
         <h1 id="page-title">
@@ -125,6 +112,6 @@ export function DictionaryFormPage() {
           <NewDictionaryFlow />
         )}
       </div>
-    </main>
+    </>
   );
 }

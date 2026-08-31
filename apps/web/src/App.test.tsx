@@ -9,7 +9,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("renders the base application layout", () => {
+it("renders the landing page with the offer and benefits sections", () => {
+  render(<App />);
+
+  expect(
+    screen.getByRole("heading", { name: "Cadmus Dictionary Studio" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Cadmus — головна" })).toHaveAttribute(
+    "href",
+    "/",
+  );
+  expect(
+    screen.getByRole("heading", { name: "Шлях від скану до даних" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "Чому команди обирають Cadmus" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "API" }),
+  ).not.toBeInTheDocument();
+});
+
+it("shows the system status on the /status page", async () => {
+  window.history.replaceState({}, "", "/status");
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue(
@@ -20,11 +42,10 @@ it("renders the base application layout", () => {
   render(<App />);
 
   expect(
-    screen.getByRole("heading", { name: "Cadmus Dictionary Studio" }),
+    screen.getByRole("heading", { level: 1, name: "Стан системи" }),
   ).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Cadmus — головна" })).toHaveAttribute(
-    "href",
-    "/",
+  await waitFor(() =>
+    expect(screen.getByRole("status")).toHaveTextContent("Доступний"),
   );
 });
 
@@ -352,6 +373,9 @@ it("logs in, keeps the password out of the URL, and opens dashboard", async () =
       if (url === "/api/auth/session") {
         return sessionResponse(loginWasSent);
       }
+      if (url === "/api/dictionaries") {
+        return new Response("[]", { status: 200 });
+      }
       throw new Error(`Unexpected request: ${url} ${init?.method}`);
     },
   );
@@ -426,7 +450,14 @@ it.each([
 
 it("redirects an already authenticated user away from login", async () => {
   window.history.replaceState({}, "", "/login");
-  vi.stubGlobal("fetch", vi.fn().mockImplementation(() => sessionResponse(true)));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input) === "/api/dictionaries"
+        ? new Response("[]", { status: 200 })
+        : sessionResponse(true),
+    ),
+  );
 
   render(<App />);
 
@@ -451,6 +482,9 @@ it("logs out from an authenticated page and redirects to login", async () => {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/dictionaries") {
+        return new Response("[]", { status: 200 });
+      }
       if (String(input) === "/api/auth/logout") {
         return new Response(JSON.stringify({ message: "Ви вийшли із системи." }), {
           status: 200,
@@ -812,6 +846,9 @@ it("keeps the authenticated state and reports an unconfirmed logout", async () =
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/auth/session") return sessionResponse(true);
+      if (String(input) === "/api/dictionaries") {
+        return new Response("[]", { status: 200 });
+      }
       if (String(input) === "/api/auth/logout") {
         logoutAttempts += 1;
         throw new TypeError("network unavailable");

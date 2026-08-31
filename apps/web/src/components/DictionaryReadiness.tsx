@@ -4,21 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { API, apiMessageFrom, type DictionaryResponse } from "../api";
-
-const STATUS_LABELS: Record<DictionaryResponse["status"], string> = {
-  draft: "Чернетка",
-  configured: "Готовий до обробки",
-  scanned: "Сканування завершено",
-};
-
-const STATUS_BADGE_VARIANT: Record<
-  DictionaryResponse["status"],
-  "warning" | "success"
-> = {
-  draft: "warning",
-  configured: "success",
-  scanned: "success",
-};
+import {
+  DICTIONARY_STATUS_BADGE_VARIANT,
+  DICTIONARY_STATUS_LABELS,
+} from "../dictionaryStatusLabels";
 
 /** BH-31/BH-58 completion indicators: current status, blockers, and confirmation. */
 export function DictionaryReadiness({
@@ -71,8 +60,12 @@ export function DictionaryReadiness({
   return (
     <div className="form-section" aria-labelledby="readiness-heading">
       <h2 id="readiness-heading">Готовність словника</h2>
-      <Badge size="lg" variant={STATUS_BADGE_VARIANT[dictionary.status]} role="status">
-        {STATUS_LABELS[dictionary.status]}
+      <Badge
+        size="lg"
+        variant={DICTIONARY_STATUS_BADGE_VARIANT[dictionary.status]}
+        role="status"
+      >
+        {DICTIONARY_STATUS_LABELS[dictionary.status]}
       </Badge>
       {blockers.length > 0 && (
         <ul className="mt-2 mb-0 list-disc pl-5 text-[0.92rem]">

@@ -1,8 +1,8 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-import { ApiStatus } from "./components/ApiStatus";
-import { AuthActions } from "./components/AuthActions";
+import { AppShell } from "./components/AppShell";
 import { AuthProvider } from "./components/AuthProvider";
+import { PublicLayout } from "./components/PublicLayout";
 import { AbbreviationsPage } from "./pages/AbbreviationsPage";
 import { ArticleSchemaPage } from "./pages/ArticleSchemaPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -11,67 +11,33 @@ import { DictionaryFormPage } from "./pages/DictionaryFormPage";
 import { DictionaryViewerPage } from "./pages/DictionaryViewerPage";
 import { EntryDetailPage } from "./pages/EntryDetailPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { PageRangesPage } from "./pages/PageRangesPage";
 import { ProjectMembersPage } from "./pages/ProjectMembersPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SettlementsPage } from "./pages/SettlementsPage";
+import { StatusPage } from "./pages/StatusPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
-
-function HomePage() {
-  return (
-    <main className="page" id="main-content">
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Лексикографічний робочий простір</p>
-        <h1 id="page-title">Cadmus Dictionary Studio</h1>
-        <p className="lede">
-          Основа інтерфейсу для перетворення сканів словників на перевірені
-          структуровані дані.
-        </p>
-      </section>
-      <ApiStatus />
-    </main>
-  );
-}
-
-function NotFoundPage() {
-  return (
-    <main className="page" id="main-content">
-      <h1>Сторінку не знайдено</h1>
-      <p>
-        <Link to="/">Повернутися на головну</Link>
-      </p>
-    </main>
-  );
-}
 
 export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="min-h-screen">
-          <a
-            className="fixed top-4 left-4 z-[2] -translate-y-[180%] bg-foreground px-4 py-3 text-white focus:translate-y-0"
-            href="#main-content"
-          >
-            Перейти до вмісту
-          </a>
-          <header className="flex min-h-[4.5rem] items-center border-b bg-white/[0.72] px-[6vw]">
-            <Link
-              className="font-serif text-[1.45rem] font-bold tracking-[0.02em] no-underline"
-              to="/"
-              translate="no"
-              aria-label="Cadmus — головна"
-            >
-              Cadmus
-            </Link>
-            <AuthActions />
-          </header>
-          <Routes>
+        <Routes>
+          <Route element={<PublicLayout />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/status" element={<StatusPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+          <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/dictionaries/new" element={<DictionaryFormPage />} />
             <Route path="/dictionaries" element={<DictionariesList />} />
@@ -104,12 +70,8 @@ export function App() {
               element={<ArticleSchemaPage />}
             />
             <Route path="/entries/:entryId" element={<EntryDetailPage />} />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </div>
+          </Route>
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

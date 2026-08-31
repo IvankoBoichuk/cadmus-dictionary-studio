@@ -1,7 +1,6 @@
 import { Navigate, useParams } from "react-router-dom";
 
 import type { MemberResponse } from "../api";
-import { useAuth } from "../authContext";
 import { ProjectMemberForm } from "../components/ProjectMemberForm";
 import { ProjectMembersTable } from "../components/ProjectMembersTable";
 import { useDictionaryMembers } from "../hooks/useDictionaryMembers";
@@ -48,25 +47,14 @@ function ProjectMembersWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function ProjectMembersPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Словник</p>
         <h1 id="page-title">Учасники проєкту</h1>
@@ -77,6 +65,6 @@ export function ProjectMembersPage() {
       <div className="dictionary-form">
         <ProjectMembersWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }

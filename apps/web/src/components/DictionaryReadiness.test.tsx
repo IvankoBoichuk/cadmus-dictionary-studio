@@ -192,7 +192,7 @@ describe("DictionaryReadiness", () => {
       />,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Сканування завершено");
+    expect(screen.getByRole("status")).toHaveTextContent("Скановано");
     expect(
       screen.queryByRole("button", { name: "Завершити сканування" }),
     ).not.toBeInTheDocument();

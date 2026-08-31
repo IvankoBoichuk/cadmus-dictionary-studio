@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 
 import { abbreviationsExportUrl, type AbbreviationResponse } from "../api";
-import { useAuth } from "../authContext";
 import { AbbreviationForm } from "../components/AbbreviationForm";
 import { AbbreviationImportPanel } from "../components/AbbreviationImportPanel";
 import { AbbreviationsTable } from "../components/AbbreviationsTable";
@@ -79,25 +78,14 @@ function AbbreviationsWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function AbbreviationsPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Словник</p>
         <h1 id="page-title">Скорочення словника</h1>
@@ -109,6 +97,6 @@ export function AbbreviationsPage() {
       <div className="dictionary-form">
         <AbbreviationsWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }

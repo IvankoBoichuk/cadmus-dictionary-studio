@@ -15,7 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-import { useAuth } from "../authContext";
 import { EntryFieldCrop, EntryFragmentCrop } from "../components/EntryFragmentCrop";
 import { formatPercent } from "../format";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
@@ -568,25 +567,14 @@ function EntryWorkspace({ entryId }: { entryId: string }) {
 }
 
 export function EntryDetailPage() {
-  const { session } = useAuth();
   const { entryId } = useParams<{ entryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!entryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Стаття</p>
         <h1 id="page-title">Структура словникової статті</h1>
@@ -597,6 +585,6 @@ export function EntryDetailPage() {
       <div className="dictionary-form">
         <EntryWorkspace entryId={entryId} />
       </div>
-    </main>
+    </>
   );
 }

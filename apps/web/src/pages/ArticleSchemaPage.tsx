@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { API, apiMessageFrom, type ArticleSchemaResponse } from "../api";
-import { useAuth } from "../authContext";
 import { useArticleSchemaGeneration } from "../hooks/useArticleSchemaGeneration";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
 
@@ -178,25 +177,14 @@ function ArticleSchemaWorkspace({ dictionaryId }: { dictionaryId: string }) {
 }
 
 export function ArticleSchemaPage() {
-  const { session } = useAuth();
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
 
-  if (session.status === "loading") {
-    return (
-      <main className="page" id="main-content">
-        <p role="status">Завантажуємо робочий простір…</p>
-      </main>
-    );
-  }
-  if (session.status !== "authenticated") {
-    return <Navigate replace to="/login" />;
-  }
   if (!dictionaryId) {
     return <Navigate replace to="/dictionaries" />;
   }
 
   return (
-    <main className="page" id="main-content">
+    <>
       <section className="hero" aria-labelledby="page-title">
         <p className="eyebrow">Словник</p>
         <h1 id="page-title">Схема словникової статті</h1>
@@ -207,6 +195,6 @@ export function ArticleSchemaPage() {
       <div className="dictionary-form">
         <ArticleSchemaWorkspace dictionaryId={dictionaryId} />
       </div>
-    </main>
+    </>
   );
 }
