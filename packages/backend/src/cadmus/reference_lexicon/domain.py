@@ -20,9 +20,9 @@ NON_STANDARD_TAGS = frozenset(
     {"bad", "subst", "alt", "arch", "slang", "vulg", "obsc", "rare"}
 )
 
-# Tags documented by VESUM as lemma-disambiguating, plus stable grammatical
-# properties needed to avoid collapsing homographic lemmas.
-_LEMMA_KEY_TAGS = frozenset(
+# VESUM marks some tags as lemma keys. The discriminator is POS-aware:
+# gender is stable for nouns but is merely inflectional for adjectives.
+_NOUN_KEY_TAGS = frozenset(
     {
         "anim",
         "inanim",
@@ -38,11 +38,13 @@ _LEMMA_KEY_TAGS = frozenset(
         "ns",
         "np",
         "nv",
-        "imperf",
-        "perf",
-        "rev",
-        "actv",
-        "pasv",
+    }
+)
+_VERB_KEY_TAGS = frozenset({"imperf", "perf", "rev"})
+_ADJP_KEY_TAGS = frozenset({"actv", "pasv", "imperf", "perf"})
+_ADVP_KEY_TAGS = frozenset({"imperf", "perf"})
+_PRONOUN_KEY_TAGS = frozenset(
+    {
         "pron",
         "pers",
         "refl",
@@ -148,10 +150,25 @@ def reference_lexicon_id(code: str) -> UUID:
 
 
 def _lemma_key_tags(tags: list[str]) -> list[str]:
+    pos = tags[0]
+    allowed: frozenset[str]
+    if pos == "noun":
+        allowed = _NOUN_KEY_TAGS
+    elif pos == "verb":
+        allowed = _VERB_KEY_TAGS
+    elif pos == "adjp":
+        allowed = _ADJP_KEY_TAGS
+    elif pos == "advp":
+        allowed = _ADVP_KEY_TAGS
+    else:
+        allowed = frozenset()
+
     selected = {
         tag
         for tag in tags[1:]
-        if tag in _LEMMA_KEY_TAGS or _XP_RE.fullmatch(tag) is not None
+        if tag in allowed
+        or tag in _PRONOUN_KEY_TAGS
+        or _XP_RE.fullmatch(tag) is not None
     }
     return sorted(selected)
 

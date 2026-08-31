@@ -60,8 +60,11 @@ sync-geography:
 import-vesum:
 	test -n "$(VESUM_FILE)"
 	test -n "$(VESUM_VERSION)"
-	$(UV) run --locked --package cadmus-worker python -m cadmus_worker.import_vesum \
-		"$(VESUM_FILE)" --version "$(VESUM_VERSION)" \
+	test -f "$(VESUM_FILE)"
+	docker compose run --rm \
+		-v "$(abspath $(VESUM_FILE)):/tmp/cadmus-vesum.txt:ro" \
+		worker python -m cadmus_worker.import_vesum \
+		/tmp/cadmus-vesum.txt --version "$(VESUM_VERSION)" \
 		$(if $(VESUM_COMMIT),--source-commit "$(VESUM_COMMIT)",)
 
 web:
@@ -191,6 +194,7 @@ structure-check:
 	test -s docs/decisions/0004-provenance-first-data-model.md
 	test -s docs/decisions/0005-cadmus-database-schema-and-migrations.md
 	test -s docs/decisions/0007-external-geography-sync-and-local-cache.md
+	test -s docs/decisions/0009-vesum-reference-lexicon.md
 	test -d apps/api
 	test -d apps/worker
 	test -d apps/web

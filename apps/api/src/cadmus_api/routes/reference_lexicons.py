@@ -20,7 +20,16 @@ from cadmus.reference_lexicon import (
     ReferenceLexiconQueryService,
     ReferenceMatchType,
 )
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    HTTPException,
+    Path,
+    Query,
+    Response,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
@@ -159,7 +168,10 @@ def create_reference_lexicons_router(
         except ReferenceLexiconNotFoundError:
             return JSONResponse(
                 status_code=404,
-                content={"code": "not_found", "message": "Еталонний словник не імпортовано."},
+                content={
+                    "code": "not_found",
+                    "message": "Еталонний словник не імпортовано.",
+                },
             )
 
     @router.get(
@@ -209,7 +221,10 @@ def create_reference_lexicons_router(
         except (EntryAccessError, ReferenceLemmaNotFoundError):
             return JSONResponse(
                 status_code=404,
-                content={"code": "not_found", "message": "Статтю або відповідник не знайдено."},
+                content={
+                    "code": "not_found",
+                    "message": "Статтю або відповідник не знайдено.",
+                },
             )
         return [
             EntryReferenceLinkResponse(
@@ -217,8 +232,8 @@ def create_reference_lexicons_router(
                 entry_id=item.link.entry_id,
                 reference_lemma_id=item.link.reference_lemma_id,
                 relation_type=item.link.relation_type,
-                origin=item.link.origin.value,
-                validation_status=item.link.validation_status.value,
+                origin=str(item.link.origin),
+                validation_status=str(item.link.validation_status),
                 confidence=item.link.confidence,
                 created_at=item.link.created_at,
                 lemma=_lemma_response(item.lemma),
@@ -251,7 +266,10 @@ def create_reference_lexicons_router(
         except (EntryAccessError, ReferenceLemmaNotFoundError):
             return JSONResponse(
                 status_code=404,
-                content={"code": "not_found", "message": "Статтю або відповідник не знайдено."},
+                content={
+                    "code": "not_found",
+                    "message": "Статтю або відповідник не знайдено.",
+                },
             )
         except ReferenceLemmaNotStandardError:
             return JSONResponse(
@@ -266,8 +284,8 @@ def create_reference_lexicons_router(
             entry_id=item.link.entry_id,
             reference_lemma_id=item.link.reference_lemma_id,
             relation_type=item.link.relation_type,
-            origin=item.link.origin.value,
-            validation_status=item.link.validation_status.value,
+            origin=str(item.link.origin),
+            validation_status=str(item.link.validation_status),
             confidence=item.link.confidence,
             created_at=item.link.created_at,
             lemma=_lemma_response(item.lemma),
