@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from types import TracebackType
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import (
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session, registry
 
 from cadmus.infrastructure.database import metadata
 from cadmus.reference_lexicon.domain import (
+    MorphologyFeatures,
     ReferenceLemma,
     ReferenceLemmaMatch,
     ReferenceLexicon,
@@ -88,6 +90,8 @@ reference_word_forms = Table(
     Column("form", String(500), nullable=False),
     Column("normalized_form", String(500), nullable=False, index=True),
     Column("morphology", Text, nullable=False),
+    Column("morphology_tags", JSONB, nullable=False),
+    Column("morphology_features", JSONB, nullable=False),
     Column("is_standard", Boolean, nullable=False),
     Column("is_active", Boolean, nullable=False, default=True),
 )
@@ -159,7 +163,13 @@ class SqlAlchemyReferenceLexiconRepository:
             form_predicates.append(reference_word_forms.c.is_standard.is_(True))
 
         form_stmt = (
-            select(ReferenceLemma, reference_word_forms.c.form)
+            select(
+                ReferenceLemma,
+                reference_word_forms.c.form,
+                reference_word_forms.c.morphology,
+                reference_word_forms.c.morphology_tags,
+                reference_word_forms.c.morphology_features,
+            )
             .join(
                 reference_word_forms,
                 reference_word_forms.c.lemma_id == reference_lemmas.c.id,
@@ -175,7 +185,8 @@ class SqlAlchemyReferenceLexiconRepository:
             )
             .limit(limit * 4)
         )
-        for lemma, matched_form in self._session.execute(form_stmt):
+        for row in self._session.execute(form_stmt):
+            lemma = row[0]
             if lemma.id in seen:
                 continue
             seen.add(lemma.id)
@@ -183,7 +194,10 @@ class SqlAlchemyReferenceLexiconRepository:
                 ReferenceLemmaMatch(
                     lemma=lemma,
                     match_type=ReferenceMatchType.WORD_FORM,
-                    matched_form=str(matched_form),
+                    matched_form=str(row[1]),
+                    matched_form_morphology=str(row[2]),
+                    matched_form_tags=cast(list[str], row[3]),
+                    matched_form_features=cast(MorphologyFeatures, row[4]),
                 )
             )
             if len(results) >= limit:
@@ -267,6 +281,8 @@ class SqlAlchemyReferenceLexiconRepository:
                 "form": word_form.form,
                 "normalized_form": word_form.normalized_form,
                 "morphology": word_form.morphology,
+                "morphology_tags": word_form.morphology_tags,
+                "morphology_features": word_form.morphology_features,
                 "is_standard": word_form.is_standard,
                 "is_active": True,
             }
@@ -297,6 +313,8 @@ class SqlAlchemyReferenceLexiconRepository:
                     "form": form_insert.excluded.form,
                     "normalized_form": form_insert.excluded.normalized_form,
                     "morphology": form_insert.excluded.morphology,
+                    "morphology_tags": form_insert.excluded.morphology_tags,
+                    "morphology_features": form_insert.excluded.morphology_features,
                     "is_standard": form_insert.excluded.is_standard,
                     "is_active": True,
                 },

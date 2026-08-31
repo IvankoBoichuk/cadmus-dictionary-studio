@@ -13,6 +13,7 @@ from cadmus.lexicography import (
     ReferenceRelationType,
 )
 from cadmus.reference_lexicon import (
+    MorphologyFeatures,
     ReferenceLemma,
     ReferenceLemmaNotFoundError,
     ReferenceLexicon,
@@ -69,6 +70,9 @@ class ReferenceLemmaResponse(BaseModel):
     is_standard: bool
     match_type: ReferenceMatchType | None = None
     matched_form: str | None = None
+    matched_form_morphology: str | None = None
+    matched_form_tags: list[str] | None = None
+    matched_form_features: MorphologyFeatures | None = None
 
 
 class EntryReferenceLinkResponse(BaseModel):
@@ -112,6 +116,9 @@ def _lemma_response(
     *,
     match_type: ReferenceMatchType | None = None,
     matched_form: str | None = None,
+    matched_form_morphology: str | None = None,
+    matched_form_tags: list[str] | None = None,
+    matched_form_features: MorphologyFeatures | None = None,
 ) -> ReferenceLemmaResponse:
     return ReferenceLemmaResponse(
         id=lemma.id,
@@ -122,6 +129,9 @@ def _lemma_response(
         is_standard=lemma.is_standard,
         match_type=match_type,
         matched_form=matched_form,
+        matched_form_morphology=matched_form_morphology,
+        matched_form_tags=matched_form_tags,
+        matched_form_features=matched_form_features,
     )
 
 
@@ -205,6 +215,9 @@ def create_reference_lexicons_router(
                 match.lemma,
                 match_type=match.match_type,
                 matched_form=match.matched_form,
+                matched_form_morphology=match.matched_form_morphology,
+                matched_form_tags=match.matched_form_tags,
+                matched_form_features=match.matched_form_features,
             )
             for match in matches
         ]

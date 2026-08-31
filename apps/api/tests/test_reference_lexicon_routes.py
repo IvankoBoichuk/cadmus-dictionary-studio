@@ -113,6 +113,13 @@ class StubReferenceLexiconQueryService:
                 lemma=_lemma(),
                 match_type=ReferenceMatchType.WORD_FORM,
                 matched_form=query,
+                matched_form_morphology="noun:anim:m:v_rod",
+                matched_form_tags=["noun", "anim", "m", "v_rod"],
+                matched_form_features={
+                    "case": "v_rod",
+                    "gender": "m",
+                    "animacy": "anim",
+                },
             )
         ]
 
@@ -208,6 +215,8 @@ def test_reference_search_returns_lemma_for_matching_word_form() -> None:
     assert response.json()[0]["lemma"] == "господар"
     assert response.json()[0]["match_type"] == "word_form"
     assert response.json()[0]["matched_form"] == "господаря"
+    assert response.json()[0]["matched_form_morphology"] == "noun:anim:m:v_rod"
+    assert response.json()[0]["matched_form_features"]["case"] == "v_rod"
     assert response.json()[0]["is_standard"] is True
 
 

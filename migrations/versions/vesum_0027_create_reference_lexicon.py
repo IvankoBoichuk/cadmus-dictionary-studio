@@ -1,4 +1,4 @@
-"""Create versioned reference lexicon data and entry mappings.
+"""Create VESUM reference lexicon data and entry mappings.
 
 Revision ID: vesum_0027
 Revises: bh148_0026
@@ -84,6 +84,16 @@ def upgrade() -> None:
         sa.Column("form", sa.String(length=500), nullable=False),
         sa.Column("normalized_form", sa.String(length=500), nullable=False),
         sa.Column("morphology", sa.Text(), nullable=False),
+        sa.Column(
+            "morphology_tags",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
+        sa.Column(
+            "morphology_features",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
         sa.Column("is_standard", sa.Boolean(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(
