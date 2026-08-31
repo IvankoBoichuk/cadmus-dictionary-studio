@@ -99,7 +99,10 @@ class SqlAlchemyEntryReferenceLinkRepository:
             self._session.scalars(
                 select(EntryReferenceLink)
                 .where(entry_reference_links.c.entry_id == entry_id)
-                .order_by(entry_reference_links.c.created_at, entry_reference_links.c.id)
+                .order_by(
+                    entry_reference_links.c.created_at,
+                    entry_reference_links.c.id,
+                )
             )
         )
 

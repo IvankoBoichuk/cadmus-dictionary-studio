@@ -120,7 +120,8 @@ def upgrade() -> None:
         sa.Column("created_by", sa.Uuid(), nullable=False),
         sa.CheckConstraint(
             "relation_type IN "
-            "('standard_equivalent', 'synonym', 'approximate_equivalent', 'hypernym', 'related')",
+            "('standard_equivalent', 'synonym', 'approximate_equivalent', "
+            "'hypernym', 'related')",
             name="ck_entry_reference_links_entry_reference_link_relation_type",
         ),
         sa.CheckConstraint(

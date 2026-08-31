@@ -151,7 +151,9 @@ def create_app(
     delete_entry_field_service: DeleteEntryFieldService | None = None,
     validate_entry_service: ValidateEntryService | None = None,
     reference_lexicon_query_service: ReferenceLexiconQueryService | None = None,
-    manage_entry_reference_links_service: ManageEntryReferenceLinksService | None = None,
+    manage_entry_reference_links_service: (
+        ManageEntryReferenceLinksService | None
+    ) = None,
     authorization_service: AuthorizationService | None = None,
     manage_members_service: ManageMembersService | None = None,
     list_members_service: ListMembersService | None = None,

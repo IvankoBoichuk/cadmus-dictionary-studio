@@ -195,7 +195,10 @@ def create_reference_lexicons_router(
         except ReferenceLexiconNotFoundError:
             return JSONResponse(
                 status_code=404,
-                content={"code": "not_found", "message": "Еталонний словник не імпортовано."},
+                content={
+                    "code": "not_found",
+                    "message": "Еталонний словник не імпортовано.",
+                },
             )
         return [
             _lemma_response(
@@ -276,7 +279,9 @@ def create_reference_lexicons_router(
                 status_code=422,
                 content={
                     "code": "non_standard_reference",
-                    "message": "Для літературного відповідника виберіть нормативну лему.",
+                    "message": (
+                        "Для літературного відповідника виберіть нормативну лему."
+                    ),
                 },
             )
         return EntryReferenceLinkResponse(
