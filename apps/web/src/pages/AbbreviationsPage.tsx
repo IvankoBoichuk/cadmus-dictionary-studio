@@ -86,14 +86,11 @@ export function AbbreviationsPage() {
 
   return (
     <>
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Скорочення словника</h1>
-        <p className="lede">
-          Налаштуйте структурований список скорочень, який Cadmus
-          використовуватиме під час виділення полів статей.
-        </p>
-      </section>
+      <h2 className="mb-2 text-[1.15rem]">Скорочення словника</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Налаштуйте структурований список скорочень, який Cadmus
+        використовуватиме під час виділення полів статей.
+      </p>
       <div className="dictionary-form">
         <AbbreviationsWorkspace dictionaryId={dictionaryId} />
       </div>

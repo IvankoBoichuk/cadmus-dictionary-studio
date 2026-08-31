@@ -185,13 +185,10 @@ export function ArticleSchemaPage() {
 
   return (
     <>
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Схема словникової статті</h1>
-        <p className="lede">
-          Керуйте AI-згенерованою схемою полів статті та її версіями (BH-148).
-        </p>
-      </section>
+      <h2 className="mb-2 text-[1.15rem]">Схема словникової статті</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Керуйте AI-згенерованою схемою полів статті та її версіями (BH-148).
+      </p>
       <div className="dictionary-form">
         <ArticleSchemaWorkspace dictionaryId={dictionaryId} />
       </div>

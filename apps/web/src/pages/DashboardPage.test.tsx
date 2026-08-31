@@ -75,7 +75,7 @@ it("summarises the dictionaries by lifecycle status", async () => {
   expect(within(scanned).getByText("1")).toBeInTheDocument();
 });
 
-it("lists the most recently updated dictionaries first, linking each to its editor", async () => {
+it("lists the most recently updated dictionaries first, linking each to its overview", async () => {
   renderDashboard([
     dictionaryEntry({
       id: "older",
@@ -94,14 +94,16 @@ it("lists the most recently updated dictionaries first, linking each to its edit
   ]);
 
   await screen.findByText("Новіший словник");
-  const editorLinks = screen
+  const rowLinks = screen
     .getAllByRole("link")
-    .filter((link) => link.getAttribute("href")?.endsWith("/edit"));
-  expect(editorLinks.map((link) => link.textContent)).toEqual([
+    .filter((link) =>
+      /^\/dictionaries\/(?!new$)[^/]+$/.test(link.getAttribute("href") ?? ""),
+    );
+  expect(rowLinks.map((link) => link.textContent)).toEqual([
     "Новіший словник",
     "Старіший словник",
   ]);
-  expect(editorLinks[0]).toHaveAttribute("href", "/dictionaries/newer/edit");
+  expect(rowLinks[0]).toHaveAttribute("href", "/dictionaries/newer");
   expect(screen.getByText("Потребує уваги: 2")).toBeInTheDocument();
 });
 

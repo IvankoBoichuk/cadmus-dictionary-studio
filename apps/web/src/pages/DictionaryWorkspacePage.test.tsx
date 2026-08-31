@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthenticatedUser } from "../api";
 import { AuthContext, type AuthContextValue } from "../authContext";
-import { DictionaryViewerPage } from "./DictionaryViewerPage";
+import { DictionaryWorkspacePage } from "./DictionaryWorkspacePage";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -27,8 +27,8 @@ function renderAt(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route
-            path="/dictionaries/:dictionaryId/view"
-            element={<DictionaryViewerPage />}
+            path="/dictionaries/:dictionaryId/pages"
+            element={<DictionaryWorkspacePage />}
           />
         </Routes>
       </MemoryRouter>
@@ -36,7 +36,7 @@ function renderAt(path: string) {
   );
 }
 
-describe("DictionaryViewerPage", () => {
+describe("DictionaryWorkspacePage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -47,7 +47,7 @@ describe("DictionaryViewerPage", () => {
       vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 10 })),
     );
 
-    renderAt("/dictionaries/dict-1/view?page=3");
+    renderAt("/dictionaries/dict-1/pages?page=3");
 
     expect(await screen.findByAltText("Сторінка 3 з 10")).toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe("DictionaryViewerPage", () => {
       vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 10 })),
     );
 
-    renderAt("/dictionaries/dict-1/view");
+    renderAt("/dictionaries/dict-1/pages");
 
     expect(await screen.findByAltText("Сторінка 1 з 10")).toBeInTheDocument();
   });
@@ -69,7 +69,7 @@ describe("DictionaryViewerPage", () => {
       vi.fn().mockResolvedValue(jsonResponse(200, { total_pages: 10 })),
     );
 
-    renderAt("/dictionaries/dict-1/view?page=3");
+    renderAt("/dictionaries/dict-1/pages?page=3");
     await screen.findByAltText("Сторінка 3 з 10");
 
     fireEvent.click(screen.getByRole("button", { name: "Наступна →" }));

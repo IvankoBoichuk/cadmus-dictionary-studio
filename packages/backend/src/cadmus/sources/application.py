@@ -42,6 +42,7 @@ from cadmus.sources.domain import (
     PageRangeInput,
     PageRangesUnavailableError,
     PageRangeValidationError,
+    ProcessingSignals,
     SettlementMappingAccessError,
     SettlementMappingStatus,
     SettlementMappingValidationError,
@@ -50,6 +51,7 @@ from cadmus.sources.domain import (
     apply_status_after_edit,
     expand_page_ranges,
     missing_required_fields,
+    next_processing_status,
     normalize_page_ranges,
     readiness_blockers,
     settlement_mapping_duplicate_key,
@@ -883,6 +885,128 @@ class MarkDictionaryScannedService:
                     occurred_at=now,
                     previous_status=previous_status,
                     new_status=DictionaryStatus.SCANNED,
+                )
+            )
+            unit_of_work.commit()
+        return dictionary
+
+
+class AdvanceDictionaryProcessingStatusService:
+    """Keep a dictionary's status in step with lexeme/entry completion.
+
+    Owns the ``scanned`` <-> ``in_progress`` <-> ``processed`` moves and their
+    audit events; the decision itself lives in
+    ``sources.domain.next_processing_status``. Never leaves that band, so it
+    cannot undo ``configured`` or ``published``. Idempotent when the target
+    already matches. The caller supplies the (cross-module) lexicography
+    signals and must already be authorized to edit.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock
+        self._authorization = authorization or AuthorizationService()
+
+    def advance(
+        self, dictionary_id: UUID, actor_id: UUID, signals: ProcessingSignals
+    ) -> Dictionary:
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
+
+            previous_status = DictionaryStatus(dictionary.status)
+            target = next_processing_status(previous_status, signals)
+            if target == previous_status:
+                return dictionary
+
+            dictionary.status = target
+            dictionary.updated_at = now
+            dictionary.updated_by = actor_id
+            unit_of_work.sources.update_dictionary(dictionary)
+            unit_of_work.sources.add_event(
+                DictionaryEvent(
+                    id=uuid4(),
+                    dictionary_id=dictionary_id,
+                    event_type=DictionaryEventType.STATUS_CHANGED,
+                    actor_user_id=actor_id,
+                    occurred_at=now,
+                    previous_status=previous_status,
+                    new_status=target,
+                )
+            )
+            unit_of_work.commit()
+        return dictionary
+
+
+class DictionaryNotProcessedError(Exception):
+    """Raised when publishing a dictionary that is not yet ``processed``."""
+
+    def __init__(self, dictionary_id: UUID) -> None:
+        super().__init__(f"dictionary {dictionary_id} is not fully processed")
+        self.dictionary_id = dictionary_id
+
+
+class PublishDictionaryService:
+    """Release a fully processed dictionary (``processed`` -> ``published``).
+
+    An explicit editor action -- the auto-sync never publishes. Only a
+    ``processed`` dictionary can be published; calling this on an already
+    ``published`` dictionary is a no-op.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: SourcesUnitOfWorkFactory,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        authorization: AuthorizationService | None = None,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._clock = clock
+        self._authorization = authorization or AuthorizationService()
+
+    def publish(self, dictionary_id: UUID, actor_id: UUID) -> Dictionary:
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            dictionary = _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
+
+            if dictionary.status == DictionaryStatus.PUBLISHED:
+                return dictionary
+            if dictionary.status != DictionaryStatus.PROCESSED:
+                raise DictionaryNotProcessedError(dictionary_id)
+
+            previous_status = DictionaryStatus(dictionary.status)
+            dictionary.status = DictionaryStatus.PUBLISHED
+            dictionary.updated_at = now
+            dictionary.updated_by = actor_id
+            unit_of_work.sources.update_dictionary(dictionary)
+            unit_of_work.sources.add_event(
+                DictionaryEvent(
+                    id=uuid4(),
+                    dictionary_id=dictionary_id,
+                    event_type=DictionaryEventType.STATUS_CHANGED,
+                    actor_user_id=actor_id,
+                    occurred_at=now,
+                    previous_status=previous_status,
+                    new_status=DictionaryStatus.PUBLISHED,
                 )
             )
             unit_of_work.commit()

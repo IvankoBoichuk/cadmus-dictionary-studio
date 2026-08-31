@@ -11,14 +11,11 @@ export function PageRangesPage() {
 
   return (
     <>
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Діапазони сторінок</h1>
-        <p className="lede">
-          Вкажіть один або декілька діапазонів сторінок PDF, що містять словникові
-          статті, щоб Cadmus пропускав обкладинку, зміст та інші службові частини.
-        </p>
-      </section>
+      <h2 className="mb-2 text-[1.15rem]">Діапазони сторінок</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Вкажіть один або декілька діапазонів сторінок PDF, що містять словникові
+        статті, щоб Cadmus пропускав обкладинку, зміст та інші службові частини.
+      </p>
       <div className="dictionary-form">
         <PageRangeEditor dictionaryId={dictionaryId} />
       </div>

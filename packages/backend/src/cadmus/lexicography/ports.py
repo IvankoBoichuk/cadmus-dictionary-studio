@@ -13,11 +13,13 @@ from cadmus.lexicography.domain import (
     EntryExtractionSnapshot,
     EntryField,
     EntryFragment,
+    EntryStatus,
     ExtractedField,
     FragmentSegment,
     GeneratedSchema,
     Lexeme,
     LexemeEvent,
+    LexemeStatus,
     OcrSuggestionTaskSnapshot,
 )
 
@@ -40,6 +42,14 @@ class LexicographyRepository(Protocol):
     def list_page_ids_with_lexemes(self, dictionary_id: UUID) -> set[UUID]: ...
 
     def has_any_lexeme(self, dictionary_id: UUID) -> bool: ...
+
+    def count_lexemes_by_status(
+        self, dictionary_id: UUID
+    ) -> dict[LexemeStatus, int]: ...
+
+    def count_entries_by_status(
+        self, dictionary_id: UUID
+    ) -> dict[EntryStatus, int]: ...
 
     def add_article_schema(self, schema: ArticleSchema) -> None: ...
 

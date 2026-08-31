@@ -55,13 +55,10 @@ export function ProjectMembersPage() {
 
   return (
     <>
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Учасники проєкту</h1>
-        <p className="lede">
-          Керуйте тим, хто має доступ до словника, і якою є їхня роль.
-        </p>
-      </section>
+      <h2 className="mb-2 text-[1.15rem]">Учасники проєкту</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Керуйте тим, хто має доступ до словника, і якою є їхня роль.
+      </p>
       <div className="dictionary-form">
         <ProjectMembersWorkspace dictionaryId={dictionaryId} />
       </div>

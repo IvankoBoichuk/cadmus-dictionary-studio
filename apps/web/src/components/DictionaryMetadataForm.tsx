@@ -1,5 +1,6 @@
 import { FileDown } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,12 +31,11 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+import { dictionarySourceDownloadUrl, type DictionaryResponse } from "../api";
 import {
-  dictionarySourceDownloadUrl,
-  type ContributorRole,
-  type DictionaryResponse,
-  type LegalStatus,
-} from "../api";
+  CONTRIBUTOR_ROLE_OPTIONS,
+  LEGAL_STATUS_OPTIONS,
+} from "../dictionaryLabels";
 import { formatBytes } from "../hooks/useDictionaryUpload";
 import { useDictionaryMetadataForm } from "../hooks/useDictionaryMetadataForm";
 import { useFocusFirstError } from "../hooks/useFocusFirstError";
@@ -49,19 +49,6 @@ const MISSING_FIELD_LABELS: Record<string, string> = {
 };
 
 const LEGAL_STATUS_UNSET = "__unset__";
-
-const LEGAL_STATUS_OPTIONS: { value: LegalStatus; label: string }[] = [
-  { value: "public_domain", label: "Суспільне надбання" },
-  { value: "licensed", label: "За ліцензією" },
-  { value: "permission_granted", label: "Дозвіл отримано" },
-  { value: "restricted", label: "Обмежений доступ" },
-  { value: "unknown", label: "Невідомо" },
-];
-
-const CONTRIBUTOR_ROLE_OPTIONS: { value: ContributorRole; label: string }[] = [
-  { value: "compiler", label: "Укладач(ка)" },
-  { value: "author", label: "Автор(ка)" },
-];
 
 /** Download icon + tooltip carrying the original file name (BH-27 source panel,
  * condensed into the sticky header). */
@@ -120,17 +107,16 @@ export function DictionaryMetadataForm({
   source,
   onSaved,
   title,
-  description,
-  statusSlot,
-  navSlot,
+  portalActionsInto,
 }: {
   initialDictionary: DictionaryResponse;
   source?: DictionaryResponse["source"];
   onSaved?: (dictionary: DictionaryResponse) => void;
+  /** Heading shown in the self-contained header (create flow only). */
   title?: string;
-  description?: string;
-  statusSlot?: ReactNode;
-  navSlot?: ReactNode;
+  /** id of an element to portal the Save action into instead of rendering the
+   * component's own sticky header (used inside `DictionaryLayout`). */
+  portalActionsInto?: string;
 }) {
   const {
     form,
@@ -162,45 +148,57 @@ export function DictionaryMetadataForm({
   const hasFeedback =
     missingRequiredFields.length > 0 || Boolean(message) || Boolean(submissionError);
 
+  // The portal target lives in an ancestor route (`DictionaryLayout`'s sticky
+  // header); read it once after mount so the Save action can render there.
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot DOM sync
+    setPortalNode(
+      portalActionsInto ? document.getElementById(portalActionsInto) : null,
+    );
+  }, [portalActionsInto]);
+
+  const actions = (
+    <>
+      {source && (
+        <SourceDownload dictionaryId={initialDictionary.id} source={source} />
+      )}
+      <Button
+        form="dictionary-metadata-form"
+        disabled={form.formState.isSubmitting}
+        type="submit"
+      >
+        {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти чернетку"}
+      </Button>
+    </>
+  );
+
   return (
     <Form {...form}>
       <form
         noValidate
+        id="dictionary-metadata-form"
         ref={formRef}
         onSubmit={onSubmit}
-        aria-labelledby="page-title"
+        aria-label="Метадані словника"
       >
-        <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] -mt-[clamp(2rem,6vw,3.5rem)] mb-6 border-b border-border bg-background/90 px-[clamp(1rem,4vw,2.5rem)] py-3 backdrop-blur-sm">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-            <div className="min-w-0">
-              <p className="text-[0.7rem] font-[750] tracking-[0.12em] text-muted-foreground uppercase">
-                Словник
-              </p>
-              <h1 className="mt-0.5 mb-0 max-w-none font-serif text-[1.4rem] leading-tight font-medium">
-                {title ?? "Метадані словника"}
-              </h1>
-              {description && (
-                <p className="mt-1 mb-0 hidden truncate text-[0.82rem] text-muted-foreground md:block">
-                  {description}
+        {portalActionsInto ? (
+          portalNode && createPortal(actions, portalNode)
+        ) : (
+          <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] -mt-[clamp(2rem,6vw,3.5rem)] mb-6 border-b border-border bg-background/90 px-[clamp(1rem,4vw,2.5rem)] py-3 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+              <div className="min-w-0">
+                <p className="text-[0.7rem] font-[750] tracking-[0.12em] text-muted-foreground uppercase">
+                  Словник
                 </p>
-              )}
+                <h1 className="mt-0.5 mb-0 max-w-none font-serif text-[1.4rem] leading-tight font-medium">
+                  {title ?? "Метадані словника"}
+                </h1>
+              </div>
+              <div className="flex items-center gap-3">{actions}</div>
             </div>
-            <div className="flex items-center gap-3">
-              {source && (
-                <SourceDownload
-                  dictionaryId={initialDictionary.id}
-                  source={source}
-                />
-              )}
-              {statusSlot}
-              <Button disabled={form.formState.isSubmitting} type="submit">
-                {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти чернетку"}
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        {navSlot}
+          </header>
+        )}
 
         {hasFeedback && (
           <div className="mb-6 grid gap-2">

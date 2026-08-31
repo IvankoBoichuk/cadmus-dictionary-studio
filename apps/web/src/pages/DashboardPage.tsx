@@ -172,7 +172,7 @@ function RecentRow({ entry }: { entry: DictionaryResponse }) {
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 p-4 sm:p-5">
       <Link
         className="font-[650] text-primary hover:underline"
-        to={`/dictionaries/${entry.id}/edit`}
+        to={`/dictionaries/${entry.id}`}
       >
         {entry.title ?? "Без назви"}
       </Link>

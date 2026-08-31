@@ -1,11 +1,15 @@
-"""Thin HTTP adapters for the BH-57 dictionary scan-progress use case."""
+"""Thin HTTP adapter for releasing a fully processed dictionary."""
 
 from typing import Annotated
 from uuid import UUID
 
 from cadmus.identity import AuthenticationError, AuthenticationService, User
-from cadmus.lexicography import LexemeAccessError, ScanProgress, ScanProgressService
-from cadmus.sources import DictionaryStatus
+from cadmus.sources import (
+    DictionaryAccessError,
+    DictionaryNotProcessedError,
+    DictionaryStatus,
+    PublishDictionaryService,
+)
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
@@ -13,30 +17,13 @@ from pydantic import BaseModel, ConfigDict
 SESSION_COOKIE_NAME = "cadmus_session"
 
 
-class PageProgressResponse(BaseModel):
-    """One page's scan status: does it have at least one lexeme (AC1)."""
+class PublishDictionaryResponse(BaseModel):
+    """The dictionary's id and its status after publishing."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    page_number: int
-    has_lexemes: bool
-
-
-class ScanProgressResponse(BaseModel):
-    """AC2: aggregate scan progress alongside each page's status, plus
-    lexeme- and entry-level completion and the current dictionary status
-    (kept in sync with that completion)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
+    id: UUID
     status: DictionaryStatus
-    total_pages: int
-    processed_pages: int
-    pages: list[PageProgressResponse]
-    total_lexemes: int
-    completed_lexemes: int
-    total_entries: int
-    completed_entries: int
 
 
 class ErrorResponse(BaseModel):
@@ -62,32 +49,12 @@ NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
 }
 
 
-def _scan_progress_response(progress: ScanProgress) -> ScanProgressResponse:
-    return ScanProgressResponse(
-        status=progress.status,
-        total_pages=progress.total_pages,
-        processed_pages=progress.processed_pages,
-        pages=[
-            PageProgressResponse(
-                page_number=page.page_number, has_lexemes=page.has_lexemes
-            )
-            for page in progress.pages
-        ],
-        total_lexemes=progress.total_lexemes,
-        completed_lexemes=progress.completed_lexemes,
-        total_entries=progress.total_entries,
-        completed_entries=progress.completed_entries,
-    )
-
-
-def create_scan_progress_router(
+def create_publish_dictionary_router(
     authentication_service: AuthenticationService,
-    scan_progress_service: ScanProgressService,
+    publish_dictionary_service: PublishDictionaryService,
 ) -> APIRouter:
-    """Create the BH-57 scan-progress route bound to its application use case."""
-    router = APIRouter(
-        prefix="/dictionaries/{dictionary_id}/scan-progress", tags=["scan-progress"]
-    )
+    """Create the publish route bound to its application use case."""
+    router = APIRouter(prefix="/dictionaries/{dictionary_id}", tags=["dictionaries"])
 
     def current_user(
         session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
@@ -107,23 +74,38 @@ def create_scan_progress_router(
 
     AuthenticatedUser = Annotated[User, Depends(current_user)]
 
-    @router.get(
-        "",
-        response_model=ScanProgressResponse,
-        responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
-        summary="Read a dictionary's scan progress (AC1, AC2)",
+    @router.post(
+        "/publish",
+        response_model=PublishDictionaryResponse,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **NOT_FOUND_RESPONSE,
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": ErrorResponse,
+                "description": "The dictionary is not fully processed yet",
+            },
+        },
+        summary="Publish a dictionary once every lexeme and entry is complete",
     )
-    def get_scan_progress(
+    def publish_dictionary(
         user: AuthenticatedUser,
         dictionary_id: Annotated[UUID, Path()],
-    ) -> ScanProgressResponse | JSONResponse:
+    ) -> PublishDictionaryResponse | JSONResponse:
         try:
-            progress = scan_progress_service.get_progress(dictionary_id, user.id)
-        except LexemeAccessError:
+            dictionary = publish_dictionary_service.publish(dictionary_id, user.id)
+        except DictionaryAccessError:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={"code": "not_found", "message": "Словник не знайдено."},
             )
-        return _scan_progress_response(progress)
+        except DictionaryNotProcessedError:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={
+                    "code": "not_processed",
+                    "message": "Спершу завершіть опрацювання всіх лексем та статей.",
+                },
+            )
+        return PublishDictionaryResponse(id=dictionary.id, status=dictionary.status)
 
     return router

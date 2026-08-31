@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -208,6 +214,36 @@ describe("DictionaryMetadataForm", () => {
       article_description: string | null;
     };
     expect(body.article_description).toBe("Значення, приклади, синоніми.");
+  });
+
+  it("portals the save action into an external header slot", async () => {
+    const saved = baseDictionary({ title: "Словник", missing_required_fields: [] });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, saved)));
+
+    render(
+      <>
+        <div id="external-actions" />
+        <DictionaryMetadataForm
+          initialDictionary={baseDictionary()}
+          portalActionsInto="external-actions"
+        />
+      </>,
+    );
+
+    const slot = document.getElementById("external-actions") as HTMLElement;
+    const save = await within(slot).findByRole("button", {
+      name: "Зберегти чернетку",
+    });
+    expect(save).toHaveAttribute("form", "dictionary-metadata-form");
+
+    fireEvent.change(screen.getByLabelText("Назва"), {
+      target: { value: "Словник" },
+    });
+    fireEvent.click(save);
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Усі обов'язкові поля"),
+    );
   });
 
   it("shows the already-uploaded source without offering to re-upload it", () => {

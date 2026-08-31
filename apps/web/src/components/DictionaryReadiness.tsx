@@ -9,15 +9,20 @@ import {
   DICTIONARY_STATUS_LABELS,
 } from "../dictionaryStatusLabels";
 
-/** BH-31/BH-58 completion indicators: current status, blockers, and confirmation. */
+/** Current status, readiness blockers, and the one action available next:
+ * configure a draft, finish scanning, or publish a fully processed dictionary.
+ * ``in_progress`` / ``processed`` are reached automatically, so they offer no
+ * button except the final publish. */
 export function DictionaryReadiness({
   dictionary,
   onConfigured,
   onScanned,
+  onPublished,
 }: {
   dictionary: DictionaryResponse;
   onConfigured: (dictionary: DictionaryResponse) => void;
   onScanned: (dictionary: DictionaryResponse) => void;
+  onPublished?: (dictionary: DictionaryResponse) => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +56,22 @@ export function DictionaryReadiness({
       setError(
         apiMessageFrom(submitError) ??
           "Не вдалося завершити сканування. Спробуйте ще раз.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await API.dictionaries.publish(dictionary.id);
+      (onPublished ?? onScanned)({ ...dictionary, status: result.status });
+    } catch (submitError) {
+      setError(
+        apiMessageFrom(submitError) ??
+          "Не вдалося опублікувати словник. Спробуйте ще раз.",
       );
     } finally {
       setSubmitting(false);
@@ -95,6 +116,16 @@ export function DictionaryReadiness({
           onClick={() => void handleFinishScanning()}
         >
           {submitting ? "Завершуємо…" : "Завершити сканування"}
+        </Button>
+      )}
+      {dictionary.status === "processed" && (
+        <Button
+          type="button"
+          size="sm"
+          disabled={submitting}
+          onClick={() => void handlePublish()}
+        >
+          {submitting ? "Публікуємо…" : "Опублікувати словник"}
         </Button>
       )}
       {blockers.length > 0 && (

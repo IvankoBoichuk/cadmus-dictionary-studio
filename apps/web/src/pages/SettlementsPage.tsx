@@ -90,15 +90,12 @@ export function SettlementsPage() {
 
   return (
     <>
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Географічні мітки словника</h1>
-        <p className="lede">
-          Зіставте географічні позначки з оригіналу словника із сучасними
-          населеними пунктами, зберігаючи історичну форму та адміністративну
-          належність.
-        </p>
-      </section>
+      <h2 className="mb-2 text-[1.15rem]">Географічні мітки словника</h2>
+      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+        Зіставте географічні позначки з оригіналу словника із сучасними
+        населеними пунктами, зберігаючи історичну форму та адміністративну
+        належність.
+      </p>
       <div className="dictionary-form">
         <SettlementsWorkspace dictionaryId={dictionaryId} />
       </div>

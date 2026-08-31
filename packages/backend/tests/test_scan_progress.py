@@ -8,14 +8,18 @@ from uuid import UUID, uuid4
 
 import pytest
 from cadmus.lexicography import (
+    DictionaryEntry,
+    EntryStatus,
     Lexeme,
     LexemeAccessError,
     LexemeEvent,
     LexemeOrigin,
+    LexemeStatus,
     LexicographyRepository,
     ScanProgressService,
 )
 from cadmus.sources import (
+    AdvanceDictionaryProcessingStatusService,
     Dictionary,
     DictionaryPage,
     DictionaryPageRange,
@@ -37,9 +41,16 @@ class MemorySourcesRepository:
     source_files: dict[UUID, SourceFile] = field(default_factory=dict)
     page_ranges: dict[UUID, list[DictionaryPageRange]] = field(default_factory=dict)
     pages: dict[tuple[UUID, int], DictionaryPage] = field(default_factory=dict)
+    events: list[object] = field(default_factory=list)
 
     def get_dictionary(self, dictionary_id: UUID) -> Dictionary | None:
         return self.dictionaries.get(dictionary_id)
+
+    def update_dictionary(self, dictionary: Dictionary) -> None:
+        self.dictionaries[dictionary.id] = dictionary
+
+    def add_event(self, event: object) -> None:
+        self.events.append(event)
 
     def get_source_file(self, dictionary_id: UUID) -> SourceFile | None:
         return self.source_files.get(dictionary_id)
@@ -76,10 +87,14 @@ class MemorySourcesUnitOfWork:
 @dataclass
 class MemoryLexicographyRepository:
     lexemes: dict[UUID, Lexeme] = field(default_factory=dict)
+    entries: dict[UUID, DictionaryEntry] = field(default_factory=dict)
     events: list[LexemeEvent] = field(default_factory=list)
 
     def add_lexeme(self, lexeme: Lexeme) -> None:
         self.lexemes[lexeme.id] = lexeme
+
+    def add_entry(self, entry: DictionaryEntry) -> None:
+        self.entries[entry.id] = entry
 
     def list_page_ids_with_lexemes(self, dictionary_id: UUID) -> set[UUID]:
         return {
@@ -92,6 +107,20 @@ class MemoryLexicographyRepository:
         return any(
             lexeme.dictionary_id == dictionary_id for lexeme in self.lexemes.values()
         )
+
+    def count_lexemes_by_status(self, dictionary_id: UUID) -> dict[LexemeStatus, int]:
+        counts: dict[LexemeStatus, int] = {}
+        for lexeme in self.lexemes.values():
+            if lexeme.dictionary_id == dictionary_id:
+                counts[lexeme.status] = counts.get(lexeme.status, 0) + 1
+        return counts
+
+    def count_entries_by_status(self, dictionary_id: UUID) -> dict[EntryStatus, int]:
+        counts: dict[EntryStatus, int] = {}
+        for entry in self.entries.values():
+            if entry.dictionary_id == dictionary_id:
+                counts[entry.status] = counts.get(entry.status, 0) + 1
+        return counts
 
 
 class MemoryLexicographyUnitOfWork:
@@ -113,11 +142,13 @@ class MemoryLexicographyUnitOfWork:
         pass
 
 
-def _dictionary(owner_id: UUID) -> Dictionary:
+def _dictionary(
+    owner_id: UUID, status: DictionaryStatus = DictionaryStatus.DRAFT
+) -> Dictionary:
     return Dictionary(
         id=uuid4(),
         owner_id=owner_id,
-        status=DictionaryStatus.DRAFT,
+        status=status,
         created_at=NOW,
         updated_at=NOW,
         updated_by=owner_id,
@@ -165,7 +196,11 @@ def _page(source_file_id: UUID, page_index: int) -> DictionaryPage:
     )
 
 
-def _lexeme(dictionary_id: UUID, page_id: UUID) -> Lexeme:
+def _lexeme(
+    dictionary_id: UUID,
+    page_id: UUID,
+    status: LexemeStatus = LexemeStatus.DRAFT,
+) -> Lexeme:
     return Lexeme(
         id=uuid4(),
         dictionary_id=dictionary_id,
@@ -176,6 +211,7 @@ def _lexeme(dictionary_id: UUID, page_id: UUID) -> Lexeme:
         width=100,
         height=40,
         origin=LexemeOrigin.MANUAL,
+        status=status,
         created_at=NOW,
         created_by=uuid4(),
         updated_at=NOW,
@@ -183,13 +219,31 @@ def _lexeme(dictionary_id: UUID, page_id: UUID) -> Lexeme:
     )
 
 
+def _entry(dictionary_id: UUID, status: EntryStatus) -> DictionaryEntry:
+    return DictionaryEntry(
+        id=uuid4(),
+        dictionary_id=dictionary_id,
+        lexeme_id=uuid4(),
+        headword="слово",
+        status=status,
+        created_at=NOW,
+        updated_at=NOW,
+        created_by=uuid4(),
+        updated_by=uuid4(),
+    )
+
+
 class Fixture:
     """A dictionary with 3 viewable pages (indices 0-2), no lexemes yet."""
 
-    def __init__(self, page_count: int = 3) -> None:
+    def __init__(
+        self,
+        page_count: int = 3,
+        status: DictionaryStatus = DictionaryStatus.DRAFT,
+    ) -> None:
         self.owner_id = uuid4()
         self.sources_repository = MemorySourcesRepository()
-        self.dictionary = _dictionary(self.owner_id)
+        self.dictionary = _dictionary(self.owner_id, status)
         self.sources_repository.dictionaries[self.dictionary.id] = self.dictionary
         self.source_file = _source_file(self.dictionary.id)
         self.sources_repository.source_files[self.dictionary.id] = self.source_file
@@ -207,18 +261,30 @@ class Fixture:
                 self.sources_repository
             )
         )
+        self.status_service = AdvanceDictionaryProcessingStatusService(
+            unit_of_work_factory=lambda: MemorySourcesUnitOfWork(
+                self.sources_repository
+            ),
+            clock=lambda: NOW,
+        )
         self.lexicography_repository = MemoryLexicographyRepository()
         self.service = ScanProgressService(
             unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
                 self.lexicography_repository
             ),
             dictionary_pages=self.dictionary_pages,
+            status_service=self.status_service,
         )
 
-    def add_lexeme_on_page(self, page_number: int) -> None:
+    def add_lexeme_on_page(
+        self, page_number: int, status: LexemeStatus = LexemeStatus.DRAFT
+    ) -> None:
         page = self.pages[page_number - 1]
-        lexeme = _lexeme(self.dictionary.id, page.id)
+        lexeme = _lexeme(self.dictionary.id, page.id, status)
         self.lexicography_repository.add_lexeme(lexeme)
+
+    def add_entry(self, status: EntryStatus) -> None:
+        self.lexicography_repository.add_entry(_entry(self.dictionary.id, status))
 
 
 def test_get_progress_with_no_lexemes_reports_nothing_processed() -> None:
@@ -273,6 +339,86 @@ def test_get_progress_missing_dictionary_raises_access_error() -> None:
 
     with pytest.raises(LexemeAccessError):
         fixture.service.get_progress(uuid4(), fixture.owner_id)
+
+
+def test_get_progress_reports_zero_lexeme_and_entry_totals_when_empty() -> None:
+    fixture = Fixture()
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.total_lexemes == 0
+    assert progress.completed_lexemes == 0
+    assert progress.total_entries == 0
+    assert progress.completed_entries == 0
+
+
+def test_get_progress_counts_completed_lexemes_and_entries() -> None:
+    fixture = Fixture()
+    fixture.add_lexeme_on_page(1, LexemeStatus.COMPLETE)
+    fixture.add_lexeme_on_page(1, LexemeStatus.READY_TO_REVIEW)
+    fixture.add_lexeme_on_page(2, LexemeStatus.DRAFT)
+    fixture.add_entry(EntryStatus.COMPLETE)
+    fixture.add_entry(EntryStatus.DRAFT)
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.total_lexemes == 3
+    assert progress.completed_lexemes == 1
+    assert progress.total_entries == 2
+    assert progress.completed_entries == 1
+
+
+def test_get_progress_leaves_draft_status_untouched() -> None:
+    fixture = Fixture(status=DictionaryStatus.DRAFT)
+    fixture.add_lexeme_on_page(1, LexemeStatus.COMPLETE)
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.status == DictionaryStatus.DRAFT
+
+
+def test_get_progress_advances_scanned_to_in_progress_once_work_starts() -> None:
+    fixture = Fixture(status=DictionaryStatus.SCANNED)
+    fixture.add_lexeme_on_page(1, LexemeStatus.READY_TO_REVIEW)
+    fixture.add_lexeme_on_page(2, LexemeStatus.DRAFT)
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.status == DictionaryStatus.IN_PROGRESS
+    assert (
+        fixture.sources_repository.dictionaries[fixture.dictionary.id].status
+        == DictionaryStatus.IN_PROGRESS
+    )
+
+
+def test_get_progress_advances_to_processed_when_all_complete() -> None:
+    fixture = Fixture(status=DictionaryStatus.IN_PROGRESS)
+    fixture.add_lexeme_on_page(1, LexemeStatus.COMPLETE)
+    fixture.add_lexeme_on_page(2, LexemeStatus.COMPLETE)
+    fixture.add_entry(EntryStatus.COMPLETE)
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.status == DictionaryStatus.PROCESSED
+
+
+def test_get_progress_reverts_processed_to_in_progress_if_work_reopens() -> None:
+    fixture = Fixture(status=DictionaryStatus.PROCESSED)
+    fixture.add_lexeme_on_page(1, LexemeStatus.COMPLETE)
+    fixture.add_lexeme_on_page(2, LexemeStatus.READY_TO_REVIEW)
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.status == DictionaryStatus.IN_PROGRESS
+
+
+def test_get_progress_never_reverts_published() -> None:
+    fixture = Fixture(status=DictionaryStatus.PUBLISHED)
+    fixture.add_lexeme_on_page(1, LexemeStatus.READY_TO_REVIEW)
+
+    progress = fixture.service.get_progress(fixture.dictionary.id, fixture.owner_id)
+
+    assert progress.status == DictionaryStatus.PUBLISHED
 
 
 def test_get_progress_without_saved_ranges_is_empty() -> None:

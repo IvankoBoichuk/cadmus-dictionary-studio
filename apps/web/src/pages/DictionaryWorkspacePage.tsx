@@ -2,8 +2,10 @@ import { Navigate, useParams, useSearchParams } from "react-router-dom";
 
 import { DictionaryPageViewer } from "../components/DictionaryPageViewer";
 
-/** BH-53: the ``page`` query param keeps the current page across reloads. */
-export function DictionaryViewerPage() {
+/** `/dictionaries/:id/pages` — "Сторінки та слова": the page-by-page workspace
+ * for boxing words, running OCR and promoting lexemes to entries.
+ * BH-53: the ``page`` query param keeps the current page across reloads. */
+export function DictionaryWorkspacePage() {
   const { dictionaryId } = useParams<{ dictionaryId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -27,17 +29,10 @@ export function DictionaryViewerPage() {
   };
 
   return (
-    <>
-      <section className="hero" aria-labelledby="page-title">
-        <p className="eyebrow">Словник</p>
-        <h1 id="page-title">Перегляд сторінок</h1>
-        <p className="lede">Перегляньте сторінки словника послідовно.</p>
-      </section>
-      <DictionaryPageViewer
-        dictionaryId={dictionaryId}
-        pageNumber={pageNumber}
-        onNavigate={handleNavigate}
-      />
-    </>
+    <DictionaryPageViewer
+      dictionaryId={dictionaryId}
+      pageNumber={pageNumber}
+      onNavigate={handleNavigate}
+    />
   );
 }

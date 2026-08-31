@@ -95,6 +95,15 @@ export type FinishScanningNotReadyResponse =
 type FinishScanningNotFoundResponse =
   FinishScanningOperation["responses"][404]["content"]["application/json"];
 
+type PublishDictionaryOperation =
+  paths["/dictionaries/{dictionary_id}/publish"]["post"];
+export type PublishDictionaryResponse =
+  PublishDictionaryOperation["responses"][200]["content"]["application/json"];
+type PublishDictionaryNotProcessedResponse =
+  PublishDictionaryOperation["responses"][422]["content"]["application/json"];
+type PublishDictionaryNotFoundResponse =
+  PublishDictionaryOperation["responses"][404]["content"]["application/json"];
+
 export type SchemaGenerationStatus = components["schemas"]["SchemaGenerationStatus"];
 export type ArticleSchemaResponse = components["schemas"]["ArticleSchemaResponse"];
 
@@ -511,6 +520,10 @@ function dictionaryFinishScanningPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/finish-scanning` as keyof paths;
 }
 
+function dictionaryPublishPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/publish` as keyof paths;
+}
+
 function pageRangesPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/page-ranges` as keyof paths;
 }
@@ -903,6 +916,16 @@ export const API = {
         FinishScanningResponse,
         FinishScanningNotReadyResponse | FinishScanningNotFoundResponse
       >(dictionaryFinishScanningPath(dictionaryId), options);
+    },
+
+    publish(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<PublishDictionaryResponse> {
+      return postWithoutBody<
+        PublishDictionaryResponse,
+        PublishDictionaryNotProcessedResponse | PublishDictionaryNotFoundResponse
+      >(dictionaryPublishPath(dictionaryId), options);
     },
   },
 

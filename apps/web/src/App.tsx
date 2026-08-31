@@ -1,18 +1,22 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./components/AppShell";
 import { AuthProvider } from "./components/AuthProvider";
+import { DictionaryLayout } from "./components/DictionaryLayout";
+import { DictionarySettingsLayout } from "./components/DictionarySettingsLayout";
 import { PublicLayout } from "./components/PublicLayout";
 import { AbbreviationsPage } from "./pages/AbbreviationsPage";
 import { ArticleSchemaPage } from "./pages/ArticleSchemaPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DictionariesList } from "./pages/DictionariesList";
-import { DictionaryFormPage } from "./pages/DictionaryFormPage";
-import { DictionaryViewerPage } from "./pages/DictionaryViewerPage";
+import { DictionaryMetadataPage } from "./pages/DictionaryMetadataPage";
+import { DictionaryOverviewPage } from "./pages/DictionaryOverviewPage";
+import { DictionaryWorkspacePage } from "./pages/DictionaryWorkspacePage";
 import { EntryDetailPage } from "./pages/EntryDetailPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { NewDictionaryPage } from "./pages/NewDictionaryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { PageRangesPage } from "./pages/PageRangesPage";
 import { ProjectMembersPage } from "./pages/ProjectMembersPage";
@@ -39,36 +43,24 @@ export function App() {
           </Route>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dictionaries/new" element={<DictionaryFormPage />} />
             <Route path="/dictionaries" element={<DictionariesList />} />
+            <Route path="/dictionaries/new" element={<NewDictionaryPage />} />
             <Route
-              path="/dictionaries/:dictionaryId/edit"
-              element={<DictionaryFormPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/abbreviations"
-              element={<AbbreviationsPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/settlements"
-              element={<SettlementsPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/page-ranges"
-              element={<PageRangesPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/members"
-              element={<ProjectMembersPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/view"
-              element={<DictionaryViewerPage />}
-            />
-            <Route
-              path="/dictionaries/:dictionaryId/article-schema"
-              element={<ArticleSchemaPage />}
-            />
+              path="/dictionaries/:dictionaryId"
+              element={<DictionaryLayout />}
+            >
+              <Route index element={<DictionaryOverviewPage />} />
+              <Route path="pages" element={<DictionaryWorkspacePage />} />
+              <Route path="settings" element={<DictionarySettingsLayout />}>
+                <Route index element={<Navigate replace to="metadata" />} />
+                <Route path="metadata" element={<DictionaryMetadataPage />} />
+                <Route path="page-ranges" element={<PageRangesPage />} />
+                <Route path="abbreviations" element={<AbbreviationsPage />} />
+                <Route path="settlements" element={<SettlementsPage />} />
+                <Route path="article-schema" element={<ArticleSchemaPage />} />
+                <Route path="members" element={<ProjectMembersPage />} />
+              </Route>
+            </Route>
             <Route path="/entries/:entryId" element={<EntryDetailPage />} />
           </Route>
         </Routes>

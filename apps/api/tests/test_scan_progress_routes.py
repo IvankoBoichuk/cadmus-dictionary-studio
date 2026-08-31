@@ -12,6 +12,7 @@ from cadmus.lexicography import (
     ScanProgress,
     ScanProgressService,
 )
+from cadmus.sources import DictionaryStatus
 from cadmus_api.main import create_app
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -77,6 +78,7 @@ def test_get_scan_progress_requires_authentication() -> None:
 
 def test_get_scan_progress_returns_aggregate_and_per_page_status() -> None:
     progress = ScanProgress(
+        status=DictionaryStatus.IN_PROGRESS,
         total_pages=3,
         processed_pages=2,
         pages=(
@@ -84,6 +86,10 @@ def test_get_scan_progress_returns_aggregate_and_per_page_status() -> None:
             PageProgress(page_number=2, has_lexemes=False),
             PageProgress(page_number=3, has_lexemes=True),
         ),
+        total_lexemes=10,
+        completed_lexemes=4,
+        total_entries=3,
+        completed_entries=1,
     )
     service = StubScanProgressService(progress=progress)
 
@@ -93,6 +99,7 @@ def test_get_scan_progress_returns_aggregate_and_per_page_status() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert body["status"] == "in_progress"
     assert body["total_pages"] == 3
     assert body["processed_pages"] == 2
     assert body["pages"] == [
@@ -100,6 +107,10 @@ def test_get_scan_progress_returns_aggregate_and_per_page_status() -> None:
         {"page_number": 2, "has_lexemes": False},
         {"page_number": 3, "has_lexemes": True},
     ]
+    assert body["total_lexemes"] == 10
+    assert body["completed_lexemes"] == 4
+    assert body["total_entries"] == 3
+    assert body["completed_entries"] == 1
 
 
 def test_get_scan_progress_not_owned_returns_404() -> None:

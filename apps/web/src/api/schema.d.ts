@@ -574,6 +574,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a dictionary once every lexeme and entry is complete */
+        post: operations["publish_dictionary_dictionaries__dictionary_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/scan-progress": {
         parameters: {
             query?: never;
@@ -1418,10 +1435,16 @@ export interface components {
         };
         /**
          * DictionaryStatus
-         * @description Dictionary lifecycle status (BH-27, BH-31, and BH-58).
+         * @description Dictionary lifecycle status.
+         *
+         *     ``draft`` -> ``configured`` -> ``scanned`` are the setup and page-scanning
+         *     stages (BH-27, BH-31, BH-58). After ``scanned`` the status tracks the
+         *     lexicographic work automatically: ``in_progress`` once decomposition has
+         *     begun, ``processed`` once every lexeme and entry is ``complete``.
+         *     ``published`` is the only status reached by an explicit editor action.
          * @enum {string}
          */
-        DictionaryStatus: "draft" | "configured" | "scanned";
+        DictionaryStatus: "draft" | "configured" | "scanned" | "in_progress" | "processed" | "published";
         /**
          * DuplicateAbbreviationResponse
          * @description Structured duplicate warning for AC4.
@@ -2053,6 +2076,18 @@ export interface components {
          */
         PasswordResetFailure: "invalid" | "expired" | "used";
         /**
+         * PublishDictionaryResponse
+         * @description The dictionary's id and its status after publishing.
+         */
+        PublishDictionaryResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["DictionaryStatus"];
+        };
+        /**
          * QueueUnavailableResponse
          * @description Stable response when Redis cannot serve queue operations.
          */
@@ -2190,13 +2225,24 @@ export interface components {
         };
         /**
          * ScanProgressResponse
-         * @description AC2: aggregate scan progress alongside each page's status.
+         * @description AC2: aggregate scan progress alongside each page's status, plus
+         *     lexeme- and entry-level completion and the current dictionary status
+         *     (kept in sync with that completion).
          */
         ScanProgressResponse: {
+            /** Completed Entries */
+            completed_entries: number;
+            /** Completed Lexemes */
+            completed_lexemes: number;
             /** Pages */
             pages: components["schemas"]["PageProgressResponse"][];
             /** Processed Pages */
             processed_pages: number;
+            status: components["schemas"]["DictionaryStatus"];
+            /** Total Entries */
+            total_entries: number;
+            /** Total Lexemes */
+            total_lexemes: number;
             /** Total Pages */
             total_pages: number;
         };
@@ -4855,6 +4901,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_dictionary_dictionaries__dictionary_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishDictionaryResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary is not fully processed yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

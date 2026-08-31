@@ -1,4 +1,4 @@
-import { SquarePen, Trash2 } from "lucide-react";
+import { ArrowRight, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
@@ -82,8 +82,8 @@ function DictionaryCard({
               variant="secondary"
               className="size-9 shadow-sm"
             >
-              <Link to={`/dictionaries/${entry.id}/edit`} aria-label="Редагувати">
-                <SquarePen aria-hidden="true" />
+              <Link to={`/dictionaries/${entry.id}`} aria-label="Відкрити">
+                <ArrowRight aria-hidden="true" />
               </Link>
             </Button>
             <Button
