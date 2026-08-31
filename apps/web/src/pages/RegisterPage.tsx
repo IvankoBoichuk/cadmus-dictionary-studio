@@ -1,23 +1,44 @@
 import { useRef } from "react";
 import { Link } from "react-router-dom";
 
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
 import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useRegistrationForm } from "../hooks/useRegistrationForm";
 
 export function RegisterPage() {
-  const form = useRegistrationForm();
+  const { form, onSubmit, message } = useRegistrationForm();
   const formRef = useRef<HTMLFormElement>(null);
 
-  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
+  useFocusFirstError(
+    formRef,
+    form.formState.submitCount,
+    form.formState.isSubmitting,
+  );
 
-  if (form.message) {
+  if (message) {
     return (
       <main className="auth-page" id="main-content">
-        <section className="auth-card auth-card--result" aria-labelledby="page-title">
+        <section
+          className="auth-card text-center"
+          aria-labelledby="page-title"
+        >
           <p className="eyebrow">Реєстрація завершена</p>
-          <h1 id="page-title">Перевірте email</h1>
-          <p className="result-message" role="status">
-            {form.message}
+          <h1 id="page-title" className="mx-auto">
+            Перевірте email
+          </h1>
+          <p className="leading-relaxed text-muted-foreground" role="status">
+            {message}
           </p>
           <Link to="/">Повернутися на головну</Link>
         </section>
@@ -25,79 +46,93 @@ export function RegisterPage() {
     );
   }
 
+  const rootError = form.formState.errors.root?.message;
+
   return (
     <main className="auth-page" id="main-content">
       <section className="auth-card" aria-labelledby="page-title">
         <p className="eyebrow">Новий акаунт</p>
         <h1 id="page-title">Зареєструватися</h1>
-        <p className="auth-intro">
+        <p className="leading-relaxed text-muted-foreground">
           Створіть акаунт за допомогою email і пароля. Після цього ми надішлемо
           посилання для підтвердження.
         </p>
-        <form noValidate ref={formRef} onSubmit={form.submit}>
-          <div className="form-field">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              spellCheck={false}
-              {...form.getFieldProps("email")}
-              aria-invalid={Boolean(form.errors.email)}
-              aria-describedby={form.errors.email ? "email-error" : undefined}
+        <Form {...form}>
+          <form
+            noValidate
+            ref={formRef}
+            onSubmit={onSubmit}
+            className="mt-8 grid gap-5"
+          >
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      spellCheck={false}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {form.errors.email && (
-              <p className="field-error" id="email-error">
-                {form.errors.email}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Пароль</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>Щонайменше 12 символів.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password_confirmation"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Підтвердження пароля</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {rootError && (
+              <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+                {rootError}
               </p>
             )}
-          </div>
-          <div className="form-field">
-            <label htmlFor="password">Пароль</label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              {...form.getFieldProps("password")}
-              aria-invalid={Boolean(form.errors.password)}
-              aria-describedby={form.errors.password ? "password-error" : undefined}
-            />
-            <p className="field-hint">Щонайменше 12 символів.</p>
-            {form.errors.password && (
-              <p className="field-error" id="password-error">
-                {form.errors.password}
-              </p>
-            )}
-          </div>
-          <div className="form-field">
-            <label htmlFor="password-confirmation">Підтвердження пароля</label>
-            <input
-              id="password-confirmation"
-              type="password"
-              autoComplete="new-password"
-              {...form.getFieldProps("password_confirmation")}
-              aria-invalid={Boolean(form.errors.password_confirmation)}
-              aria-describedby={
-                form.errors.password_confirmation
-                  ? "password-confirmation-error"
-                  : undefined
-              }
-            />
-            {form.errors.password_confirmation && (
-              <p className="field-error" id="password-confirmation-error">
-                {form.errors.password_confirmation}
-              </p>
-            )}
-          </div>
-          {form.submissionError && (
-            <p className="form-error" role="alert">
-              {form.submissionError}
-            </p>
-          )}
-          <button disabled={form.submitting} type="submit">
-            {form.submitting ? "Створюємо акаунт…" : "Створити акаунт"}
-          </button>
-        </form>
+            <Button
+              className="mt-2 justify-self-start"
+              disabled={form.formState.isSubmitting}
+              type="submit"
+            >
+              {form.formState.isSubmitting
+                ? "Створюємо акаунт…"
+                : "Створити акаунт"}
+            </Button>
+          </form>
+        </Form>
       </section>
     </main>
   );

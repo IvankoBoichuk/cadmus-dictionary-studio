@@ -58,9 +58,8 @@ it("opens registration and shows validation errors beside fields", async () => {
   expect(
     await screen.findByText("Введіть коректну email-адресу."),
   ).toBeInTheDocument();
-  expect(screen.getByLabelText("Email")).toHaveAttribute(
-    "aria-describedby",
-    "email-error",
+  expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
+    "Введіть коректну email-адресу.",
   );
   expect(
     screen.getByText("Пароль має містити щонайменше 12 символів."),
@@ -148,9 +147,8 @@ it("places duplicate email feedback beside the email field", async () => {
   expect(
     await screen.findByText("Ця email-адреса вже зареєстрована."),
   ).toBeInTheDocument();
-  expect(screen.getByLabelText("Email")).toHaveAttribute(
-    "aria-describedby",
-    "email-error",
+  expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
+    "Ця email-адреса вже зареєстрована.",
   );
 });
 

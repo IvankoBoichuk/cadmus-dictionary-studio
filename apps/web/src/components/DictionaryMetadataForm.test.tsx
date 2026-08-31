@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DictionaryResponse } from "../api";
@@ -97,18 +98,17 @@ describe("DictionaryMetadataForm", () => {
     expect(screen.getByLabelText("English")).toBeChecked();
   });
 
-  it("only shows conditional legal fields for the relevant status", () => {
+  it("only shows conditional legal fields for the relevant status", async () => {
+    const user = userEvent.setup();
     render(<DictionaryMetadataForm initialDictionary={baseDictionary()} />);
 
     expect(screen.queryByLabelText("Тип ліцензії")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Правовий статус"), {
-      target: { value: "licensed" },
-    });
+    await user.click(screen.getByRole("combobox", { name: "Правовий статус" }));
+    await user.click(screen.getByRole("option", { name: "За ліцензією" }));
     expect(screen.getByLabelText("Тип ліцензії")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Правовий статус"), {
-      target: { value: "permission_granted" },
-    });
+    await user.click(screen.getByRole("combobox", { name: "Правовий статус" }));
+    await user.click(screen.getByRole("option", { name: "Дозвіл отримано" }));
     expect(screen.queryByLabelText("Тип ліцензії")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Ідентифікатор чи опис дозволу")).toBeInTheDocument();
   });

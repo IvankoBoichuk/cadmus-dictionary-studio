@@ -1,5 +1,16 @@
 import { useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import type { Role } from "../api";
 import type { MemberActionState } from "../hooks/useDictionaryMembers";
 import { ASSIGNABLE_ROLE_OPTIONS } from "../roleLabels";
@@ -33,8 +44,8 @@ export function ProjectMemberForm({
       <h2 id="member-form-heading">Запросити учасника</h2>
 
       <div className="form-field">
-        <label htmlFor="member-email">Пошта</label>
-        <input
+        <Label htmlFor="member-email">Пошта</Label>
+        <Input
           id="member-email"
           name="email"
           type="email"
@@ -46,18 +57,19 @@ export function ProjectMemberForm({
       </div>
 
       <div className="form-field">
-        <label htmlFor="member-role">Роль</label>
-        <select
-          id="member-role"
-          value={role}
-          onChange={(event) => setRole(event.target.value as Role)}
-        >
-          {ASSIGNABLE_ROLE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <Label htmlFor="member-role">Роль</Label>
+        <Select value={role} onValueChange={(value) => setRole(value as Role)}>
+          <SelectTrigger id="member-role">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ASSIGNABLE_ROLE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {actionState?.error && (
@@ -67,9 +79,9 @@ export function ProjectMemberForm({
       )}
 
       <div className="form-actions">
-        <button disabled={actionState?.pending} type="submit">
+        <Button disabled={actionState?.pending} type="submit">
           {actionState?.pending ? "Запрошуємо…" : "Запросити"}
-        </button>
+        </Button>
       </div>
     </form>
   );

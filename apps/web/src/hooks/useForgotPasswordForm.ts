@@ -1,53 +1,41 @@
-import { useFormik } from "formik";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
 
 import { API } from "../api";
 
-type ForgotPasswordValues = { email: string };
-type FieldErrors = Partial<Record<"email", string>>;
-type ForgotPasswordStatus = {
-  message?: string;
-  submissionError?: string;
-};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const INITIAL_VALUES: ForgotPasswordValues = { email: "" };
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().regex(EMAIL_RE, "Введіть коректну email-адресу."),
+});
 
-function validate(values: ForgotPasswordValues): FieldErrors {
-  const errors: FieldErrors = {};
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
-    errors.email = "Введіть коректну email-адресу.";
-  }
-  return errors;
-}
+export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 export function useForgotPasswordForm() {
-  const formik = useFormik<ForgotPasswordValues>({
-    initialValues: INITIAL_VALUES,
-    validate,
-    validateOnBlur: true,
-    validateOnChange: true,
-    onSubmit: async (values, helpers) => {
-      helpers.setStatus(undefined);
-      try {
-        const response = await API.auth.forgotPassword(values);
-        helpers.setStatus({
-          message:
-            response.message ??
-            "Якщо такий email зареєстровано, ми надіслали інструкції для відновлення пароля.",
-        });
-      } catch {
-        helpers.setStatus({
-          submissionError: "Сервіс відновлення пароля недоступний. Спробуйте пізніше.",
-        });
-      }
-    },
+  const [message, setMessage] = useState<string | null>(null);
+
+  const form = useForm<ForgotPasswordValues>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
+    mode: "onTouched",
   });
 
-  const status = formik.status as ForgotPasswordStatus | undefined;
-  return {
-    ...formik,
-    message: status?.message ?? null,
-    submissionError: status?.submissionError ?? null,
-    submit: formik.handleSubmit,
-    submitting: formik.isSubmitting,
-  } as const;
+  const onSubmit = form.handleSubmit(async (values) => {
+    form.clearErrors("root");
+    try {
+      const response = await API.auth.forgotPassword(values);
+      setMessage(
+        response.message ??
+          "Якщо такий email зареєстровано, ми надіслали інструкції для відновлення пароля.",
+      );
+    } catch {
+      form.setError("root", {
+        message: "Сервіс відновлення пароля недоступний. Спробуйте пізніше.",
+      });
+    }
+  });
+
+  return { form, onSubmit, message };
 }

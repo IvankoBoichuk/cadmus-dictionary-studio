@@ -1,90 +1,120 @@
 import { useRef } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
 import { API_BASE_URL } from "../config";
 import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useLoginForm } from "../hooks/useLoginForm";
 import { useAuth } from "../authContext";
 
 function LoginForm({ sessionUnavailable }: { sessionUnavailable: boolean }) {
-  const form = useLoginForm();
+  const { form, onSubmit } = useLoginForm();
   const formRef = useRef<HTMLFormElement>(null);
   const [searchParams] = useSearchParams();
 
-  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
+  useFocusFirstError(
+    formRef,
+    form.formState.submitCount,
+    form.formState.isSubmitting,
+  );
   const googleAuthFailed = searchParams.get("error") === "google_auth_failed";
-  const emailError = form.touched.email ? form.errors.email : undefined;
-  const passwordError = form.touched.password ? form.errors.password : undefined;
+  const rootError = form.formState.errors.root?.message;
 
   return (
     <main className="auth-page" id="main-content">
       <section className="auth-card" aria-labelledby="page-title">
         <p className="eyebrow">Робочий простір</p>
         <h1 id="page-title">Увійти</h1>
-        <p className="auth-intro">
+        <p className="leading-relaxed text-muted-foreground">
           Увійдіть за допомогою email і пароля, щоб продовжити роботу.
         </p>
         {sessionUnavailable && (
-          <p className="form-error" role="alert">
+          <p className="m-0 text-[0.88rem] text-destructive" role="alert">
             Не вдалося перевірити поточну сесію. Ви можете спробувати увійти.
           </p>
         )}
         {googleAuthFailed && (
-          <p className="form-error" role="alert">
+          <p className="m-0 text-[0.88rem] text-destructive" role="alert">
             Не вдалося увійти через Google. Спробуйте ще раз або скористайтеся
             email і паролем.
           </p>
         )}
-        <form noValidate ref={formRef} onSubmit={form.handleSubmit}>
-          <div className="form-field">
-            <label htmlFor="login-email">Email</label>
-            <input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              spellCheck={false}
-              {...form.getFieldProps("email")}
-              aria-invalid={Boolean(emailError)}
-              aria-describedby={emailError ? "login-email-error" : undefined}
+        <Form {...form}>
+          <form
+            noValidate
+            ref={formRef}
+            onSubmit={onSubmit}
+            className="mt-8 grid gap-5"
+          >
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      spellCheck={false}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {emailError && (
-              <p className="field-error" id="login-email-error">
-                {emailError}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Пароль</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="current-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  <p className="m-0 text-[0.88rem] text-muted-foreground">
+                    <Link to="/forgot-password">Забули пароль?</Link>
+                  </p>
+                </FormItem>
+              )}
+            />
+            {rootError && (
+              <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+                {rootError}
               </p>
             )}
-          </div>
-          <div className="form-field">
-            <label htmlFor="login-password">Пароль</label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              {...form.getFieldProps("password")}
-              aria-invalid={Boolean(passwordError)}
-              aria-describedby={
-                passwordError ? "login-password-error" : undefined
-              }
-            />
-            {passwordError && (
-              <p className="field-error" id="login-password-error">
-                {passwordError}
-              </p>
-            )}
-            <p className="field-hint">
-              <Link to="/forgot-password">Забули пароль?</Link>
-            </p>
-          </div>
-          {typeof form.status === "string" && (
-            <p className="form-error" role="alert">
-              {form.status}
-            </p>
-          )}
-          <button disabled={form.isSubmitting} type="submit">
-            {form.isSubmitting ? "Входимо…" : "Увійти"}
-          </button>
-        </form>
-        <p className="oauth-divider">або</p>
-        <a className="google-oauth-button" href={`${API_BASE_URL}/auth/google/start`}>
+            <Button
+              className="mt-2 justify-self-start"
+              disabled={form.formState.isSubmitting}
+              type="submit"
+            >
+              {form.formState.isSubmitting ? "Входимо…" : "Увійти"}
+            </Button>
+          </form>
+        </Form>
+        <p className="my-6 text-center text-[0.88rem] text-muted-foreground">
+          або
+        </p>
+        <a
+          className="flex justify-center rounded-[0.55rem] border border-input px-[0.8rem] py-[0.65rem] font-[650] text-foreground no-underline hover:border-primary hover:bg-[#f4f7f4] focus-visible:border-primary focus-visible:bg-[#f4f7f4] focus-visible:[outline:3px_solid_var(--color-ring-subtle)]"
+          href={`${API_BASE_URL}/auth/google/start`}
+        >
           Продовжити з Google
         </a>
       </section>

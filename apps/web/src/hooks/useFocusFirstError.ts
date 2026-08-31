@@ -5,8 +5,8 @@ import { useEffect, type RefObject } from "react";
  * marked `aria-invalid="true"`, so keyboard and screen-reader users land on the
  * problem instead of having to hunt for it.
  *
- * `submitCount` is Formik's per-form counter; it changes on every submit attempt
- * (including repeated ones), which is what re-triggers the focus move.
+ * `submitCount` is react-hook-form's `formState.submitCount`; it changes on every
+ * submit attempt (including repeated ones), which is what re-triggers the focus move.
  */
 export function useFocusFirstError(
   formRef: RefObject<HTMLFormElement | null>,

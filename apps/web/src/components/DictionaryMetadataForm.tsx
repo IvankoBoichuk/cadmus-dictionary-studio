@@ -1,5 +1,27 @@
 import { useRef } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
 import type { ContributorRole, DictionaryResponse, LegalStatus } from "../api";
 import { formatBytes } from "../hooks/useDictionaryUpload";
 import { useDictionaryMetadataForm } from "../hooks/useDictionaryMetadataForm";
@@ -12,6 +34,8 @@ const MISSING_FIELD_LABELS: Record<string, string> = {
   languages: "Мови",
   legal_status: "Правовий статус",
 };
+
+const LEGAL_STATUS_UNSET = "__unset__";
 
 const LEGAL_STATUS_OPTIONS: { value: LegalStatus; label: string }[] = [
   { value: "public_domain", label: "Суспільне надбання" },
@@ -35,319 +59,402 @@ export function DictionaryMetadataForm({
   source?: DictionaryResponse["source"];
   onSaved?: (dictionary: DictionaryResponse) => void;
 }) {
-  const form = useDictionaryMetadataForm(initialDictionary, onSaved);
+  const {
+    form,
+    onSubmit,
+    message,
+    submissionError,
+    missingRequiredFields,
+    contributorFields,
+    addContributor,
+    removeContributor,
+    moveContributor,
+    toggleLanguage,
+  } = useDictionaryMetadataForm(initialDictionary, onSaved);
   const formRef = useRef<HTMLFormElement>(null);
 
-  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
-  useUnsavedChangesWarning(form.dirty && !form.isSubmitting);
+  useFocusFirstError(
+    formRef,
+    form.formState.submitCount,
+    form.formState.isSubmitting,
+  );
+  useUnsavedChangesWarning(
+    form.formState.isDirty && !form.formState.isSubmitting,
+  );
+
+  const contributors = form.watch("contributors");
+  const languageCodes = form.watch("language_codes");
+  const legalStatus = form.watch("legal_status");
 
   return (
-    <form
-      noValidate
-      ref={formRef}
-      onSubmit={form.submit}
-      aria-labelledby="metadata-heading"
-    >
-      {source && (
-        <div className="form-section">
-          <h2 id="metadata-heading">Джерело</h2>
-          <p className="file-summary">
-            <span translate="no">{source.original_filename}</span> ·{" "}
-            {formatBytes(source.byte_size)}
-            {source.inspection_status === "pending" && " · перевіряємо PDF…"}
-            {source.inspection_status === "verified" &&
-              source.page_count !== null &&
-              ` · ${source.page_count} стор.`}
-            {source.inspection_status === "failed" &&
-              " · PDF не пройшов перевірку структури."}
-          </p>
-        </div>
-      )}
-
-      <div className="form-section" aria-labelledby="bibliographic-heading">
-        <h2 id="bibliographic-heading">2. Бібліографічні дані</h2>
-
-        <div className="form-field">
-          <label htmlFor="title">Назва</label>
-          <input
-            id="title"
-            {...form.getFieldProps("title")}
-            aria-invalid={Boolean(form.errors.title)}
-            aria-describedby={form.errors.title ? "title-error" : undefined}
-          />
-          {form.errors.title && (
-            <p className="field-error" id="title-error">
-              {form.errors.title}
+    <Form {...form}>
+      <form
+        noValidate
+        ref={formRef}
+        onSubmit={onSubmit}
+        aria-labelledby="metadata-heading"
+      >
+        {source && (
+          <div className="form-section">
+            <h2 id="metadata-heading">Джерело</h2>
+            <p className="m-0 font-[650] text-primary-strong">
+              <span translate="no">{source.original_filename}</span> ·{" "}
+              {formatBytes(source.byte_size)}
+              {source.inspection_status === "pending" && " · перевіряємо PDF…"}
+              {source.inspection_status === "verified" &&
+                source.page_count !== null &&
+                ` · ${source.page_count} стор.`}
+              {source.inspection_status === "failed" &&
+                " · PDF не пройшов перевірку структури."}
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="form-field">
-          <label htmlFor="description">Опис</label>
-          <textarea id="description" rows={3} {...form.getFieldProps("description")} />
-        </div>
+        <div className="form-section" aria-labelledby="bibliographic-heading">
+          <h2 id="bibliographic-heading">2. Бібліографічні дані</h2>
 
-        <div className="form-field">
-          <label htmlFor="article_description">Структура словникової статті</label>
-          <p className="section-hint">
-            Опишіть, з яких частин складається словникова стаття (значення,
-            приклади, синоніми тощо) — на основі цього опису система
-            згенерує схему для автоматичного розбору статей.
-          </p>
-          <textarea
-            id="article_description"
-            rows={6}
-            {...form.getFieldProps("article_description")}
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Назва</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        <div className="form-field">
-          <label htmlFor="dictionary_type">Тип словника</label>
-          <input id="dictionary_type" {...form.getFieldProps("dictionary_type")} />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="publisher">Видавництво</label>
-          <input id="publisher" {...form.getFieldProps("publisher")} />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="publication_year">Рік видання</label>
-          <input
-            id="publication_year"
-            inputMode="numeric"
-            spellCheck={false}
-            {...form.getFieldProps("publication_year")}
-            aria-invalid={Boolean(form.errors.publication_year)}
-            aria-describedby={
-              form.errors.publication_year ? "publication-year-error" : undefined
-            }
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Опис</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} {...field} />
+                </FormControl>
+              </FormItem>
+            )}
           />
-          {form.errors.publication_year && (
-            <p className="field-error" id="publication-year-error">
-              {form.errors.publication_year}
-            </p>
-          )}
-        </div>
 
-        <div className="form-field">
-          <label htmlFor="edition">Видання (номер / назва)</label>
-          <input id="edition" {...form.getFieldProps("edition")} />
-        </div>
-
-        <div className="form-field">
-          <label htmlFor="isbn">ISBN</label>
-          <input
-            id="isbn"
-            spellCheck={false}
-            autoComplete="off"
-            {...form.getFieldProps("isbn")}
-            aria-invalid={Boolean(form.errors.isbn)}
-            aria-describedby={form.errors.isbn ? "isbn-error" : undefined}
+          <FormField
+            control={form.control}
+            name="article_description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Структура словникової статті</FormLabel>
+                <FormDescription>
+                  Опишіть, з яких частин складається словникова стаття (значення,
+                  приклади, синоніми тощо) — на основі цього опису система
+                  згенерує схему для автоматичного розбору статей.
+                </FormDescription>
+                <FormControl>
+                  <Textarea rows={6} {...field} />
+                </FormControl>
+              </FormItem>
+            )}
           />
-          {form.errors.isbn && (
-            <p className="field-error" id="isbn-error">
-              {form.errors.isbn}
-            </p>
-          )}
-        </div>
 
-        <div className="form-field">
-          <label htmlFor="digital_source">Джерело цифрової копії</label>
-          <input
-            id="digital_source"
-            autoComplete="off"
-            {...form.getFieldProps("digital_source")}
+          <FormField
+            control={form.control}
+            name="dictionary_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Тип словника</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+              </FormItem>
+            )}
           />
+
+          <FormField
+            control={form.control}
+            name="publisher"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Видавництво</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="publication_year"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Рік видання</FormLabel>
+                <FormControl>
+                  <Input inputMode="numeric" spellCheck={false} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="edition"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Видання (номер / назва)</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="isbn"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>ISBN</FormLabel>
+                <FormControl>
+                  <Input spellCheck={false} autoComplete="off" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="digital_source"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Джерело цифрової копії</FormLabel>
+                <FormControl>
+                  <Input autoComplete="off" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <fieldset className="border-0 p-0">
+            <legend className="p-0 font-bold">Автори та укладачі</legend>
+            <ol className="my-3 grid list-none gap-[0.6rem] p-0">
+              {contributorFields.map((contributorField, index) => {
+                const name = contributors[index]?.name ?? "";
+                return (
+                  <li
+                    className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2"
+                    key={contributorField.id}
+                  >
+                    <label className="sr-only" htmlFor={`contributor-name-${index}`}>
+                      Ім'я
+                    </label>
+                    <input
+                      className="min-h-[2.6rem] rounded-[0.5rem] border border-input px-[0.65rem] py-2"
+                      id={`contributor-name-${index}`}
+                      {...form.register(`contributors.${index}.name`)}
+                    />
+                    <label
+                      className="sr-only"
+                      htmlFor={`contributor-role-${index}`}
+                    >
+                      Роль
+                    </label>
+                    <select
+                      className="min-h-[2.6rem] rounded-[0.5rem] border border-input px-[0.65rem] py-2"
+                      id={`contributor-role-${index}`}
+                      {...form.register(`contributors.${index}.role`)}
+                    >
+                      {CONTRIBUTOR_ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      type="button"
+                      onClick={() => moveContributor(index, -1)}
+                      disabled={index === 0}
+                      aria-label={`Перемістити ${name || "запис"} вище`}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      type="button"
+                      onClick={() => moveContributor(index, 1)}
+                      disabled={index === contributorFields.length - 1}
+                      aria-label={`Перемістити ${name || "запис"} нижче`}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      type="button"
+                      onClick={() => removeContributor(index)}
+                      aria-label={`Видалити ${name || "запис"}`}
+                    >
+                      ✕
+                    </Button>
+                  </li>
+                );
+              })}
+            </ol>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => addContributor({ name: "", role: "compiler" })}
+            >
+              Додати автора чи укладача
+            </Button>
+          </fieldset>
         </div>
 
-        <fieldset className="contributor-fieldset">
-          <legend>Автори та укладачі</legend>
-          <ol className="contributor-list">
-            {form.values.contributors.map((contributor, index) => (
-              <li className="contributor-row" key={index}>
-                <label className="visually-hidden" htmlFor={`contributor-name-${index}`}>
-                  Ім'я
-                </label>
-                <input
-                  id={`contributor-name-${index}`}
-                  value={contributor.name}
-                  onChange={(event) =>
-                    form.updateContributor(index, {
-                      ...contributor,
-                      name: event.target.value,
-                    })
-                  }
-                />
-                <label
-                  className="visually-hidden"
-                  htmlFor={`contributor-role-${index}`}
-                >
-                  Роль
-                </label>
-                <select
-                  id={`contributor-role-${index}`}
-                  value={contributor.role}
-                  onChange={(event) =>
-                    form.updateContributor(index, {
-                      ...contributor,
-                      role: event.target.value as ContributorRole,
-                    })
-                  }
-                >
-                  {CONTRIBUTOR_ROLE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => form.moveContributor(index, -1)}
-                  disabled={index === 0}
-                  aria-label={`Перемістити ${contributor.name || "запис"} вище`}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => form.moveContributor(index, 1)}
-                  disabled={index === form.values.contributors.length - 1}
-                  aria-label={`Перемістити ${contributor.name || "запис"} нижче`}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  onClick={() => form.removeContributor(index)}
-                  aria-label={`Видалити ${contributor.name || "запис"}`}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ol>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => form.addContributor({ name: "", role: "compiler" })}
+        <div className="form-section" aria-labelledby="languages-heading">
+          <h2 id="languages-heading">3. Мови</h2>
+          <p className="section-hint">Оберіть одну чи декілька мов словника.</p>
+          <div
+            className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-[0.6rem]"
+            role="group"
+            aria-labelledby="languages-heading"
           >
-            Додати автора чи укладача
-          </button>
-        </fieldset>
-      </div>
-
-      <div className="form-section" aria-labelledby="languages-heading">
-        <h2 id="languages-heading">3. Мови</h2>
-        <p className="section-hint">Оберіть одну чи декілька мов словника.</p>
-        <div className="language-grid" role="group" aria-labelledby="languages-heading">
-          {LANGUAGE_OPTIONS.map((language) => (
-            <label className="language-option" key={language.code}>
-              <input
-                type="checkbox"
-                checked={form.values.language_codes.includes(language.code)}
-                onChange={() => form.toggleLanguage(language.code)}
-              />
-              {language.name}
-            </label>
-          ))}
-        </div>
-        {form.errors.language_codes && (
-          <p className="field-error" role="alert">
-            {form.errors.language_codes}
-          </p>
-        )}
-      </div>
-
-      <div className="form-section" aria-labelledby="legal-heading">
-        <h2 id="legal-heading">4. Правовий статус</h2>
-
-        <div className="form-field">
-          <label htmlFor="legal_status">Правовий статус</label>
-          <select id="legal_status" {...form.getFieldProps("legal_status")}>
-            <option value="">Не вказано</option>
-            {LEGAL_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+            {LANGUAGE_OPTIONS.map((language) => (
+              <div className="flex items-center gap-2" key={language.code}>
+                <Checkbox
+                  id={`language-${language.code}`}
+                  checked={languageCodes.includes(language.code)}
+                  onCheckedChange={() => toggleLanguage(language.code)}
+                />
+                <Label
+                  htmlFor={`language-${language.code}`}
+                  className="font-semibold"
+                >
+                  {language.name}
+                </Label>
+              </div>
             ))}
-          </select>
+          </div>
+          {form.formState.errors.language_codes && (
+            <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+              {form.formState.errors.language_codes.message}
+            </p>
+          )}
         </div>
 
-        {form.values.legal_status === "licensed" && (
-          <div className="form-field">
-            <label htmlFor="license_type">Тип ліцензії</label>
-            <input
-              id="license_type"
-              {...form.getFieldProps("license_type")}
-              aria-invalid={Boolean(form.errors.license_type)}
-              aria-describedby={
-                form.errors.license_type ? "license-type-error" : undefined
-              }
-            />
-            {form.errors.license_type && (
-              <p className="field-error" id="license-type-error">
-                {form.errors.license_type}
-              </p>
-            )}
-          </div>
-        )}
+        <div className="form-section" aria-labelledby="legal-heading">
+          <h2 id="legal-heading">4. Правовий статус</h2>
 
-        {form.values.legal_status === "permission_granted" && (
-          <div className="form-field">
-            <label htmlFor="permission_reference">Ідентифікатор чи опис дозволу</label>
-            <input
-              id="permission_reference"
-              {...form.getFieldProps("permission_reference")}
-              aria-invalid={Boolean(form.errors.permission_reference)}
-              aria-describedby={
-                form.errors.permission_reference
-                  ? "permission-reference-error"
-                  : undefined
-              }
-            />
-            {form.errors.permission_reference && (
-              <p className="field-error" id="permission-reference-error">
-                {form.errors.permission_reference}
-              </p>
+          <FormField
+            control={form.control}
+            name="legal_status"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Правовий статус</FormLabel>
+                <Select
+                  value={field.value || LEGAL_STATUS_UNSET}
+                  onValueChange={(value) =>
+                    field.onChange(value === LEGAL_STATUS_UNSET ? "" : value)
+                  }
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={LEGAL_STATUS_UNSET}>Не вказано</SelectItem>
+                    {LEGAL_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
             )}
-          </div>
-        )}
+          />
 
-        <div className="form-field">
-          <label htmlFor="rights_note">Примітка щодо прав</label>
-          <textarea id="rights_note" rows={2} {...form.getFieldProps("rights_note")} />
+          {legalStatus === "licensed" && (
+            <FormField
+              control={form.control}
+              name="license_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Тип ліцензії</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {legalStatus === "permission_granted" && (
+            <FormField
+              control={form.control}
+              name="permission_reference"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ідентифікатор чи опис дозволу</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <FormField
+            control={form.control}
+            name="rights_note"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Примітка щодо прав</FormLabel>
+                <FormControl>
+                  <Textarea rows={2} {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </div>
-      </div>
 
-      <div className="form-section" aria-labelledby="save-heading">
-        <h2 id="save-heading">5. Збереження чернетки</h2>
-        {form.missingRequiredFields.length > 0 && (
-          <p className="missing-fields" role="status">
-            {"Ще не заповнено: " +
-              form.missingRequiredFields
-                .map((field) => MISSING_FIELD_LABELS[field] ?? field)
-                .join(", ") +
-              ". Чернетку можна зберегти й заповнити пізніше."}
-          </p>
-        )}
-        {form.message && (
-          <p className="result-message--success" role="status">
-            {form.message}
-          </p>
-        )}
-        {form.submissionError && (
-          <p className="form-error" role="alert">
-            {form.submissionError}
-          </p>
-        )}
-        <button disabled={form.submitting} type="submit">
-          {form.submitting ? "Зберігаємо…" : "Зберегти чернетку"}
-        </button>
-      </div>
-    </form>
+        <div className="form-section" aria-labelledby="save-heading">
+          <h2 id="save-heading">5. Збереження чернетки</h2>
+          {missingRequiredFields.length > 0 && (
+            <p
+              className="rounded-[0.6rem] bg-warning px-4 py-3 text-[0.92rem] text-warning-foreground"
+              role="status"
+            >
+              {"Ще не заповнено: " +
+                missingRequiredFields
+                  .map((field) => MISSING_FIELD_LABELS[field] ?? field)
+                  .join(", ") +
+                ". Чернетку можна зберегти й заповнити пізніше."}
+            </p>
+          )}
+          {message && (
+            <p className="m-0 text-[0.88rem] text-success-foreground" role="status">
+              {message}
+            </p>
+          )}
+          {submissionError && (
+            <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+              {submissionError}
+            </p>
+          )}
+          <Button disabled={form.formState.isSubmitting} type="submit">
+            {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти чернетку"}
+          </Button>
+        </div>
+      </form>
+    </Form>
   );
 }

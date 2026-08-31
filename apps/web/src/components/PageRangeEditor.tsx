@@ -1,5 +1,8 @@
 import { type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import { usePageRangeEditor } from "../hooks/usePageRangeEditor";
 
 /** BH-28: lets the user configure one or more physical PDF page ranges. */
@@ -36,13 +39,17 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
           : `У файлі ${editor.pageCount} стор. Використовуються фізичні номери сторінок PDF, а не надруковані на них номери.`}
       </p>
 
-      <ol className="page-range-list">
+      <ol className="my-3 grid list-none gap-[0.6rem] p-0">
         {editor.rows.map((row, index) => (
-          <li className="page-range-row" key={index}>
-            <label className="visually-hidden" htmlFor={`range-start-${index}`}>
+          <li
+            className="grid grid-cols-[6rem_auto_6rem_auto] items-center gap-2"
+            key={index}
+          >
+            <label className="sr-only" htmlFor={`range-start-${index}`}>
               Початкова сторінка
             </label>
-            <input
+            <Input
+              className="min-h-[2.6rem] px-[0.65rem] py-2"
               id={`range-start-${index}`}
               inputMode="numeric"
               value={row.start_page}
@@ -57,10 +64,11 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
               }
             />
             <span aria-hidden="true">–</span>
-            <label className="visually-hidden" htmlFor={`range-end-${index}`}>
+            <label className="sr-only" htmlFor={`range-end-${index}`}>
               Кінцева сторінка
             </label>
-            <input
+            <Input
+              className="min-h-[2.6rem] px-[0.65rem] py-2"
               id={`range-end-${index}`}
               inputMode="numeric"
               value={row.end_page}
@@ -74,21 +82,22 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
                   : undefined
               }
             />
-            <button
+            <Button
+              variant="secondary"
+              size="icon"
               type="button"
-              className="icon-button"
               onClick={() => editor.removeRow(index)}
               aria-label={`Видалити діапазон ${index + 1}`}
             >
               ✕
-            </button>
+            </Button>
             {editor.errors[`ranges.${index}.start_page`] && (
-              <p className="field-error" id={`range-start-error-${index}`}>
+              <p className="field-error col-span-full" id={`range-start-error-${index}`}>
                 {editor.errors[`ranges.${index}.start_page`]}
               </p>
             )}
             {editor.errors[`ranges.${index}.end_page`] && (
-              <p className="field-error" id={`range-end-error-${index}`}>
+              <p className="field-error col-span-full" id={`range-end-error-${index}`}>
                 {editor.errors[`ranges.${index}.end_page`]}
               </p>
             )}
@@ -96,13 +105,13 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
         ))}
       </ol>
 
-      <button type="button" className="secondary-button" onClick={editor.addRow}>
+      <Button variant="secondary" type="button" onClick={editor.addRow}>
         Додати діапазон
-      </button>
+      </Button>
 
       <div className="form-actions">
         {editor.message && (
-          <p className="result-message--success" role="status">
+          <p className="m-0 text-[0.88rem] text-success-foreground" role="status">
             {editor.message}
           </p>
         )}
@@ -111,9 +120,9 @@ export function PageRangeEditor({ dictionaryId }: { dictionaryId: string }) {
             {editor.submissionError}
           </p>
         )}
-        <button disabled={editor.submitting} type="submit">
+        <Button disabled={editor.submitting} type="submit">
           {editor.submitting ? "Зберігаємо…" : "Зберегти діапазони"}
-        </button>
+        </Button>
       </div>
     </form>
   );

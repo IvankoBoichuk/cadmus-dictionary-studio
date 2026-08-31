@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+
 import type { DictionaryResponse } from "../api";
 import {
   ALLOWED_UPLOAD_EXTENSION,
@@ -62,27 +65,16 @@ export function DictionarySourceUpload({
           state.status === "uploading" ||
           state.status === "error" ||
           state.status === "duplicate") && (
-          <p className="file-summary">
+          <p className="m-0 font-[650] text-primary-strong">
             {state.file.name} · {formatBytes(state.file.size)}
           </p>
         )}
 
         {state.status === "uploading" && (
-          <div
-            className="progress-track"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(state.progress * 100)}
+          <Progress
+            value={Math.round(Math.min(1, Math.max(0, state.progress)) * 100)}
             aria-label="Прогрес завантаження"
-          >
-            <div
-              className="progress-bar"
-              style={{
-                transform: `scaleX(${Math.min(1, Math.max(0, state.progress))})`,
-              }}
-            />
-          </div>
+          />
         )}
 
         {state.status === "error" && (
@@ -102,23 +94,23 @@ export function DictionarySourceUpload({
 
       <div className="form-actions">
         {state.status === "selected" && (
-          <button type="button" onClick={handleUpload}>
+          <Button type="button" onClick={handleUpload}>
             Завантажити файл
-          </button>
+          </Button>
         )}
         {state.status === "uploading" && (
-          <button type="button" disabled>
+          <Button type="button" disabled>
             Завантажуємо…
-          </button>
+          </Button>
         )}
         {(state.status === "error" || state.status === "duplicate") && (
           <>
-            <button type="button" onClick={retry}>
+            <Button type="button" onClick={retry}>
               Спробувати ще раз
-            </button>
-            <button type="button" className="secondary-button" onClick={handleChooseAnother}>
+            </Button>
+            <Button variant="secondary" type="button" onClick={handleChooseAnother}>
               Обрати інший файл
-            </button>
+            </Button>
           </>
         )}
       </div>

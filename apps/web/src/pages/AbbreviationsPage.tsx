@@ -34,13 +34,13 @@ function AbbreviationsWorkspace({ dictionaryId }: { dictionaryId: string }) {
         </p>
         <div className="form-actions">
           <a
-            className="secondary-link"
+            className="ml-4 inline-block font-[650] text-primary hover:underline"
             href={abbreviationsExportUrl(dictionaryId, "json")}
           >
             Експортувати JSON
           </a>
           <a
-            className="secondary-link"
+            className="ml-4 inline-block font-[650] text-primary hover:underline"
             href={abbreviationsExportUrl(dictionaryId, "csv")}
           >
             Експортувати CSV

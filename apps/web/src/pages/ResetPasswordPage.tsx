@@ -1,16 +1,30 @@
 import { useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+
 import { useFocusFirstError } from "../hooks/useFocusFirstError";
 import { useResetPasswordForm } from "../hooks/useResetPasswordForm";
 
 function InvalidLinkResult({ message }: { message: string }) {
   return (
     <main className="auth-page" id="main-content">
-      <section className="auth-card auth-card--result" aria-labelledby="page-title">
+      <section className="auth-card text-center" aria-labelledby="page-title">
         <p className="eyebrow">Відновлення пароля</p>
-        <h1 id="page-title">Не вдалося відновити пароль</h1>
-        <p className="result-message result-message--error" role="status">
+        <h1 id="page-title" className="mx-auto">
+          Не вдалося відновити пароль
+        </h1>
+        <p className="leading-relaxed text-destructive" role="status">
           {message}
         </p>
         <Link to="/forgot-password">Надіслати новий запит</Link>
@@ -22,10 +36,16 @@ function InvalidLinkResult({ message }: { message: string }) {
 export function ResetPasswordPage() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get("token");
-  const form = useResetPasswordForm(token ?? "");
+  const { form, onSubmit, message, tokenError } = useResetPasswordForm(
+    token ?? "",
+  );
   const formRef = useRef<HTMLFormElement>(null);
 
-  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
+  useFocusFirstError(
+    formRef,
+    form.formState.submitCount,
+    form.formState.isSubmitting,
+  );
 
   if (!token) {
     return (
@@ -33,14 +53,19 @@ export function ResetPasswordPage() {
     );
   }
 
-  if (form.message) {
+  if (message) {
     return (
       <main className="auth-page" id="main-content">
-        <section className="auth-card auth-card--result" aria-labelledby="page-title">
+        <section
+          className="auth-card text-center"
+          aria-labelledby="page-title"
+        >
           <p className="eyebrow">Відновлення пароля</p>
-          <h1 id="page-title">Пароль змінено</h1>
-          <p className="result-message" role="status">
-            {form.message}
+          <h1 id="page-title" className="mx-auto">
+            Пароль змінено
+          </h1>
+          <p className="leading-relaxed text-muted-foreground" role="status">
+            {message}
           </p>
           <Link to="/login">Увійти</Link>
         </section>
@@ -48,72 +73,76 @@ export function ResetPasswordPage() {
     );
   }
 
-  if (form.tokenError) {
-    return <InvalidLinkResult message={form.tokenError} />;
+  if (tokenError) {
+    return <InvalidLinkResult message={tokenError} />;
   }
+
+  const rootError = form.formState.errors.root?.message;
 
   return (
     <main className="auth-page" id="main-content">
       <section className="auth-card" aria-labelledby="page-title">
         <p className="eyebrow">Відновлення пароля</p>
         <h1 id="page-title">Встановіть новий пароль</h1>
-        <p className="auth-intro">Введіть і підтвердіть новий пароль для акаунта.</p>
-        <form noValidate ref={formRef} onSubmit={form.submit}>
-          <div className="form-field">
-            <label htmlFor="reset-password-new-password">Новий пароль</label>
-            <input
-              id="reset-password-new-password"
-              type="password"
-              autoComplete="new-password"
-              {...form.getFieldProps("new_password")}
-              aria-invalid={Boolean(form.errors.new_password)}
-              aria-describedby={
-                form.errors.new_password
-                  ? "reset-password-new-password-error"
-                  : undefined
-              }
+        <p className="leading-relaxed text-muted-foreground">
+          Введіть і підтвердіть новий пароль для акаунта.
+        </p>
+        <Form {...form}>
+          <form
+            noValidate
+            ref={formRef}
+            onSubmit={onSubmit}
+            className="mt-8 grid gap-5"
+          >
+            <FormField
+              control={form.control}
+              name="new_password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Новий пароль</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>Щонайменше 12 символів.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <p className="field-hint">Щонайменше 12 символів.</p>
-            {form.errors.new_password && (
-              <p className="field-error" id="reset-password-new-password-error">
-                {form.errors.new_password}
+            <FormField
+              control={form.control}
+              name="new_password_confirmation"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Підтвердження пароля</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {rootError && (
+              <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+                {rootError}
               </p>
             )}
-          </div>
-          <div className="form-field">
-            <label htmlFor="reset-password-new-password-confirmation">
-              Підтвердження пароля
-            </label>
-            <input
-              id="reset-password-new-password-confirmation"
-              type="password"
-              autoComplete="new-password"
-              {...form.getFieldProps("new_password_confirmation")}
-              aria-invalid={Boolean(form.errors.new_password_confirmation)}
-              aria-describedby={
-                form.errors.new_password_confirmation
-                  ? "reset-password-new-password-confirmation-error"
-                  : undefined
-              }
-            />
-            {form.errors.new_password_confirmation && (
-              <p
-                className="field-error"
-                id="reset-password-new-password-confirmation-error"
-              >
-                {form.errors.new_password_confirmation}
-              </p>
-            )}
-          </div>
-          {form.submissionError && (
-            <p className="form-error" role="alert">
-              {form.submissionError}
-            </p>
-          )}
-          <button disabled={form.submitting} type="submit">
-            {form.submitting ? "Змінюємо пароль…" : "Змінити пароль"}
-          </button>
-        </form>
+            <Button
+              className="mt-2 justify-self-start"
+              disabled={form.formState.isSubmitting}
+              type="submit"
+            >
+              {form.formState.isSubmitting ? "Змінюємо пароль…" : "Змінити пароль"}
+            </Button>
+          </form>
+        </Form>
       </section>
     </main>
   );

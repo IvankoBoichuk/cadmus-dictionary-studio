@@ -170,7 +170,7 @@ describe("DictionaryPageViewer", () => {
 
     expect(listItem).toHaveAttribute("aria-pressed", "true");
     expect((await screen.findByTitle("слово")).className).toContain(
-      "lexeme-box--selected",
+      "border-selected",
     );
   });
 

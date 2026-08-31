@@ -40,25 +40,40 @@ function ExistingDictionaryFlow({ dictionaryId }: { dictionaryId: string }) {
   return (
     <>
       <div className="form-actions">
-        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/page-ranges`}>
+        <Link
+          className="ml-4 inline-block font-[650] text-primary hover:underline"
+          to={`/dictionaries/${dictionaryId}/page-ranges`}
+        >
           Налаштувати діапазони сторінок
         </Link>
-        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/abbreviations`}>
+        <Link
+          className="ml-4 inline-block font-[650] text-primary hover:underline"
+          to={`/dictionaries/${dictionaryId}/abbreviations`}
+        >
           Налаштувати скорочення словника
         </Link>
-        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/settlements`}>
+        <Link
+          className="ml-4 inline-block font-[650] text-primary hover:underline"
+          to={`/dictionaries/${dictionaryId}/settlements`}
+        >
           Зіставити географічні мітки словника
         </Link>
         <Link
-          className="secondary-link"
+          className="ml-4 inline-block font-[650] text-primary hover:underline"
           to={`/dictionaries/${dictionaryId}/article-schema`}
         >
           Схема словникової статті
         </Link>
-        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/view`}>
+        <Link
+          className="ml-4 inline-block font-[650] text-primary hover:underline"
+          to={`/dictionaries/${dictionaryId}/view`}
+        >
           Переглянути сторінки
         </Link>
-        <Link className="secondary-link" to={`/dictionaries/${dictionaryId}/members`}>
+        <Link
+          className="ml-4 inline-block font-[650] text-primary hover:underline"
+          to={`/dictionaries/${dictionaryId}/members`}
+        >
           Учасники проєкту
         </Link>
       </div>

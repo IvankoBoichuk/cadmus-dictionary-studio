@@ -1,5 +1,7 @@
-import { useFormik } from "formik";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import * as z from "zod";
 
 import {
   API,
@@ -9,17 +11,42 @@ import {
   type AbbreviationResponse,
 } from "../api";
 
-export type AbbreviationFormValues = {
-  abbreviation: string;
-  category: AbbreviationCategory | "";
-  full_form: string;
-  language_code: string;
-  note: string;
-  unresolved: boolean;
-  variants: string[];
-};
+const abbreviationSchema = z
+  .object({
+    abbreviation: z.string(),
+    category: z.string(),
+    full_form: z.string(),
+    language_code: z.string(),
+    note: z.string(),
+    unresolved: z.boolean(),
+    variants: z.array(z.object({ value: z.string() })),
+  })
+  .superRefine((values, ctx) => {
+    if (!values.abbreviation.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["abbreviation"],
+        message: "Вкажіть скорочення.",
+      });
+    }
+    if (!values.category) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["category"],
+        message: "Оберіть категорію.",
+      });
+    }
+    if (!values.unresolved && !values.full_form.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["full_form"],
+        message:
+          "Вкажіть повну форму. Якщо вона невідома, позначте запис як нерозшифрований.",
+      });
+    }
+  });
 
-type FormErrors = Partial<Record<keyof AbbreviationFormValues, string>>;
+export type AbbreviationFormValues = z.infer<typeof abbreviationSchema>;
 
 const EMPTY_VALUES: AbbreviationFormValues = {
   abbreviation: "",
@@ -31,7 +58,9 @@ const EMPTY_VALUES: AbbreviationFormValues = {
   variants: [],
 };
 
-function valuesFrom(editing: AbbreviationResponse | null): AbbreviationFormValues {
+function valuesFrom(
+  editing: AbbreviationResponse | null,
+): AbbreviationFormValues {
   if (!editing) return EMPTY_VALUES;
   return {
     abbreviation: editing.abbreviation,
@@ -40,19 +69,8 @@ function valuesFrom(editing: AbbreviationResponse | null): AbbreviationFormValue
     language_code: editing.language_code ?? "",
     note: editing.note ?? "",
     unresolved: editing.unresolved,
-    variants: [...editing.variants],
+    variants: editing.variants.map((value) => ({ value })),
   };
-}
-
-function validate(values: AbbreviationFormValues): FormErrors {
-  const errors: FormErrors = {};
-  if (!values.abbreviation.trim()) errors.abbreviation = "Вкажіть скорочення.";
-  if (!values.category) errors.category = "Оберіть категорію.";
-  if (!values.unresolved && !values.full_form.trim()) {
-    errors.full_form =
-      "Вкажіть повну форму. Якщо вона невідома, позначте запис як нерозшифрований.";
-  }
-  return errors;
 }
 
 /**
@@ -66,78 +84,69 @@ export function useAbbreviationForm(
   editing: AbbreviationResponse | null,
   onSaved: (saved: AbbreviationResponse) => void,
 ) {
-  const formik = useFormik<AbbreviationFormValues>({
-    initialValues: valuesFrom(editing),
-    validate,
-    validateOnBlur: true,
-    validateOnChange: false,
-    onSubmit: async (values, helpers) => {
-      helpers.setStatus(undefined);
-      const body = {
-        abbreviation: values.abbreviation.trim(),
-        category: values.category as AbbreviationCategory,
-        full_form: values.unresolved ? values.full_form.trim() || null : values.full_form.trim(),
-        language_code: values.language_code || null,
-        note: values.note.trim() || null,
-        unresolved: values.unresolved,
-        variants: values.variants.map((variant) => variant.trim()).filter(Boolean),
-      };
-      try {
-        const saved = editing
-          ? await API.abbreviations.update(dictionaryId, editing.id, body)
-          : await API.abbreviations.create(dictionaryId, body);
-        onSaved(saved);
-        if (!editing) helpers.resetForm();
-      } catch (error) {
-        const duplicate = duplicateAbbreviationFrom(error);
-        if (duplicate) {
-          helpers.setStatus({ submissionError: duplicate.message });
-          return;
-        }
-        const apiErrors = fieldErrorsFrom(error);
-        if (apiErrors) {
-          helpers.setErrors(apiErrors as FormErrors);
-          helpers.setStatus({ submissionError: "Перевірте поля, позначені помилками." });
-          return;
-        }
-        helpers.setStatus({
-          submissionError: "Не вдалося зберегти скорочення. Спробуйте ще раз.",
-        });
-      }
-    },
+  const form = useForm<AbbreviationFormValues>({
+    resolver: zodResolver(abbreviationSchema),
+    defaultValues: valuesFrom(editing),
+    mode: "onBlur",
   });
+  const variants = useFieldArray({ control: form.control, name: "variants" });
 
+  // `reset` clears field values, errors (including the form-level `root`), and
+  // `isDirty` together -- so switching the row being edited also drops a stale
+  // save error, the way Formik's `resetForm` used to.
   useEffect(() => {
-    formik.resetForm({ values: valuesFrom(editing) });
+    form.reset(valuesFrom(editing));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  const addVariant = () => {
-    void formik.setFieldValue("variants", [...formik.values.variants, ""]);
-  };
-
-  const updateVariant = (index: number, value: string) => {
-    const next = [...formik.values.variants];
-    next[index] = value;
-    void formik.setFieldValue("variants", next);
-  };
-
-  const removeVariant = (index: number) => {
-    void formik.setFieldValue(
-      "variants",
-      formik.values.variants.filter((_, current) => current !== index),
-    );
-  };
-
-  const status = formik.status as { submissionError?: string } | undefined;
+  const onSubmit = form.handleSubmit(async (values) => {
+    form.clearErrors("root");
+    const body = {
+      abbreviation: values.abbreviation.trim(),
+      category: values.category as AbbreviationCategory,
+      full_form: values.unresolved
+        ? values.full_form.trim() || null
+        : values.full_form.trim(),
+      language_code: values.language_code || null,
+      note: values.note.trim() || null,
+      unresolved: values.unresolved,
+      variants: values.variants
+        .map((variant) => variant.value.trim())
+        .filter(Boolean),
+    };
+    try {
+      const saved = editing
+        ? await API.abbreviations.update(dictionaryId, editing.id, body)
+        : await API.abbreviations.create(dictionaryId, body);
+      onSaved(saved);
+      if (!editing) form.reset(EMPTY_VALUES);
+    } catch (error) {
+      const duplicate = duplicateAbbreviationFrom(error);
+      if (duplicate) {
+        form.setError("root", { message: duplicate.message });
+        return;
+      }
+      const apiErrors = fieldErrorsFrom(error);
+      if (apiErrors) {
+        for (const [field, message] of Object.entries(apiErrors)) {
+          form.setError(field as keyof AbbreviationFormValues, { message });
+        }
+        form.setError("root", {
+          message: "Перевірте поля, позначені помилками.",
+        });
+        return;
+      }
+      form.setError("root", {
+        message: "Не вдалося зберегти скорочення. Спробуйте ще раз.",
+      });
+    }
+  });
 
   return {
-    ...formik,
-    submit: formik.handleSubmit,
-    submitting: formik.isSubmitting,
-    submissionError: status?.submissionError ?? null,
-    addVariant,
-    updateVariant,
-    removeVariant,
-  } as const;
+    form,
+    onSubmit,
+    variantFields: variants.fields,
+    addVariant: () => variants.append({ value: "" }),
+    removeVariant: (index: number) => variants.remove(index),
+  };
 }

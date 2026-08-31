@@ -1,5 +1,25 @@
 import { useRef } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
 import type { AbbreviationResponse } from "../api";
 import { CATEGORY_OPTIONS } from "../abbreviationCategories";
 import { useAbbreviationForm } from "../hooks/useAbbreviationForm";
@@ -18,155 +38,205 @@ export function AbbreviationForm({
   onSaved: (saved: AbbreviationResponse) => void;
   onCancel?: () => void;
 }) {
-  const form = useAbbreviationForm(dictionaryId, editing, onSaved);
+  const { form, onSubmit, variantFields, addVariant, removeVariant } =
+    useAbbreviationForm(dictionaryId, editing, onSaved);
   const formRef = useRef<HTMLFormElement>(null);
+  const submissionError = form.formState.errors.root?.message;
 
-  useFocusFirstError(formRef, form.submitCount, form.isSubmitting);
-  useUnsavedChangesWarning(form.dirty && !form.isSubmitting);
+  useFocusFirstError(
+    formRef,
+    form.formState.submitCount,
+    form.formState.isSubmitting,
+  );
+  useUnsavedChangesWarning(
+    form.formState.isDirty && !form.formState.isSubmitting,
+  );
 
   return (
-    <form
-      noValidate
-      ref={formRef}
-      onSubmit={form.submit}
-      aria-labelledby="abbreviation-form-heading"
-      className="form-section"
-    >
-      <h2 id="abbreviation-form-heading">
-        {editing ? "Редагувати скорочення" : "Додати скорочення"}
-      </h2>
+    <Form {...form}>
+      <form
+        noValidate
+        ref={formRef}
+        onSubmit={onSubmit}
+        aria-labelledby="abbreviation-form-heading"
+        className="form-section"
+      >
+        <h2 id="abbreviation-form-heading">
+          {editing ? "Редагувати скорочення" : "Додати скорочення"}
+        </h2>
 
-      <div className="form-field">
-        <label htmlFor="abbreviation">Скорочення</label>
-        <input
-          id="abbreviation"
-          spellCheck={false}
-          autoComplete="off"
-          {...form.getFieldProps("abbreviation")}
-          aria-invalid={Boolean(form.errors.abbreviation)}
-          aria-describedby={
-            form.errors.abbreviation ? "abbreviation-error" : undefined
-          }
+        <FormField
+          control={form.control}
+          name="abbreviation"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Скорочення</FormLabel>
+              <FormControl>
+                <Input spellCheck={false} autoComplete="off" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {form.errors.abbreviation && (
-          <p className="field-error" id="abbreviation-error">
-            {form.errors.abbreviation}
-          </p>
-        )}
-      </div>
 
-      <div className="form-field">
-        <label htmlFor="category">Категорія</label>
-        <select
-          id="category"
-          {...form.getFieldProps("category")}
-          aria-invalid={Boolean(form.errors.category)}
-          aria-describedby={form.errors.category ? "category-error" : undefined}
-        >
-          <option value="">Оберіть категорію</option>
-          {CATEGORY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        {form.errors.category && (
-          <p className="field-error" id="category-error">
-            {form.errors.category}
-          </p>
-        )}
-      </div>
-
-      <div className="form-field">
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={form.values.unresolved}
-            onChange={(event) =>
-              void form.setFieldValue("unresolved", event.target.checked)
-            }
-          />
-          Розшифрування поки невідоме (нерозшифрований запис)
-        </label>
-      </div>
-
-      <div className="form-field">
-        <label htmlFor="full_form">Повна форма</label>
-        <input
-          id="full_form"
-          {...form.getFieldProps("full_form")}
-          aria-invalid={Boolean(form.errors.full_form)}
-          aria-describedby={form.errors.full_form ? "full-form-error" : undefined}
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Категорія</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Оберіть категорію" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {form.errors.full_form && (
-          <p className="field-error" id="full-form-error">
-            {form.errors.full_form}
-          </p>
-        )}
-      </div>
 
-      <div className="form-field">
-        <label htmlFor="language_code">Мова</label>
-        <select id="language_code" {...form.getFieldProps("language_code")}>
-          <option value="">Не вказано</option>
-          {LANGUAGE_OPTIONS.map((language) => (
-            <option key={language.code} value={language.code}>
-              {language.name}
-            </option>
-          ))}
-        </select>
-      </div>
+        <FormField
+          control={form.control}
+          name="unresolved"
+          render={({ field }) => (
+            <FormItem>
+              <div className="flex items-center gap-2">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                  />
+                </FormControl>
+                <FormLabel>
+                  Розшифрування поки невідоме (нерозшифрований запис)
+                </FormLabel>
+              </div>
+            </FormItem>
+          )}
+        />
 
-      <fieldset className="contributor-fieldset">
-        <legend>Варіанти написання</legend>
-        <ol className="contributor-list">
-          {form.values.variants.map((variant, index) => (
-            <li className="contributor-row" key={index}>
-              <label className="visually-hidden" htmlFor={`variant-${index}`}>
-                Варіант написання
-              </label>
-              <input
-                id={`variant-${index}`}
-                value={variant}
-                onChange={(event) => form.updateVariant(index, event.target.value)}
-              />
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => form.removeVariant(index)}
-                aria-label={`Видалити варіант «${variant || "без назви"}»`}
+        <FormField
+          control={form.control}
+          name="full_form"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Повна форма</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="language_code"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Мова</FormLabel>
+              <Select
+                value={field.value || "__none__"}
+                onValueChange={(value) =>
+                  field.onChange(value === "__none__" ? "" : value)
+                }
               >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ol>
-        <button type="button" className="secondary-button" onClick={form.addVariant}>
-          Додати варіант написання
-        </button>
-      </fieldset>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="__none__">Не вказано</SelectItem>
+                  {LANGUAGE_OPTIONS.map((language) => (
+                    <SelectItem key={language.code} value={language.code}>
+                      {language.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormItem>
+          )}
+        />
 
-      <div className="form-field">
-        <label htmlFor="note">Примітка</label>
-        <textarea id="note" rows={2} {...form.getFieldProps("note")} />
-      </div>
+        <fieldset className="border-0 p-0">
+          <legend className="p-0 font-bold">Варіанти написання</legend>
+          <ol className="my-3 grid list-none gap-[0.6rem] p-0">
+            {variantFields.map((variantField, index) => (
+              <li
+                className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-2"
+                key={variantField.id}
+              >
+                <label className="sr-only" htmlFor={`variant-${index}`}>
+                  Варіант написання
+                </label>
+                <input
+                  className="min-h-[2.6rem] rounded-[0.5rem] border border-input px-[0.65rem] py-2"
+                  id={`variant-${index}`}
+                  {...form.register(`variants.${index}.value`)}
+                />
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  type="button"
+                  onClick={() => removeVariant(index)}
+                  aria-label={`Видалити варіант «${
+                    form.getValues(`variants.${index}.value`) || "без назви"
+                  }»`}
+                >
+                  ✕
+                </Button>
+              </li>
+            ))}
+          </ol>
+          <Button variant="secondary" type="button" onClick={addVariant}>
+            Додати варіант написання
+          </Button>
+        </fieldset>
 
-      {form.submissionError && (
-        <p className="form-error" role="alert">
-          {form.submissionError}
-        </p>
-      )}
+        <FormField
+          control={form.control}
+          name="note"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Примітка</FormLabel>
+              <FormControl>
+                <Textarea rows={2} {...field} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
 
-      <div className="form-actions">
-        <button disabled={form.submitting} type="submit">
-          {form.submitting ? "Зберігаємо…" : editing ? "Зберегти зміни" : "Додати"}
-        </button>
-        {editing && onCancel && (
-          <button type="button" className="secondary-button" onClick={onCancel}>
-            Скасувати
-          </button>
+        {submissionError && (
+          <p className="m-0 text-[0.88rem] text-destructive" role="alert">
+            {submissionError}
+          </p>
         )}
-      </div>
-    </form>
+
+        <div className="form-actions">
+          <Button disabled={form.formState.isSubmitting} type="submit">
+            {form.formState.isSubmitting
+              ? "Зберігаємо…"
+              : editing
+                ? "Зберегти зміни"
+                : "Додати"}
+          </Button>
+          {editing && onCancel && (
+            <Button variant="secondary" type="button" onClick={onCancel}>
+              Скасувати
+            </Button>
+          )}
+        </div>
+      </form>
+    </Form>
   );
 }

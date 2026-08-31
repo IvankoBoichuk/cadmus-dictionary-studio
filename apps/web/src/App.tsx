@@ -50,13 +50,16 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <div className="app-shell">
-          <a className="skip-link" href="#main-content">
+        <div className="min-h-screen">
+          <a
+            className="fixed top-4 left-4 z-[2] -translate-y-[180%] bg-foreground px-4 py-3 text-white focus:translate-y-0"
+            href="#main-content"
+          >
             Перейти до вмісту
           </a>
-          <header className="site-header">
+          <header className="flex min-h-[4.5rem] items-center border-b bg-white/[0.72] px-[6vw]">
             <Link
-              className="brand"
+              className="font-serif text-[1.45rem] font-bold tracking-[0.02em] no-underline"
               to="/"
               translate="no"
               aria-label="Cadmus — головна"

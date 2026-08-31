@@ -1,11 +1,23 @@
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
 import { API, apiMessageFrom, type DictionaryResponse } from "../api";
 
 const STATUS_LABELS: Record<DictionaryResponse["status"], string> = {
   draft: "Чернетка",
   configured: "Готовий до обробки",
   scanned: "Сканування завершено",
+};
+
+const STATUS_BADGE_VARIANT: Record<
+  DictionaryResponse["status"],
+  "warning" | "success"
+> = {
+  draft: "warning",
+  configured: "success",
+  scanned: "success",
 };
 
 /** BH-31/BH-58 completion indicators: current status, blockers, and confirmation. */
@@ -59,11 +71,11 @@ export function DictionaryReadiness({
   return (
     <div className="form-section" aria-labelledby="readiness-heading">
       <h2 id="readiness-heading">Готовність словника</h2>
-      <p className={`status-badge status-badge--${dictionary.status}`} role="status">
+      <Badge size="lg" variant={STATUS_BADGE_VARIANT[dictionary.status]} role="status">
         {STATUS_LABELS[dictionary.status]}
-      </p>
+      </Badge>
       {blockers.length > 0 && (
-        <ul className="readiness-blockers">
+        <ul className="mt-2 mb-0 list-disc pl-5 text-[0.92rem]">
           {blockers.map((blocker) => (
             <li key={blocker.code}>{blocker.message}</li>
           ))}
@@ -75,22 +87,22 @@ export function DictionaryReadiness({
         </p>
       )}
       {dictionary.status === "draft" && (
-        <button
+        <Button
           type="button"
           disabled={!isReady || submitting}
           onClick={() => void handleConfigure()}
         >
           {submitting ? "Підтверджуємо…" : "Позначити як готовий до обробки"}
-        </button>
+        </Button>
       )}
       {dictionary.status === "configured" && (
-        <button
+        <Button
           type="button"
           disabled={submitting}
           onClick={() => void handleFinishScanning()}
         >
           {submitting ? "Завершуємо…" : "Завершити сканування"}
-        </button>
+        </Button>
       )}
     </div>
   );

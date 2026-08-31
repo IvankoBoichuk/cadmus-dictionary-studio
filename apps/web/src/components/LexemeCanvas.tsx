@@ -7,6 +7,10 @@ import {
   type SyntheticEvent,
 } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
 import type { LexemeResponse, LexemeSuggestion } from "../api";
 import { isFinePointer, scrollIntoViewOptions } from "../interaction";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
@@ -23,6 +27,18 @@ import {
 } from "../lexemeGeometry";
 
 type Size = { width: number; height: number };
+
+/** Per-corner/edge offsets + resize cursor for a selected box's handles. */
+const HANDLE_CLASSES: Record<HandleId, string> = {
+  nw: "left-[-5px] top-[-5px] cursor-nwse-resize",
+  n: "left-1/2 top-[-5px] -translate-x-1/2 cursor-ns-resize",
+  ne: "right-[-5px] top-[-5px] cursor-nesw-resize",
+  w: "left-[-5px] top-1/2 -translate-y-1/2 cursor-ew-resize",
+  e: "right-[-5px] top-1/2 -translate-y-1/2 cursor-ew-resize",
+  sw: "left-[-5px] bottom-[-5px] cursor-nesw-resize",
+  s: "left-1/2 bottom-[-5px] -translate-x-1/2 cursor-ns-resize",
+  se: "right-[-5px] bottom-[-5px] cursor-nwse-resize",
+};
 
 type HandleDragState = {
   box: 1 | 2;
@@ -71,11 +87,11 @@ function LexemeBox({
       ref={boxRef}
       // Focusable programmatically (not via Tab) so BH-70 can move assistive focus here.
       tabIndex={selected ? -1 : undefined}
-      className={
-        selected
-          ? "lexeme-box lexeme-box--selected lexeme-box--clickable"
-          : "lexeme-box lexeme-box--clickable"
-      }
+      className={cn(
+        "pointer-events-auto absolute cursor-pointer border-2 border-lexeme bg-[rgb(217_119_6_/_15%)]",
+        selected &&
+          "border-[3px] border-selected bg-[rgb(185_28_28_/_18%)]",
+      )}
       title={title}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={onSelect}
@@ -85,7 +101,11 @@ function LexemeBox({
         HANDLES.map((handle) => (
           <div
             key={handle}
-            className={`lexeme-resize-handle lexeme-resize-handle--${handle}`}
+            data-handle={handle}
+            className={cn(
+              "pointer-events-auto absolute size-[10px] rounded-[2px] border border-white bg-selected",
+              HANDLE_CLASSES[handle],
+            )}
             onMouseDown={(event) => onHandleMouseDown(handle, event)}
           />
         ))}
@@ -376,38 +396,38 @@ export function LexemeCanvas({
   };
 
   return (
-    <div className="lexeme-canvas-wrap">
+    <div className="grid justify-items-center gap-3">
       {redrawingLexemeId && (
         <p className="lede" role="status">
           Намалюйте нову область для вибраної лексеми.{" "}
-          <button type="button" className="secondary-button" onClick={onCancelRedraw}>
+          <Button variant="secondary" type="button" onClick={onCancelRedraw}>
             Скасувати перемальовування
-          </button>
+          </Button>
         </p>
       )}
       {secondBoxDraftLexemeId && (
         <p className="lede" role="status">
           Намалюйте другу область для вибраної лексеми (наприклад, продовження в іншій
           колонці).{" "}
-          <button
+          <Button
+            variant="secondary"
             type="button"
-            className="secondary-button"
             onClick={onCancelSecondBoxDraft}
           >
             Скасувати
-          </button>
+          </Button>
         </p>
       )}
       <div
         ref={containerRef}
-        className="lexeme-canvas"
+        className="relative inline-block cursor-crosshair select-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
         <img
-          className="page-viewer-image"
+          className="block max-h-[80vh] max-w-full rounded-[0.75rem] border bg-surface"
           src={imageUrl}
           alt={imageAlt}
           onLoad={handleImageLoad}
@@ -479,7 +499,7 @@ export function LexemeCanvas({
               <button
                 type="button"
                 key={`${suggestion.x}-${suggestion.y}-${index}`}
-                className="lexeme-box lexeme-box--suggestion"
+                className="pointer-events-auto absolute cursor-pointer rounded-none border-2 border-dashed border-lexeme-suggestion bg-[rgb(37_99_235_/_10%)] p-0 hover:bg-[rgb(37_99_235_/_22%)]"
                 title={suggestion.source_text}
                 aria-label={`Прийняти запропоноване слово «${suggestion.source_text}»`}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -494,7 +514,7 @@ export function LexemeCanvas({
             ))}
         {drag && (
           <div
-            className="lexeme-box lexeme-box--draft"
+            className="pointer-events-none absolute border-2 border-dashed border-primary bg-[rgb(36_88_71_/_12%)]"
             style={{
               left: Math.min(drag.start.x, drag.current.x),
               top: Math.min(drag.start.y, drag.current.y),
@@ -505,7 +525,7 @@ export function LexemeCanvas({
         )}
         {pendingBox && (
           <div
-            className="lexeme-box lexeme-box--pending"
+            className="pointer-events-none absolute border-2 border-primary bg-[rgb(36_88_71_/_18%)]"
             style={{
               left: pendingBox.x,
               top: pendingBox.y,
@@ -517,9 +537,13 @@ export function LexemeCanvas({
       </div>
 
       {pendingBox && (
-        <form className="lexeme-form" onSubmit={handleSubmit}>
+        <form
+          className="grid w-[min(100%,24rem)] gap-2"
+          onSubmit={handleSubmit}
+        >
           <label htmlFor="lexeme-source-text">Текст лексеми</label>
-          <input
+          <Input
+            className="min-h-[2.6rem] rounded-[0.5rem] px-[0.65rem] py-2"
             id="lexeme-source-text"
             name="source_text"
             value={text}
@@ -535,16 +559,16 @@ export function LexemeCanvas({
             </p>
           )}
           <div className="form-actions">
-            <button
+            <Button
               type="submit"
-              className="primary-link"
+              className="mt-4 px-[1.1rem] py-3"
               disabled={createState.status === "submitting" || !text.trim()}
             >
               {createState.status === "submitting" ? "Зберігаємо…" : "Зберегти лексему"}
-            </button>
-            <button type="button" className="secondary-button" onClick={cancelPending}>
+            </Button>
+            <Button variant="secondary" type="button" onClick={cancelPending}>
               Скасувати
-            </button>
+            </Button>
           </div>
           {createState.status === "error" && !createState.fieldErrors && (
             <p className="form-error" role="alert">
@@ -554,13 +578,13 @@ export function LexemeCanvas({
           {createState.status === "duplicate" && (
             <div className="form-error" role="alert">
               <p>{createState.message}</p>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
-                className="secondary-button"
                 onClick={(event) => void handleSubmit(event, true)}
               >
                 Зберегти попри збіг
-              </button>
+              </Button>
             </div>
           )}
         </form>
