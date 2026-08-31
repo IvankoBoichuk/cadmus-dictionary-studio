@@ -355,7 +355,12 @@ class VesumVisualParser:
             return None
 
         is_word_form = raw.startswith("  ")
-        content = raw.strip()
+        # Upstream visual rows may carry a trailing "# ..." editor note
+        # (e.g. `вась-вась noninfl    # ...`); VESUM words and tags never
+        # contain "#", so anything from the first one on is a comment.
+        content = raw.split("#", 1)[0].strip()
+        if not content:
+            return None
         parts = content.split(maxsplit=1)
         prefix = f"line {line_number}: " if line_number is not None else ""
         if len(parts) != 2:

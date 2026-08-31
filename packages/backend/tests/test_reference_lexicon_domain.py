@@ -70,6 +70,25 @@ def test_visual_parser_uses_lemma_row_for_lemma_identity() -> None:
     assert feminine.lemma.id == head.lemma.id
 
 
+def test_visual_parser_strips_trailing_comment_from_a_row() -> None:
+    parser = VesumVisualParser(uuid4())
+
+    record = parser.parse_line(
+        'вась-вась noninfl    # "бути з кимось на вась-вась" - тут іменник\n',
+        line_number=1,
+    )
+
+    assert record is not None
+    assert record.lemma.lemma == "вась-вась"
+    assert record.lemma.part_of_speech == "noninfl"
+
+
+def test_visual_parser_ignores_a_comment_only_row() -> None:
+    parser = VesumVisualParser(uuid4())
+
+    assert parser.parse_line("  # standalone note\n", line_number=1) is None
+
+
 def test_visual_parser_rejects_form_before_lemma() -> None:
     parser = VesumVisualParser(uuid4())
 
