@@ -1270,13 +1270,17 @@ def build_entry_presentation_context(
 
     context = _assemble(schema.definition.get("fields", []), [])
     context.setdefault("headword", entry.headword)
-    context["entry"] = {"headword": entry.headword, "status": entry.status.value}
+    # ``status``/``role``/``origin`` come back from the imperative SQLAlchemy
+    # mapping as plain strings (the columns are ``String``, not ``Enum``), so
+    # ``str(...)`` -- not ``.value`` -- is what normalises both a persisted
+    # entity and a hand-built ``StrEnum`` one.
+    context["entry"] = {"headword": entry.headword, "status": str(entry.status)}
     context["fields"] = [
         {
             "field_path": field.field_path,
-            "role": field.role.value,
+            "role": str(field.role),
             "value": _value(field),
-            "origin": field.origin.value,
+            "origin": str(field.origin),
         }
         for field in sorted(fields, key=lambda f: f.position)
     ]

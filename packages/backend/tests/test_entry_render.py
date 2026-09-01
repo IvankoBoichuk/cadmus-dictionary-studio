@@ -227,6 +227,23 @@ def test_rule_tagged_children_surface_as_lists_on_the_instance() -> None:
     assert meaning.geographic_labels == ["Полтава"]
 
 
+def test_handles_plain_string_status_role_and_origin_from_the_db_mapping() -> None:
+    # The imperative SQLAlchemy mapping loads these columns as plain strings,
+    # not StrEnum members -- the builder must not assume ``.value``.
+    schema = _schema([_node("meaning", role=EntryFieldRole.MEANING)])
+    entry = _entry()
+    entry.status = "ready_to_review"  # type: ignore[assignment]
+    field = _field("meaning", role=EntryFieldRole.MEANING, source_text="x")
+    field.role = "meaning"  # type: ignore[assignment]
+    field.origin = "model"  # type: ignore[assignment]
+
+    context = build_entry_presentation_context(entry, [field], schema)
+
+    assert context["entry"]["status"] == "ready_to_review"
+    assert context["fields"][0]["role"] == "meaning"
+    assert context["fields"][0]["origin"] == "model"
+
+
 def test_malformed_field_path_is_dropped_from_the_tree_but_kept_in_fields() -> None:
     schema = _schema([_node("meaning", role=EntryFieldRole.MEANING)])
     fields = [
