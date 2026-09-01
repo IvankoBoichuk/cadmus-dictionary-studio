@@ -458,6 +458,8 @@ function FieldRow({
   schemaOptions,
   abbreviationItems,
   settlementItems,
+  linked,
+  onHoverChange,
   onSaved,
   onDeleted,
 }: {
@@ -468,6 +470,9 @@ function FieldRow({
   schemaOptions: SchemaFieldOption[];
   abbreviationItems: string[];
   settlementItems: string[];
+  /** Highlighted because the hovered/focused row is its parent or child. */
+  linked: boolean;
+  onHoverChange: (fieldId: string | null) => void;
   onSaved: (field: EntryFieldResponse) => void;
   onDeleted: (fieldId: string) => void;
 }) {
@@ -535,7 +540,23 @@ function FieldRow({
   };
 
   return (
-    <li className="group grid gap-1.5 rounded-md border border-border bg-surface p-2">
+    <li
+      data-linked={linked || undefined}
+      className={cn(
+        "group grid gap-1.5 rounded-md border bg-surface p-2 transition-colors",
+        linked
+          ? "border-lexeme bg-lexeme/5 ring-1 ring-lexeme/40"
+          : "border-border",
+      )}
+      onMouseEnter={() => onHoverChange(field.id)}
+      onMouseLeave={() => onHoverChange(null)}
+      onFocus={() => onHoverChange(field.id)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          onHoverChange(null);
+        }
+      }}
+    >
       {editing ? (
         <div className="form-field text-[0.9rem]">
           <label className="sr-only" htmlFor={`field-role-${field.id}`}>
@@ -733,6 +754,23 @@ function EntryBody({
   const [completeMessage, setCompleteMessage] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
+
+  /** Ids of the fields directly linked to the hovered one: its parent field
+   * plus every field extracted from it (e.g. the geographic labels / abbrevi-
+   * ations a rule pass tagged inside an example). Empty when the hovered field
+   * has no such relations, so unrelated rows never light up. */
+  const linkedFieldIds = useMemo(() => {
+    const linked = new Set<string>();
+    if (!hoveredFieldId) return linked;
+    const hovered = entry.fields.find((field) => field.id === hoveredFieldId);
+    if (hovered?.parent_field_id) linked.add(hovered.parent_field_id);
+    for (const field of entry.fields) {
+      if (field.parent_field_id === hoveredFieldId) linked.add(field.id);
+    }
+    if (linked.size > 0) linked.add(hoveredFieldId);
+    return linked;
+  }, [hoveredFieldId, entry.fields]);
 
   const schemaOptions = useMemo(() => {
     if (schemasState.status !== "loaded") return [];
@@ -1028,6 +1066,8 @@ function EntryBody({
                           schemaOptions={schemaOptions}
                           abbreviationItems={abbreviationItems}
                           settlementItems={settlementItems}
+                          linked={linkedFieldIds.has(field.id)}
+                          onHoverChange={setHoveredFieldId}
                           onSaved={handleFieldSaved}
                           onDeleted={handleFieldDeleted}
                         />

@@ -667,4 +667,45 @@ describe("EntryDetailPage", () => {
       ).toEqual(["grammatical_info", "usual_plural_form", "label", "custom"]),
     );
   });
+
+  it("highlights a field's parent/child rows on hover, both ways", async () => {
+    const template = baseEntry().fields[0]!;
+    const example = {
+      ...template,
+      id: "ex000000-0000-0000-0000-000000000001",
+      parent_field_id: null,
+      field_path: "example",
+      role: "example" as const,
+      source_text: "чорний кіт з Полтави",
+    };
+    const geoLabel = {
+      ...template,
+      id: "geo00000-0000-0000-0000-000000000002",
+      parent_field_id: example.id,
+      field_path: "example.geographic_label",
+      role: "geographic_label" as const,
+      source_text: "Полтава",
+      origin: "rule" as const,
+    };
+    stubFetch({ entry: baseEntry({ fields: [example, geoLabel] }) });
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    const exampleRow = (await screen.findByText("чорний кіт з Полтави")).closest(
+      "li",
+    )!;
+    const geoRow = screen.getByText("Полтава").closest("li")!;
+    expect(exampleRow).not.toHaveAttribute("data-linked");
+    expect(geoRow).not.toHaveAttribute("data-linked");
+
+    fireEvent.mouseEnter(exampleRow);
+    expect(geoRow).toHaveAttribute("data-linked", "true");
+    expect(exampleRow).toHaveAttribute("data-linked", "true");
+
+    fireEvent.mouseLeave(exampleRow);
+    expect(geoRow).not.toHaveAttribute("data-linked");
+
+    fireEvent.mouseEnter(geoRow);
+    expect(exampleRow).toHaveAttribute("data-linked", "true");
+  });
 });
