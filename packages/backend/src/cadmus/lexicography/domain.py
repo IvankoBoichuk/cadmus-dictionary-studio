@@ -1,7 +1,7 @@
 """Lexicography domain objects and invariants (BH-54: manual lexeme selection)."""
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -788,6 +788,24 @@ def _walk_schema_nodes(nodes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     return flattened
 
 
+def _iter_schema_nodes_with_chain(
+    nodes: Sequence[dict[str, Any]], prefix: tuple[str, ...] = ()
+) -> Iterator[tuple[tuple[str, ...], dict[str, Any]]]:
+    """Depth-first walk yielding ``(chain, node)``, where ``chain`` is the
+    node's ``name`` appended to its ancestors' names
+    (``("senses", "illustrations", "text")``).
+
+    Unlike :func:`_walk_schema_nodes` this keeps the ancestry, so a required
+    *nested* node can be matched against fully-qualified
+    ``EntryField.field_path`` values instead of by bare node name.
+    """
+    for node in nodes:
+        name = node.get("name")
+        chain = (*prefix, name) if name else prefix
+        yield chain, node
+        yield from _iter_schema_nodes_with_chain(node.get("children") or [], chain)
+
+
 _BOOLEAN_LITERALS = {"так", "ні", "true", "false", "1", "0", "yes", "no"}
 
 
@@ -850,38 +868,90 @@ def validate_field_value(node: dict[str, Any], value: str) -> str | None:
     return None
 
 
+def _required_node_satisfied(
+    chain: tuple[str, ...],
+    node: dict[str, Any],
+    parsed_paths: Sequence[Sequence[tuple[str, int | None]]],
+) -> bool:
+    """Whether a ``required`` schema node at ``chain`` is populated.
+
+    Checked *per parent instance*: for every occurrence of the node's parent
+    that the entry actually fills (``senses[0].illustrations[1]``), the node
+    itself must be filled too. A node whose parent sections are wholly absent
+    from the entry is vacuously satisfied -- an optional ``group`` you never
+    used cannot block completion, even when it has a required child.
+    """
+    depth = len(chain) - 1
+    parent_names = chain[:depth]
+    leaf_name = chain[-1]
+    # A plain leaf is filled by a field sitting exactly on it; a group or a
+    # repeatable node is filled by any field at or below it.
+    want_exact_leaf = not node.get("children") and not node.get("repeatable")
+
+    instances: set[tuple[tuple[str, int | None], ...]] = set()
+    for segments in parsed_paths:
+        if len(segments) <= depth:
+            continue
+        if tuple(name for name, _ in segments[:depth]) == parent_names:
+            instances.add(tuple(segments[:depth]))
+    if depth == 0:
+        instances = {()}
+    if not instances:
+        return True
+
+    for instance in instances:
+        span = len(instance)
+        filled = False
+        for segments in parsed_paths:
+            if tuple(segments[:span]) != instance:
+                continue
+            rest = segments[span:]
+            if not rest or rest[0][0] != leaf_name:
+                continue
+            if want_exact_leaf and len(rest) != 1:
+                continue
+            filled = True
+            break
+        if not filled:
+            return False
+    return True
+
+
 def validate_entry_against_schema(
     entry: DictionaryEntry,
     fields: Sequence[EntryField],
     schema: ArticleSchema,
 ) -> dict[str, str]:
-    """Check every required, non-repeatable node in ``schema`` has at least
-    one matching field, keyed by ``field_path`` (BH-148 AC: "each field has
-    a type and provenance" / "the result passes canonical schema
-    validation"). Returns an empty dict when the entry is valid.
+    """Return field-path-keyed errors for a BH-148 entry that does not yet
+    satisfy its ``schema``. An empty dict means the entry may be completed.
+
+    Two checks: (1) every ``required`` node is populated -- for a *nested*
+    required node this is verified per parent instance the entry actually
+    fills, so ``senses[0].illustrations[0].text`` being required never forces
+    an entry that has no illustrations to invent one; (2) every field value
+    fits its node's typed constraints.
 
     ``entry`` is accepted for symmetry with the rest of the module's
-    validation helpers and for future entry-level checks; it plays no part
-    in today's per-field check.
+    validation helpers and for future entry-level checks; today only its
+    ``fields`` matter.
     """
     del entry
     errors: dict[str, str] = {}
-    present_paths = {field.field_path for field in fields}
-    for node in _walk_schema_nodes(schema.definition.get("fields", [])):
-        if not node.get("required"):
+    parsed_paths: list[list[tuple[str, int | None]]] = []
+    for field in fields:
+        segments = _parse_field_path(field.field_path)
+        if segments is not None:
+            parsed_paths.append(segments)
+
+    for chain, node in _iter_schema_nodes_with_chain(
+        schema.definition.get("fields", [])
+    ):
+        if not node.get("required") or not chain or not chain[-1]:
             continue
-        path = node.get("name")
-        if not path:
+        if _required_node_satisfied(chain, node, parsed_paths):
             continue
-        if node.get("repeatable"):
-            has_match = any(
-                candidate == path or candidate.startswith(f"{path}[")
-                for candidate in present_paths
-            )
-        else:
-            has_match = path in present_paths
-        if not has_match:
-            errors[str(path)] = f"Обов'язкове поле «{path}» не заповнене."
+        key = ".".join(chain)
+        errors[key] = f"Обов'язкове поле «{key}» не заповнене."
 
     for field in fields:
         field_node = resolve_schema_node(schema.definition, field.field_path)

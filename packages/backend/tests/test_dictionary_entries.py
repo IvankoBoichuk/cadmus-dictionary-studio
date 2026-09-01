@@ -511,6 +511,117 @@ def test_validate_entry_against_schema_reports_missing_required_field() -> None:
     assert "meaning" in errors
 
 
+def _nested_schema() -> ArticleSchema:
+    """A schema shaped like the real ones: a required leaf (``text``) nested
+    under two repeatable groups (``senses`` -> ``illustrations``)."""
+    return ArticleSchema(
+        id=uuid4(),
+        dictionary_id=uuid4(),
+        version=1,
+        status=SchemaGenerationStatus.READY,
+        source_description="",
+        definition={
+            "fields": [
+                {"name": "headword", "role": "headword", "required": True},
+                {
+                    "name": "senses",
+                    "role": "meaning",
+                    "required": True,
+                    "repeatable": True,
+                    "children": [
+                        {"name": "definition", "role": "meaning"},
+                        {
+                            "name": "illustrations",
+                            "role": "example",
+                            "repeatable": True,
+                            "children": [
+                                {"name": "text", "role": "example", "required": True},
+                                {"name": "locality", "role": "geographic_label"},
+                            ],
+                        },
+                    ],
+                },
+            ]
+        },
+        created_at=NOW,
+        created_by=uuid4(),
+    )
+
+
+def test_validate_entry_against_schema_matches_nested_required_field_by_full_path() -> (
+    None
+):
+    """Regression: a required field nested under repeatable groups used to be
+    matched by bare node name and could never be found, so no entry against
+    such a schema could ever be completed."""
+    schema = _nested_schema()
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(entry.id, uuid4(), "headword", EntryFieldRole.HEADWORD),
+        _field(entry.id, uuid4(), "senses[0].definition", EntryFieldRole.MEANING),
+        _field(
+            entry.id,
+            uuid4(),
+            "senses[0].illustrations[0].text",
+            EntryFieldRole.EXAMPLE,
+        ),
+    ]
+
+    assert validate_entry_against_schema(entry, fields, schema) == {}
+
+
+def test_validate_entry_against_schema_skips_nested_required_when_parent_absent() -> (
+    None
+):
+    """An optional group the entry never uses does not block completion, even
+    though it carries a required child."""
+    schema = _nested_schema()
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(entry.id, uuid4(), "headword", EntryFieldRole.HEADWORD),
+        _field(entry.id, uuid4(), "senses[0].definition", EntryFieldRole.MEANING),
+    ]
+
+    assert validate_entry_against_schema(entry, fields, schema) == {}
+
+
+def test_validate_entry_against_schema_flags_nested_required_once_instance_exists() -> (
+    None
+):
+    """Once an ``illustrations`` instance is populated, its required ``text``
+    must be filled; the error is keyed by the full path."""
+    schema = _nested_schema()
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(entry.id, uuid4(), "headword", EntryFieldRole.HEADWORD),
+        _field(entry.id, uuid4(), "senses[0].definition", EntryFieldRole.MEANING),
+        _field(
+            entry.id,
+            uuid4(),
+            "senses[0].illustrations[0].locality",
+            EntryFieldRole.GEOGRAPHIC_LABEL,
+        ),
+    ]
+
+    errors = validate_entry_against_schema(entry, fields, schema)
+
+    assert "senses.illustrations.text" in errors
+
+
+def test_validate_entry_against_schema_flags_missing_required_repeatable_group() -> (
+    None
+):
+    """A required repeatable group (``senses``) still errors when the entry has
+    no instance of it at all."""
+    schema = _nested_schema()
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [_field(entry.id, uuid4(), "headword", EntryFieldRole.HEADWORD)]
+
+    errors = validate_entry_against_schema(entry, fields, schema)
+
+    assert "senses" in errors
+
+
 def _typed_schema(node_type: str, options: list[str] | None = None) -> ArticleSchema:
     node: dict[str, object] = {"name": "attr", "role": "other", "type": node_type}
     if options is not None:
