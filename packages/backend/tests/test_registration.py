@@ -10,6 +10,7 @@ from cadmus.identity import (
     ActivationFailure,
     AuthenticatedSession,
     DuplicateEmailError,
+    EmailChangeToken,
     GoogleIdentity,
     PasswordResetToken,
     RegistrationService,
@@ -70,6 +71,26 @@ class MemoryIdentityRepository:
     def delete_sessions_for_user(self, user_id: UUID) -> None:
         raise AssertionError("not used by registration")
 
+    def get_session_by_id(self, session_id: UUID) -> AuthenticatedSession | None:
+        raise AssertionError("not used by registration")
+
+    def get_sessions_for_user(self, user_id: UUID) -> list[AuthenticatedSession]:
+        raise AssertionError("not used by registration")
+
+    def get_email_change_token(self, token_digest: str) -> EmailChangeToken | None:
+        return None
+
+    def add_email_change_token(self, token: EmailChangeToken) -> None:
+        raise AssertionError("not used by registration")
+
+    def delete_session_by_id(self, session_id: UUID) -> None:
+        raise AssertionError("not used by registration")
+
+    def delete_other_sessions_for_user(
+        self, user_id: UUID, keep_token_digest: str
+    ) -> None:
+        raise AssertionError("not used by registration")
+
 
 class MemoryUnitOfWork:
     def __init__(self, repository: MemoryIdentityRepository) -> None:
@@ -117,12 +138,18 @@ class RecordingEmailSender:
     def send_password_reset(self, recipient: str, reset_url: str) -> None:
         raise AssertionError("not used by registration")
 
+    def send_email_change(self, recipient: str, confirm_url: str) -> None:
+        raise AssertionError("not used by registration")
+
 
 class FailingEmailSender:
     def send_verification(self, recipient: str, verification_url: str) -> None:
         raise ConnectionError("SMTP is unavailable")
 
     def send_password_reset(self, recipient: str, reset_url: str) -> None:
+        raise ConnectionError("SMTP is unavailable")
+
+    def send_email_change(self, recipient: str, confirm_url: str) -> None:
         raise ConnectionError("SMTP is unavailable")
 
 

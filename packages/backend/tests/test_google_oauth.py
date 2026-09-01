@@ -9,6 +9,7 @@ from cadmus.identity import (
     AccountStatus,
     AuthenticatedSession,
     AuthenticationService,
+    EmailChangeToken,
     GoogleAuthenticationError,
     GoogleAuthenticationService,
     GoogleAuthFailure,
@@ -72,6 +73,26 @@ class MemoryIdentityRepository:
             if session.user_id == user_id
         ]:
             self.sessions.pop(token_digest, None)
+
+    def get_session_by_id(self, session_id: UUID) -> AuthenticatedSession | None:
+        raise AssertionError("not used by google oauth")
+
+    def get_sessions_for_user(self, user_id: UUID) -> list[AuthenticatedSession]:
+        raise AssertionError("not used by google oauth")
+
+    def get_email_change_token(self, token_digest: str) -> EmailChangeToken | None:
+        return None
+
+    def add_email_change_token(self, token: EmailChangeToken) -> None:
+        raise AssertionError("not used by google oauth")
+
+    def delete_session_by_id(self, session_id: UUID) -> None:
+        raise AssertionError("not used by google oauth")
+
+    def delete_other_sessions_for_user(
+        self, user_id: UUID, keep_token_digest: str
+    ) -> None:
+        raise AssertionError("not used by google oauth")
 
 
 class MemoryUnitOfWork:

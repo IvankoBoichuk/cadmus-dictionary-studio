@@ -1,23 +1,31 @@
 """Identity domain and registration use cases."""
 
 from cadmus.identity.application import (
+    AccountService,
     ActivationError,
     ActivationFailure,
     AuthenticationError,
     AuthenticationFailure,
     AuthenticationService,
     DuplicateEmailError,
+    EmailChangeError,
+    EmailChangeFailure,
+    EmailChangeValidationError,
     LoginResult,
     PasswordResetError,
     PasswordResetFailure,
     PasswordResetService,
     PasswordResetValidationError,
+    ProfileValidationError,
     RegistrationService,
     RegistrationValidationError,
+    SessionNotFoundError,
+    SessionView,
 )
 from cadmus.identity.domain import (
     AccountStatus,
     AuthenticatedSession,
+    EmailChangeToken,
     GoogleIdentity,
     PasswordResetToken,
     User,
@@ -44,6 +52,7 @@ from cadmus.identity.ports import (
 )
 
 __all__ = [
+    "AccountService",
     "AccountStatus",
     "ActivationError",
     "ActivationFailure",
@@ -52,6 +61,10 @@ __all__ = [
     "AuthenticationFailure",
     "AuthenticationService",
     "DuplicateEmailError",
+    "EmailChangeError",
+    "EmailChangeFailure",
+    "EmailChangeToken",
+    "EmailChangeValidationError",
     "EmailSender",
     "GoogleAuthFailure",
     "GoogleAuthenticationError",
@@ -72,9 +85,12 @@ __all__ = [
     "PasswordResetToken",
     "PasswordResetTokenProvider",
     "PasswordResetValidationError",
+    "ProfileValidationError",
     "RegistrationService",
     "RegistrationValidationError",
+    "SessionNotFoundError",
     "SessionTokenProvider",
+    "SessionView",
     "User",
     "VerificationToken",
     "VerificationTokenProvider",

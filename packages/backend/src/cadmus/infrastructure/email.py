@@ -18,6 +18,17 @@ class SmtpEmailSender:
         self._use_tls = settings.smtp_use_tls
         self._timeout = settings.smtp_timeout_seconds
 
+    def _deliver(self, message: EmailMessage) -> None:
+        with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
+            if self._use_tls:
+                smtp.starttls()
+            if self._username is not None and self._password is not None:
+                smtp.login(
+                    self._username,
+                    self._password.get_secret_value(),
+                )
+            smtp.send_message(message)
+
     def send_verification(self, recipient: str, verification_url: str) -> None:
         message = EmailMessage()
         message["Subject"] = "Підтвердіть email для Cadmus"
@@ -29,15 +40,21 @@ class SmtpEmailSender:
             "Посилання одноразове та має обмежений термін дії."
         )
 
-        with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
-            if self._use_tls:
-                smtp.starttls()
-            if self._username is not None and self._password is not None:
-                smtp.login(
-                    self._username,
-                    self._password.get_secret_value(),
-                )
-            smtp.send_message(message)
+        self._deliver(message)
+
+    def send_email_change(self, recipient: str, confirm_url: str) -> None:
+        message = EmailMessage()
+        message["Subject"] = "Підтвердження нової email-адреси Cadmus"
+        message["From"] = self._sender
+        message["To"] = recipient
+        message.set_content(
+            "Ви запросили зміну email-адреси акаунта Cadmus на цю. Щоб "
+            "підтвердити, перейдіть за посиланням:\n\n"
+            f"{confirm_url}\n\n"
+            "Посилання одноразове та має обмежений термін дії. Якщо ви не "
+            "надсилали цей запит, просто ігноруйте цей лист."
+        )
+        self._deliver(message)
 
     def send_password_reset(self, recipient: str, reset_url: str) -> None:
         message = EmailMessage()
@@ -51,12 +68,4 @@ class SmtpEmailSender:
             "надсилали цей запит, просто ігноруйте цей лист."
         )
 
-        with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as smtp:
-            if self._use_tls:
-                smtp.starttls()
-            if self._username is not None and self._password is not None:
-                smtp.login(
-                    self._username,
-                    self._password.get_secret_value(),
-                )
-            smtp.send_message(message)
+        self._deliver(message)

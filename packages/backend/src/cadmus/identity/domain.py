@@ -24,6 +24,7 @@ class User:
     created_at: datetime
     activated_at: datetime | None = None
     telegram_chat_id: str | None = None
+    name: str | None = None
 
     def activate(self, activated_at: datetime) -> None:
         """Activate a pending user without weakening an already active account."""
@@ -70,6 +71,25 @@ class PasswordResetToken:
 
 
 @dataclass
+class EmailChangeToken:
+    """A single-use, expiring credential that confirms a new email address."""
+
+    id: UUID
+    user_id: UUID
+    new_email: str
+    token_digest: str
+    expires_at: datetime
+    created_at: datetime
+    consumed_at: datetime | None = None
+
+    def consume(self, consumed_at: datetime) -> None:
+        """Mark this token as irreversibly used."""
+        if self.consumed_at is not None:
+            raise ValueError("email change token has already been consumed")
+        self.consumed_at = consumed_at
+
+
+@dataclass
 class AuthenticatedSession:
     """An expiring server-side session identified by a protected token digest."""
 
@@ -78,6 +98,7 @@ class AuthenticatedSession:
     token_digest: str
     expires_at: datetime
     created_at: datetime
+    user_agent: str | None = None
 
 
 @dataclass

@@ -6,7 +6,9 @@ import { DictionaryLayout } from "./components/DictionaryLayout";
 import { DictionarySettingsLayout } from "./components/DictionarySettingsLayout";
 import { PublicLayout } from "./components/PublicLayout";
 import { AbbreviationsPage } from "./pages/AbbreviationsPage";
+import { AccountPage } from "./pages/AccountPage";
 import { ArticleSchemaPage } from "./pages/ArticleSchemaPage";
+import { ConfirmEmailChangePage } from "./pages/ConfirmEmailChangePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DictionariesList } from "./pages/DictionariesList";
 import { DictionaryMetadataPage } from "./pages/DictionaryMetadataPage";
@@ -39,10 +41,15 @@ export function App() {
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route
+              path="/confirm-email-change"
+              element={<ConfirmEmailChangePage />}
+            />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/account" element={<AccountPage />} />
             <Route path="/dictionaries" element={<DictionariesList />} />
             <Route path="/dictionaries/new" element={<NewDictionaryPage />} />
             <Route

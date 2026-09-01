@@ -8,6 +8,7 @@ import pytest
 from cadmus.identity import (
     AccountStatus,
     AuthenticatedSession,
+    EmailChangeToken,
     GoogleIdentity,
     PasswordResetError,
     PasswordResetFailure,
@@ -71,6 +72,26 @@ class MemoryIdentityRepository:
         ]:
             self.sessions.pop(token_digest, None)
 
+    def get_session_by_id(self, session_id: UUID) -> AuthenticatedSession | None:
+        raise AssertionError("not used by password reset")
+
+    def get_sessions_for_user(self, user_id: UUID) -> list[AuthenticatedSession]:
+        raise AssertionError("not used by password reset")
+
+    def get_email_change_token(self, token_digest: str) -> EmailChangeToken | None:
+        return None
+
+    def add_email_change_token(self, token: EmailChangeToken) -> None:
+        raise AssertionError("not used by password reset")
+
+    def delete_session_by_id(self, session_id: UUID) -> None:
+        raise AssertionError("not used by password reset")
+
+    def delete_other_sessions_for_user(
+        self, user_id: UUID, keep_token_digest: str
+    ) -> None:
+        raise AssertionError("not used by password reset")
+
 
 class MemoryUnitOfWork:
     def __init__(self, repository: MemoryIdentityRepository) -> None:
@@ -117,6 +138,9 @@ class RecordingEmailSender:
 
     def send_password_reset(self, recipient: str, reset_url: str) -> None:
         self.deliveries.append((recipient, reset_url))
+
+    def send_email_change(self, recipient: str, confirm_url: str) -> None:
+        raise AssertionError("not used by password reset")
 
 
 def active_user(email: str = "researcher@example.com") -> User:

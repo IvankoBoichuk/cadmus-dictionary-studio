@@ -47,6 +47,7 @@ class StubGoogleAuthenticationService:
         expected_state: str,
         expected_nonce: str,
         code_verifier: str,
+        user_agent: str | None = None,
     ) -> LoginResult:
         self.complete_calls.append(
             {

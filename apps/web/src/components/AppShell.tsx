@@ -1,4 +1,4 @@
-import { LayoutDashboard, Library, Menu, X } from "lucide-react";
+import { LayoutDashboard, Library, Menu, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet } from "react-router-dom";
 
@@ -40,6 +40,7 @@ export function AppShell() {
       </a>
       <Sidebar
         email={session.user.email}
+        name={session.user.name ?? null}
         navOpen={navOpen}
         onToggleNav={() => setNavOpen((open) => !open)}
         onCloseNav={() => setNavOpen(false)}
@@ -56,11 +57,13 @@ export function AppShell() {
 
 function Sidebar({
   email,
+  name,
   navOpen,
   onToggleNav,
   onCloseNav,
 }: {
   email: string;
+  name: string | null;
   navOpen: boolean;
   onToggleNav: () => void;
   onCloseNav: () => void;
@@ -132,12 +135,31 @@ function Sidebar({
           ))}
         </nav>
         <div className="mt-6 border-t pt-4 lg:mt-auto">
-          <p
-            className="mb-2 truncate text-[0.85rem] text-muted-foreground"
+          <NavLink
+            to="/account"
+            onClick={onCloseNav}
             title={email}
+            className={({ isActive }) =>
+              cn(
+                "mb-2 flex min-h-[2.75rem] items-center gap-3 rounded-md px-3 no-underline transition-[background-color,color] duration-[120ms] ease-out",
+                isActive
+                  ? "bg-secondary text-secondary-foreground"
+                  : "text-foreground hover:bg-accent",
+              )
+            }
           >
-            {email}
-          </p>
+            <UserRound aria-hidden="true" className="size-[1.15rem] shrink-0" />
+            <span className="min-w-0">
+              <span className="block truncate text-[0.9rem] font-[650]">
+                {name ?? email}
+              </span>
+              {name && (
+                <span className="block truncate text-[0.8rem] font-normal text-muted-foreground">
+                  {email}
+                </span>
+              )}
+            </span>
+          </NavLink>
           <Button
             type="button"
             variant="secondary"

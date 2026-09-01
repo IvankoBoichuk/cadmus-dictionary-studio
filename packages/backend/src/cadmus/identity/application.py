@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from urllib.parse import urlencode
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from cadmus.identity.domain import (
     AccountStatus,
     AuthenticatedSession,
+    EmailChangeToken,
     PasswordResetToken,
     User,
     VerificationToken,
@@ -25,6 +26,7 @@ from cadmus.identity.ports import (
 )
 
 MINIMUM_PASSWORD_LENGTH = 12
+MAXIMUM_NAME_LENGTH = 200
 EMAIL_PATTERN = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
@@ -125,7 +127,9 @@ class AuthenticationService:
         self._session_lifetime = session_lifetime
         self._clock = clock
 
-    def login(self, email: str, password: str) -> LoginResult:
+    def login(
+        self, email: str, password: str, user_agent: str | None = None
+    ) -> LoginResult:
         """Create a session only for valid credentials on an active account."""
         normalized_email = email.strip().casefold()
 
@@ -140,9 +144,9 @@ class AuthenticationService:
             if user.status is not AccountStatus.ACTIVE:
                 raise AuthenticationError(AuthenticationFailure.UNVERIFIED_ACCOUNT)
 
-        return self.issue_session(user)
+        return self.issue_session(user, user_agent=user_agent)
 
-    def issue_session(self, user: User) -> LoginResult:
+    def issue_session(self, user: User, user_agent: str | None = None) -> LoginResult:
         """Create a new server-side session for an already-authenticated user."""
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
@@ -153,6 +157,7 @@ class AuthenticationService:
                 token_digest=token_digest,
                 created_at=now,
                 expires_at=now + self._session_lifetime,
+                user_agent=(user_agent or None),
             )
             unit_of_work.users.add_session(session)
             unit_of_work.commit()
@@ -355,6 +360,229 @@ class PasswordResetService:
             unit_of_work.commit()
 
 
+class ProfileValidationError(ValueError):
+    """Field-addressable profile input errors."""
+
+    def __init__(self, errors: Mapping[str, str]) -> None:
+        super().__init__("profile data is invalid")
+        self.errors = dict(errors)
+
+
+class EmailChangeValidationError(ValueError):
+    """Field-addressable email-change request errors."""
+
+    def __init__(self, errors: Mapping[str, str]) -> None:
+        super().__init__("email change data is invalid")
+        self.errors = dict(errors)
+
+
+class EmailChangeFailure(StrEnum):
+    """Safe public reasons why confirming an email change failed."""
+
+    INVALID = "invalid"
+    EXPIRED = "expired"
+    USED = "used"
+
+
+class EmailChangeError(ValueError):
+    """A controlled email-change-token failure."""
+
+    def __init__(self, reason: EmailChangeFailure) -> None:
+        super().__init__(reason.value)
+        self.reason = reason
+
+
+class SessionNotFoundError(LookupError):
+    """Raised when a session to revoke is missing or owned by another user."""
+
+
+@dataclass(frozen=True)
+class SessionView:
+    """A user-facing summary of one active server-side session."""
+
+    id: UUID
+    created_at: datetime
+    expires_at: datetime
+    user_agent: str | None
+    is_current: bool
+
+
+class AccountService:
+    """Self-service profile, credential, and session management for a signed-in user."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: IdentityUnitOfWorkFactory,
+        password_hasher: PasswordHasher,
+        session_token_provider: SessionTokenProvider,
+        email_change_token_provider: VerificationTokenProvider,
+        email_sender: EmailSender,
+        public_web_url: str,
+        token_lifetime: timedelta = timedelta(hours=24),
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._password_hasher = password_hasher
+        self._session_token_provider = session_token_provider
+        self._email_change_token_provider = email_change_token_provider
+        self._email_sender = email_sender
+        self._public_web_url = public_web_url.rstrip("/")
+        self._token_lifetime = token_lifetime
+        self._clock = clock
+
+    def update_profile(self, user_id: UUID, name: str | None) -> User:
+        """Set or clear the user's display name."""
+        cleaned = (name or "").strip()
+        if len(cleaned) > MAXIMUM_NAME_LENGTH:
+            raise ProfileValidationError(
+                {
+                    "name": (
+                        f"Ім'я не може бути довшим за {MAXIMUM_NAME_LENGTH} символів."
+                    )
+                }
+            )
+        with self._unit_of_work_factory() as unit_of_work:
+            user = unit_of_work.users.get_user(user_id)
+            if user is None:
+                raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
+            user.name = cleaned or None
+            unit_of_work.commit()
+        return user
+
+    def change_password(
+        self,
+        user_id: UUID,
+        current_raw_token: str,
+        current_password: str,
+        new_password: str,
+        new_password_confirmation: str,
+    ) -> None:
+        """Verify the current password, set a new one, drop every other session."""
+        errors = _validate_new_password(new_password, new_password_confirmation)
+        if errors:
+            raise PasswordResetValidationError(errors)
+
+        keep_digest = self._session_token_provider.digest(current_raw_token)
+        with self._unit_of_work_factory() as unit_of_work:
+            user = unit_of_work.users.get_user(user_id)
+            if user is None:
+                raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
+            if not self._password_hasher.verify(current_password, user.password_hash):
+                raise AuthenticationError(AuthenticationFailure.INVALID_CREDENTIALS)
+            user.password_hash = self._password_hasher.hash(new_password)
+            unit_of_work.users.delete_other_sessions_for_user(user_id, keep_digest)
+            unit_of_work.commit()
+
+    def request_email_change(
+        self, user_id: UUID, new_email: str, current_password: str
+    ) -> None:
+        """Verify the password and mail a one-time confirmation link to `new_email`."""
+        normalized_email = new_email.strip().casefold()
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            user = unit_of_work.users.get_user(user_id)
+            if user is None:
+                raise AuthenticationError(AuthenticationFailure.INVALID_SESSION)
+            if not self._password_hasher.verify(current_password, user.password_hash):
+                raise AuthenticationError(AuthenticationFailure.INVALID_CREDENTIALS)
+            if not _email_is_valid(normalized_email):
+                raise EmailChangeValidationError(
+                    {"new_email": "Введіть коректну email-адресу."}
+                )
+            if normalized_email == user.email:
+                raise EmailChangeValidationError(
+                    {"new_email": "Це вже ваша поточна адреса."}
+                )
+            if unit_of_work.users.get_user_by_email(normalized_email) is not None:
+                raise EmailChangeValidationError(
+                    {"new_email": "Ця email-адреса вже зареєстрована."}
+                )
+            raw_token, token_digest = self._email_change_token_provider.issue()
+            token = EmailChangeToken(
+                id=uuid4(),
+                user_id=user.id,
+                new_email=normalized_email,
+                token_digest=token_digest,
+                created_at=now,
+                expires_at=now + self._token_lifetime,
+            )
+            # A URL fragment keeps the credential out of web-server access logs; the
+            # browser forwards it to the API in a POST body.
+            confirm_query = urlencode({"token": raw_token})
+            confirm_url = f"{self._public_web_url}/confirm-email-change#{confirm_query}"
+            unit_of_work.users.add_email_change_token(token)
+            self._email_sender.send_email_change(normalized_email, confirm_url)
+            unit_of_work.commit()
+
+    def confirm_email_change(self, raw_token: str) -> None:
+        """Consume a valid token, move the account to its new email, end sessions."""
+        token_digest = self._email_change_token_provider.digest(raw_token)
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            token = unit_of_work.users.get_email_change_token(token_digest)
+            if token is None:
+                raise EmailChangeError(EmailChangeFailure.INVALID)
+            if token.consumed_at is not None:
+                raise EmailChangeError(EmailChangeFailure.USED)
+            if token.expires_at <= now:
+                raise EmailChangeError(EmailChangeFailure.EXPIRED)
+            user = unit_of_work.users.get_user(token.user_id)
+            if user is None:
+                raise EmailChangeError(EmailChangeFailure.INVALID)
+            existing = unit_of_work.users.get_user_by_email(token.new_email)
+            if existing is not None and existing.id != user.id:
+                raise EmailChangeError(EmailChangeFailure.INVALID)
+            user.email = token.new_email
+            token.consume(now)
+            unit_of_work.users.delete_sessions_for_user(user.id)
+            unit_of_work.commit()
+
+    def list_sessions(self, user_id: UUID, current_raw_token: str) -> list[SessionView]:
+        """Return the user's unexpired sessions, newest first."""
+        current_digest = self._session_token_provider.digest(current_raw_token)
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            sessions = unit_of_work.users.get_sessions_for_user(user_id)
+        return [
+            SessionView(
+                id=session.id,
+                created_at=session.created_at,
+                expires_at=session.expires_at,
+                user_agent=session.user_agent,
+                is_current=session.token_digest == current_digest,
+            )
+            for session in sorted(
+                (s for s in sessions if s.expires_at > now),
+                key=lambda s: s.created_at,
+                reverse=True,
+            )
+        ]
+
+    def revoke_session(self, user_id: UUID, session_id: UUID) -> None:
+        """Delete one of the user's own sessions."""
+        with self._unit_of_work_factory() as unit_of_work:
+            session = unit_of_work.users.get_session_by_id(session_id)
+            if session is None or session.user_id != user_id:
+                raise SessionNotFoundError
+            unit_of_work.users.delete_session_by_id(session_id)
+            unit_of_work.commit()
+
+    def revoke_other_sessions(self, user_id: UUID, current_raw_token: str) -> int:
+        """Delete every session for the user except the caller's own."""
+        current_digest = self._session_token_provider.digest(current_raw_token)
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            sessions = unit_of_work.users.get_sessions_for_user(user_id)
+            revoked = sum(
+                1
+                for s in sessions
+                if s.token_digest != current_digest and s.expires_at > now
+            )
+            unit_of_work.users.delete_other_sessions_for_user(user_id, current_digest)
+            unit_of_work.commit()
+        return revoked
+
+
 def _validate_new_password(password: str, password_confirmation: str) -> dict[str, str]:
     errors: dict[str, str] = {}
     if len(password) < MINIMUM_PASSWORD_LENGTH:
@@ -366,20 +594,24 @@ def _validate_new_password(password: str, password_confirmation: str) -> dict[st
     return errors
 
 
+def _email_is_valid(email: str) -> bool:
+    local_part = email.partition("@")[0]
+    return not (
+        len(email) > 254
+        or EMAIL_PATTERN.fullmatch(email) is None
+        or local_part.startswith(".")
+        or local_part.endswith(".")
+        or ".." in local_part
+    )
+
+
 def _validate_registration(
     email: str,
     password: str,
     password_confirmation: str,
 ) -> dict[str, str]:
     errors: dict[str, str] = {}
-    local_part = email.partition("@")[0]
-    if (
-        len(email) > 254
-        or EMAIL_PATTERN.fullmatch(email) is None
-        or local_part.startswith(".")
-        or local_part.endswith(".")
-        or ".." in local_part
-    ):
+    if not _email_is_valid(email):
         errors["email"] = "Введіть коректну email-адресу."
     errors.update(_validate_new_password(password, password_confirmation))
     return errors

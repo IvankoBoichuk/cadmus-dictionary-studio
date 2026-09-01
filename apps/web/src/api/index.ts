@@ -43,6 +43,51 @@ type ResetPasswordResponse =
 type PasswordResetErrorResponse =
   ResetPasswordOperation["responses"][400]["content"]["application/json"];
 
+type GetAccountOperation = paths["/auth/account"]["get"];
+type AccountResponse =
+  GetAccountOperation["responses"][200]["content"]["application/json"];
+type UpdateProfileOperation = paths["/auth/account"]["patch"];
+type UpdateProfileRequest =
+  UpdateProfileOperation["requestBody"]["content"]["application/json"];
+type UpdateProfileErrorResponse =
+  | UpdateProfileOperation["responses"][401]["content"]["application/json"]
+  | UpdateProfileOperation["responses"][422]["content"]["application/json"];
+type ChangePasswordOperation = paths["/auth/account/change-password"]["post"];
+type ChangePasswordRequest =
+  ChangePasswordOperation["requestBody"]["content"]["application/json"];
+type ChangePasswordResponse =
+  ChangePasswordOperation["responses"][200]["content"]["application/json"];
+type ChangePasswordErrorResponse =
+  | ChangePasswordOperation["responses"][401]["content"]["application/json"]
+  | ChangePasswordOperation["responses"][403]["content"]["application/json"]
+  | ChangePasswordOperation["responses"][422]["content"]["application/json"];
+type ChangeEmailOperation = paths["/auth/account/change-email"]["post"];
+type ChangeEmailRequest =
+  ChangeEmailOperation["requestBody"]["content"]["application/json"];
+type ChangeEmailResponse =
+  ChangeEmailOperation["responses"][200]["content"]["application/json"];
+type ChangeEmailErrorResponse =
+  | ChangeEmailOperation["responses"][401]["content"]["application/json"]
+  | ChangeEmailOperation["responses"][403]["content"]["application/json"]
+  | ChangeEmailOperation["responses"][422]["content"]["application/json"];
+type ConfirmEmailChangeOperation = paths["/auth/confirm-email-change"]["post"];
+type ConfirmEmailChangeRequest =
+  ConfirmEmailChangeOperation["requestBody"]["content"]["application/json"];
+type ConfirmEmailChangeResponse =
+  ConfirmEmailChangeOperation["responses"][200]["content"]["application/json"];
+type ConfirmEmailChangeErrorResponse =
+  ConfirmEmailChangeOperation["responses"][400]["content"]["application/json"];
+type ListSessionsOperation = paths["/auth/sessions"]["get"];
+export type SessionListResponse =
+  ListSessionsOperation["responses"][200]["content"]["application/json"];
+export type SessionSummary = SessionListResponse["sessions"][number];
+type RevokeSessionOperation = paths["/auth/sessions/{session_id}"]["delete"];
+type RevokeSessionErrorResponse =
+  RevokeSessionOperation["responses"][404]["content"]["application/json"];
+type RevokeOtherSessionsOperation = paths["/auth/sessions/revoke-others"]["post"];
+export type RevokeOtherSessionsResponse =
+  RevokeOtherSessionsOperation["responses"][200]["content"]["application/json"];
+
 export type LegalStatus = components["schemas"]["LegalStatus"];
 export type ContributorRole = components["schemas"]["ContributorRole"];
 export type InspectionStatus = components["schemas"]["InspectionStatus"];
@@ -508,6 +553,10 @@ async function del<Failure>(
 }
 
 /** A dynamic resource path is still a real endpoint template; only the ID varies. */
+function authSessionPath(sessionId: string): keyof paths {
+  return `/auth/sessions/${sessionId}` as keyof paths;
+}
+
 function dictionaryPath(dictionaryId: string): keyof paths {
   return `/dictionaries/${dictionaryId}` as keyof paths;
 }
@@ -848,6 +897,80 @@ export const API = {
         ResetPasswordResponse,
         PasswordResetErrorResponse | FieldErrorsResponse | ValidationErrorResponse
       >("/auth/reset-password", request, options);
+    },
+
+    getAccount(options?: RequestOptions): Promise<AccountResponse> {
+      return get<AccountResponse, AuthenticationErrorResponse>(
+        "/auth/account",
+        options,
+      );
+    },
+
+    updateProfile(
+      request: UpdateProfileRequest,
+      options?: RequestOptions,
+    ): Promise<AccountResponse> {
+      return patch<
+        UpdateProfileRequest,
+        AccountResponse,
+        UpdateProfileErrorResponse | ValidationErrorResponse
+      >("/auth/account", request, options);
+    },
+
+    changePassword(
+      request: ChangePasswordRequest,
+      options?: RequestOptions,
+    ): Promise<ChangePasswordResponse> {
+      return post<
+        ChangePasswordRequest,
+        ChangePasswordResponse,
+        ChangePasswordErrorResponse | ValidationErrorResponse
+      >("/auth/account/change-password", request, options);
+    },
+
+    changeEmail(
+      request: ChangeEmailRequest,
+      options?: RequestOptions,
+    ): Promise<ChangeEmailResponse> {
+      return post<
+        ChangeEmailRequest,
+        ChangeEmailResponse,
+        ChangeEmailErrorResponse | ValidationErrorResponse
+      >("/auth/account/change-email", request, options);
+    },
+
+    confirmEmailChange(
+      request: ConfirmEmailChangeRequest,
+      options?: RequestOptions,
+    ): Promise<ConfirmEmailChangeResponse> {
+      return post<
+        ConfirmEmailChangeRequest,
+        ConfirmEmailChangeResponse,
+        ConfirmEmailChangeErrorResponse | ValidationErrorResponse
+      >("/auth/confirm-email-change", request, options);
+    },
+
+    listSessions(options?: RequestOptions): Promise<SessionListResponse> {
+      return get<SessionListResponse, AuthenticationErrorResponse>(
+        "/auth/sessions",
+        options,
+      );
+    },
+
+    revokeSession(sessionId: string, options?: RequestOptions): Promise<void> {
+      return del<RevokeSessionErrorResponse | AuthenticationErrorResponse>(
+        authSessionPath(sessionId),
+        options,
+      );
+    },
+
+    revokeOtherSessions(
+      options?: RequestOptions,
+    ): Promise<RevokeOtherSessionsResponse> {
+      return postWithoutBody<RevokeOtherSessionsResponse, AuthenticationErrorResponse>(
+        "/auth/sessions/revoke-others",
+        options,
+      );
     },
   },
 

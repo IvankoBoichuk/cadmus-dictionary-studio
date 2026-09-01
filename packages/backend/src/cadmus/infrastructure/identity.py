@@ -23,6 +23,7 @@ from cadmus.identity import (
     AccountStatus,
     AuthenticatedSession,
     DuplicateEmailError,
+    EmailChangeToken,
     GoogleIdentity,
     IdentityUnitOfWorkFactory,
     PasswordResetToken,
@@ -52,6 +53,7 @@ users = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("activated_at", DateTime(timezone=True), nullable=True),
     Column("telegram_chat_id", String(64), nullable=True),
+    Column("name", String(200), nullable=True),
     CheckConstraint(
         "status IN ('pending_verification', 'active')",
         name="account_status",
@@ -92,6 +94,24 @@ password_reset_tokens = Table(
     Column("consumed_at", DateTime(timezone=True), nullable=True),
 )
 
+email_change_tokens = Table(
+    "email_change_tokens",
+    metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True),
+    Column(
+        "user_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    ),
+    Column("new_email", String(254), nullable=False),
+    Column("token_digest", String(64), nullable=False, unique=True),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("consumed_at", DateTime(timezone=True), nullable=True),
+)
+
 authenticated_sessions = Table(
     "authenticated_sessions",
     metadata,
@@ -106,6 +126,7 @@ authenticated_sessions = Table(
     Column("token_digest", String(64), nullable=False, unique=True),
     Column("expires_at", DateTime(timezone=True), nullable=False, index=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("user_agent", String(400), nullable=True),
 )
 
 google_identities = Table(
@@ -127,6 +148,7 @@ google_identities = Table(
 identity_registry.map_imperatively(User, users)
 identity_registry.map_imperatively(VerificationToken, verification_tokens)
 identity_registry.map_imperatively(PasswordResetToken, password_reset_tokens)
+identity_registry.map_imperatively(EmailChangeToken, email_change_tokens)
 identity_registry.map_imperatively(AuthenticatedSession, authenticated_sessions)
 identity_registry.map_imperatively(GoogleIdentity, google_identities)
 
@@ -166,6 +188,26 @@ class SqlAlchemyIdentityRepository:
             )
         )
 
+    def get_session_by_id(self, session_id: UUID) -> AuthenticatedSession | None:
+        return self._session.get(AuthenticatedSession, session_id)
+
+    def get_sessions_for_user(self, user_id: UUID) -> list[AuthenticatedSession]:
+        return list(
+            self._session.scalars(
+                select(AuthenticatedSession).where(
+                    authenticated_sessions.c.user_id == user_id
+                )
+            )
+        )
+
+    def get_email_change_token(self, token_digest: str) -> EmailChangeToken | None:
+        statement = (
+            select(EmailChangeToken)
+            .where(email_change_tokens.c.token_digest == token_digest)
+            .with_for_update()
+        )
+        return self._session.scalar(statement)
+
     def get_google_identity_by_subject(self, subject: str) -> GoogleIdentity | None:
         return self._session.scalar(
             select(GoogleIdentity).where(google_identities.c.subject == subject)
@@ -185,6 +227,9 @@ class SqlAlchemyIdentityRepository:
     def add_password_reset_token(self, token: PasswordResetToken) -> None:
         self._session.add(token)
 
+    def add_email_change_token(self, token: EmailChangeToken) -> None:
+        self._session.add(token)
+
     def add_session(self, session: AuthenticatedSession) -> None:
         self._session.add(session)
 
@@ -198,10 +243,27 @@ class SqlAlchemyIdentityRepository:
             )
         )
 
+    def delete_session_by_id(self, session_id: UUID) -> None:
+        self._session.execute(
+            delete(authenticated_sessions).where(
+                authenticated_sessions.c.id == session_id
+            )
+        )
+
     def delete_sessions_for_user(self, user_id: UUID) -> None:
         self._session.execute(
             delete(authenticated_sessions).where(
                 authenticated_sessions.c.user_id == user_id
+            )
+        )
+
+    def delete_other_sessions_for_user(
+        self, user_id: UUID, keep_token_digest: str
+    ) -> None:
+        self._session.execute(
+            delete(authenticated_sessions).where(
+                authenticated_sessions.c.user_id == user_id,
+                authenticated_sessions.c.token_digest != keep_token_digest,
             )
         )
 

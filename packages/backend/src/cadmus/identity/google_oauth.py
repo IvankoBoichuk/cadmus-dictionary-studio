@@ -100,6 +100,7 @@ class GoogleAuthenticationService:
         expected_state: str,
         expected_nonce: str,
         code_verifier: str,
+        user_agent: str | None = None,
     ) -> LoginResult:
         """Verify a Google callback and resolve it to an authenticated session."""
         if not secrets.compare_digest(state, expected_state):
@@ -156,4 +157,4 @@ class GoogleAuthenticationService:
                 )
             unit_of_work.commit()
 
-        return self._authentication_service.issue_session(user)
+        return self._authentication_service.issue_session(user, user_agent=user_agent)
