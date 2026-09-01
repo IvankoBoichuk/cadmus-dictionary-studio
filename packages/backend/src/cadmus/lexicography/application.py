@@ -815,6 +815,8 @@ class SaveArticleSchemaService:
             raise LexemeAccessError(dictionary_id) from error
 
         errors = validate_schema_definition(definition)
+        if not (presentation_formula or "").strip():
+            errors["presentation_formula"] = "Додайте формулу подання статті."
         if errors:
             raise ArticleSchemaValidationError(errors)
 

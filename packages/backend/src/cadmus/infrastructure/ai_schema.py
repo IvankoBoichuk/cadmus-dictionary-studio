@@ -101,12 +101,27 @@ _GENERATE_SCHEMA_TOOL: dict[str, Any] = {
         "a node with child fields, 'abbreviation' for a value the editor "
         "picks from the dictionary's abbreviation list, or "
         "'geographic_label' for one from its settlement list. 'options' "
-        "must be an empty array unless 'type' is 'enum'."
+        "must be an empty array unless 'type' is 'enum'. Also return "
+        "'presentation_formula': a Jinja2 template that renders one entry "
+        "built on this schema as a Markdown dictionary article. Iterate "
+        "the schema's field names as variables (repeatable fields are "
+        "lists, group fields are objects with a 'value' key, leaf fields "
+        "are strings), e.g. "
+        "'**{{ headword }}** {{ part_of_speech }}. {{ meaning }}'."
     ),
     "input_schema": {
         "type": "object",
-        "properties": {"fields": {"type": "array", "items": _TOP_NODE}},
-        "required": ["fields"],
+        "properties": {
+            "fields": {"type": "array", "items": _TOP_NODE},
+            "presentation_formula": {
+                "type": "string",
+                "description": (
+                    "A Jinja2 template producing Markdown for one rendered "
+                    "entry, referencing this schema's field names."
+                ),
+            },
+        },
+        "required": ["fields", "presentation_formula"],
         "additionalProperties": False,
     },
     "strict": True,
@@ -202,13 +217,15 @@ class AnthropicAiSchemaProvider:
             raise AiSchemaProviderError(f"schema generation failed: {error}") from error
 
         tool_use = _first_tool_use(response, _GENERATE_SCHEMA_TOOL_NAME)
-        definition = tool_use.input
-        if not isinstance(definition, dict) or "fields" not in definition:
+        payload = tool_use.input
+        if not isinstance(payload, dict) or "fields" not in payload:
             raise AiSchemaProviderError("schema generation returned malformed output")
+        formula = payload.get("presentation_formula")
         return GeneratedSchema(
-            definition=definition,
+            definition={"fields": payload["fields"]},
             raw_response=response.model_dump(mode="json"),
             provider_name=f"anthropic:{self._model}",
+            presentation_formula=formula if isinstance(formula, str) else "",
         )
 
     def extract_fields(

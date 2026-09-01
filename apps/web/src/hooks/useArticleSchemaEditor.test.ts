@@ -72,15 +72,16 @@ describe("useArticleSchemaEditor", () => {
     expect(body.presentation_formula).toBe("**{{ headword }}**");
   });
 
-  it("sends null when the formula is blank", async () => {
+  it("blocks the save and flags the field when the formula is blank", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, schema()));
     vi.stubGlobal("fetch", fetchMock);
+    const onSaved = vi.fn();
 
     const { result } = renderHook(() =>
       useArticleSchemaEditor({
         dictionaryId: DICTIONARY_ID,
-        initial: schema(),
-        onSaved: vi.fn(),
+        initial: schema({ presentation_formula: "" }),
+        onSaved,
       }),
     );
 
@@ -88,9 +89,10 @@ describe("useArticleSchemaEditor", () => {
       await result.current.submit();
     });
 
-    const body = JSON.parse(
-      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(result.current.errors.presentation_formula).toBe(
+      "Додайте формулу подання статті.",
     );
-    expect(body.presentation_formula).toBeNull();
   });
 });

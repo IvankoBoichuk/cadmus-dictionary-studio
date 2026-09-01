@@ -130,6 +130,7 @@ def generate_article_schema(
             status=SchemaGenerationStatus.READY,
             source_description=description,
             definition=generated.definition,
+            presentation_formula=generated.presentation_formula.strip() or None,
             created_at=now,
             created_by=actor_uuid,
             raw_provider_response=generated.raw_response,

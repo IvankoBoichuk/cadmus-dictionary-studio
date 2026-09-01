@@ -15,8 +15,17 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+/** An `initial` that seeds only the (now-required) presentation formula --
+ * `definition.fields` stays empty, so the field-tree behaves as if starting
+ * from scratch. */
+const FORMULA_ONLY = {
+  definition: { fields: [] },
+  presentation_formula: "{{ headword }}",
+  source_description: "",
+} as unknown as ArticleSchemaResponse;
+
 function Harness({
-  initial = null,
+  initial = FORMULA_ONLY,
   onSaved = vi.fn(),
 }: {
   initial?: ArticleSchemaResponse | null;

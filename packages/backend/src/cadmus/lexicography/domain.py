@@ -734,6 +734,10 @@ class GeneratedSchema:
     definition: dict[str, Any]
     raw_response: dict[str, Any]
     provider_name: str
+    presentation_formula: str = ""
+    """The AI's proposed Jinja2 -> Markdown rendering template for an entry
+    built on this schema (BH-148). Always requested from the model; ``""``
+    only if a provider omits it."""
 
 
 @dataclass(frozen=True)
