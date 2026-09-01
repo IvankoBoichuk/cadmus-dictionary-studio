@@ -15,6 +15,46 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+/**
+ * Routes `fetch` by URL + method. The three GETs the page issues on mount
+ * (the entry, its article schemas, its reference links) are answered from
+ * `page` regardless of order; every other call is taken from `actions` in
+ * call order, then falls back to an empty `200`.
+ */
+function stubFetch(
+  page: { entry: unknown; schemas?: unknown; links?: unknown },
+  actions: Array<() => Response> = [],
+) {
+  const queue = [...actions];
+  const mock = vi.fn((input: unknown, init?: RequestInit) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    if (method === "GET") {
+      if (/\/article-schemas(\?|$)/.test(url)) {
+        return Promise.resolve(jsonResponse(200, page.schemas ?? []));
+      }
+      if (url.endsWith("/reference-links")) {
+        return Promise.resolve(jsonResponse(200, page.links ?? []));
+      }
+      if (/\/entries\/[^/]+$/.test(url)) {
+        return Promise.resolve(jsonResponse(200, page.entry));
+      }
+    }
+    const next = queue.shift();
+    return Promise.resolve(next ? next() : jsonResponse(200, []));
+  });
+  vi.stubGlobal("fetch", mock);
+  return mock;
+}
+
+function postCallBody(mock: ReturnType<typeof stubFetch>): unknown {
+  const call = mock.mock.calls.find(
+    ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+  );
+  if (!call) throw new Error("no POST request was made");
+  return JSON.parse((call[1] as RequestInit).body as string);
+}
+
 function authenticated(): AuthContextValue {
   return {
     session: { status: "authenticated", user: {} as AuthenticatedUser },
@@ -95,11 +135,7 @@ describe("EntryDetailPage", () => {
   });
 
   it("shows the headword, status, source fragment, and fields grouped by role", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, baseEntry()))
-      .mockResolvedValueOnce(jsonResponse(200, []));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry: baseEntry() });
 
     renderAt(`/entries/${ENTRY_ID}`);
 
@@ -113,12 +149,7 @@ describe("EntryDetailPage", () => {
   it("edits a field and reflects the saved value", async () => {
     const entry = baseEntry();
     const updatedField = { ...entry.fields[0], normalized_text: "нове значення" };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, []))
-      .mockResolvedValueOnce(jsonResponse(200, updatedField));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry }, [() => jsonResponse(200, updatedField)]);
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("значення");
@@ -133,13 +164,9 @@ describe("EntryDetailPage", () => {
 
   it("deletes a field after confirmation", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    const entry = baseEntry();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, []))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry: baseEntry() }, [
+      () => new Response(null, { status: 204 }),
+    ]);
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("значення");
@@ -154,17 +181,12 @@ describe("EntryDetailPage", () => {
   it("marks the entry complete on success", async () => {
     const entry = baseEntry();
     const completed = { ...entry, status: "complete" as const };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, []))
-      .mockResolvedValueOnce(jsonResponse(200, completed));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry }, [() => jsonResponse(200, completed)]);
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("слово");
 
-    fireEvent.click(screen.getByRole("button", { name: "Позначити статтю завершеною" }));
+    fireEvent.click(screen.getByRole("button", { name: "Позначити завершеною" }));
 
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("завершеною"),
@@ -173,36 +195,30 @@ describe("EntryDetailPage", () => {
   });
 
   it("surfaces validation errors when completion is rejected", async () => {
-    const entry = baseEntry();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, []))
-      .mockResolvedValueOnce(
+    stubFetch({ entry: baseEntry() }, [
+      () =>
         jsonResponse(422, { errors: { headword: "Бракує обов'язкового поля." } }),
-      );
-    vi.stubGlobal("fetch", fetchMock);
+    ]);
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("слово");
 
-    fireEvent.click(screen.getByRole("button", { name: "Позначити статтю завершеною" }));
+    fireEvent.click(screen.getByRole("button", { name: "Позначити завершеною" }));
 
     expect(await screen.findByText("Бракує обов'язкового поля.")).toBeInTheDocument();
   });
 
   it("runs extraction and reports how many fields were created", async () => {
     const entry = baseEntry({ fields: [] });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, []))
-      .mockResolvedValueOnce(jsonResponse(202, { task_id: "task-1", status: "queued" }))
-      .mockResolvedValueOnce(
-        jsonResponse(200, { task_id: "task-1", status: "succeeded", created_fields: 2 }),
-      )
-      .mockResolvedValueOnce(jsonResponse(200, entry));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry }, [
+      () => jsonResponse(202, { task_id: "task-1", status: "queued" }),
+      () =>
+        jsonResponse(200, {
+          task_id: "task-1",
+          status: "succeeded",
+          created_fields: 2,
+        }),
+    ]);
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("Полів ще немає — запустіть автоматичний розбір.");
@@ -216,11 +232,7 @@ describe("EntryDetailPage", () => {
   });
 
   it("renders a crop of the source page for each fragment", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, baseEntry()))
-      .mockResolvedValueOnce(jsonResponse(200, []));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry: baseEntry() });
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("слово");
@@ -274,16 +286,16 @@ describe("EntryDetailPage", () => {
       created_at: "2026-08-15T12:10:00Z",
       updated_at: "2026-08-15T12:10:00Z",
     };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, [schema]))
-      .mockResolvedValueOnce(jsonResponse(201, createdField));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetch({ entry, schemas: [schema] }, [
+      () => jsonResponse(201, createdField),
+    ]);
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("слово");
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "Додати поле вручну" }),
+    );
     const pathSelect = await screen.findByLabelText("Поле схеми");
     await waitFor(() =>
       expect(
@@ -299,15 +311,107 @@ describe("EntryDetailPage", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Додати поле" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    const [, requestInit] = fetchMock.mock.calls[2] as [string, RequestInit];
-    expect(JSON.parse(requestInit.body as string)).toMatchObject({
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    expect(postCallBody(fetchMock)).toMatchObject({
       fragment_id: entry.fragments[0]!.id,
       field_path: "part_of_speech",
       role: "part_of_speech",
       source_text: "слово",
       source_start: 0,
       source_end: 5,
+    });
+  });
+
+  it("offers a dropdown of enum options for an enum schema field", async () => {
+    const entry = baseEntry();
+    const schema = {
+      id: "88888888-8888-8888-8888-888888888888",
+      dictionary_id: entry.dictionary_id,
+      version: 1,
+      status: "ready" as const,
+      source_description: "опис",
+      definition: {
+        fields: [
+          {
+            name: "gender",
+            role: "other",
+            type: "enum",
+            options: ["ч.", "ж.", "с."],
+            repeatable: false,
+            required: false,
+            children: [],
+          },
+        ],
+      },
+      provider_name: "anthropic",
+      error_message: null,
+      created_at: "2026-08-15T12:00:00Z",
+      activated_at: "2026-08-15T12:05:00Z",
+    };
+    const createdField = {
+      id: "99999999-9999-9999-9999-999999999999",
+      fragment_id: entry.fragments[0]!.id,
+      parent_field_id: null,
+      field_path: "gender",
+      role: "other",
+      position: 1,
+      source_text: "ж.",
+      source_start: 0,
+      source_end: 0,
+      x: null,
+      y: null,
+      width: null,
+      height: null,
+      normalized_text: null,
+      confidence: null,
+      origin: "manual",
+      created_at: "2026-08-15T12:10:00Z",
+      updated_at: "2026-08-15T12:10:00Z",
+    };
+    const fetchMock = stubFetch({ entry, schemas: [schema] }, [
+      () => jsonResponse(201, createdField),
+    ]);
+
+    renderAt(`/entries/${ENTRY_ID}`);
+    await screen.findByText("слово");
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати поле вручну" }));
+    const pathSelect = await screen.findByLabelText("Поле схеми");
+    await waitFor(() =>
+      expect(
+        Array.from((pathSelect as HTMLSelectElement).options).some(
+          (option) => option.value === "gender",
+        ),
+      ).toBe(true),
+    );
+    fireEvent.change(pathSelect, { target: { value: "gender" } });
+
+    const valueSelect = (await screen.findByLabelText(
+      "Значення",
+    )) as HTMLSelectElement;
+    expect(
+      Array.from(valueSelect.options).map((option) => option.value),
+    ).toEqual(["", "ч.", "ж.", "с."]);
+
+    fireEvent.change(valueSelect, { target: { value: "ж." } });
+    fireEvent.click(screen.getByRole("button", { name: "Додати поле" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    expect(postCallBody(fetchMock)).toMatchObject({
+      field_path: "gender",
+      source_text: "ж.",
     });
   });
 
@@ -352,15 +456,14 @@ describe("EntryDetailPage", () => {
       created_at: "2026-08-15T12:00:00Z",
       activated_at: "2026-08-15T12:05:00Z",
     };
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, entry))
-      .mockResolvedValueOnce(jsonResponse(200, [schema]));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch({ entry, schemas: [schema] });
 
     renderAt(`/entries/${ENTRY_ID}`);
     await screen.findByText("слово");
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "Додати поле вручну" }),
+    );
     const pathSelect = await screen.findByLabelText("Поле схеми");
     await waitFor(() =>
       expect(

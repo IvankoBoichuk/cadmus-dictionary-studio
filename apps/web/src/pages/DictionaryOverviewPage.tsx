@@ -35,17 +35,25 @@ function CompletionBar({
   label,
   completed,
   total,
+  to,
 }: {
   label: string;
   completed: number | null;
   total: number | null;
+  to?: string;
 }) {
   const known = completed !== null && total !== null;
   const ratio = known && total > 0 ? completed / total : 0;
   return (
     <div className="grid gap-1.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <span className="font-[650]">{label}</span>
+        {to ? (
+          <Link to={to} className="font-[650] text-primary">
+            {label}
+          </Link>
+        ) : (
+          <span className="font-[650]">{label}</span>
+        )}
         <span className="text-[0.9rem] text-muted-foreground tabular-nums">
           {!known
             ? "—"
@@ -175,6 +183,7 @@ export function DictionaryOverviewPage() {
             label="Статті"
             completed={scan?.completed_entries ?? null}
             total={scan?.total_entries ?? null}
+            to="entries"
           />
         </Card>
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">

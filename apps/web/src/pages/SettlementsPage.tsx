@@ -1,16 +1,28 @@
-import { useState } from "react";
+import { Download, Upload } from "lucide-react";
 import { Navigate, useParams } from "react-router-dom";
 
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
 import { settlementsExportUrl, type SettlementMappingResponse } from "../api";
-import { SettlementForm } from "../components/SettlementForm";
 import { SettlementImportPanel } from "../components/SettlementImportPanel";
 import { SettlementsTable } from "../components/SettlementsTable";
 import { useSettlements } from "../hooks/useSettlements";
 
 function SettlementsWorkspace({ dictionaryId }: { dictionaryId: string }) {
-  const { state, deleteState, remove, upsert, mergeImported, confirm, unconfirm } =
-    useSettlements(dictionaryId);
-  const [editing, setEditing] = useState<SettlementMappingResponse | null>(null);
+  const {
+    state,
+    deleteState,
+    remove,
+    upsert,
+    mergeImported,
+    confirm,
+    unconfirm,
+  } = useSettlements(dictionaryId);
 
   const handleDelete = (item: SettlementMappingResponse) => {
     if (window.confirm(`Видалити географічну мітку «${item.source_label}»?`)) {
@@ -18,65 +30,85 @@ function SettlementsWorkspace({ dictionaryId }: { dictionaryId: string }) {
     }
   };
 
-  const handleSaved = (saved: SettlementMappingResponse) => {
-    upsert(saved);
-    setEditing(null);
-  };
-
   return (
     <>
-      <div className="form-section" aria-labelledby="settlement-export-heading">
-        <h2 id="settlement-export-heading">Експорт конфігурації</h2>
-        <p className="section-hint">
-          Завантажте поточний список географічних міток у машинозчитуваному
-          форматі для повторного використання.
-        </p>
-        <div className="form-actions">
-          <a
-            className="ml-4 inline-block font-[650] text-primary hover:underline"
-            href={settlementsExportUrl(dictionaryId, "json")}
-          >
-            Експортувати JSON
-          </a>
-          <a
-            className="ml-4 inline-block font-[650] text-primary hover:underline"
-            href={settlementsExportUrl(dictionaryId, "csv")}
-          >
-            Експортувати CSV
-          </a>
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="mb-2 text-[1.15rem]">Географічні мітки словника</h2>
+          <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
+            Зіставте географічні позначки з оригіналу словника із сучасними
+            населеними пунктами, зберігаючи історичну форму та адміністративну
+            належність.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="secondary" size="sm" type="button">
+                <Upload aria-hidden="true" />
+                Імпорт
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="max-h-[70vh] w-[min(90vw,32rem)] overflow-y-auto">
+              <SettlementImportPanel
+                dictionaryId={dictionaryId}
+                onImported={mergeImported}
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="secondary" size="sm" type="button">
+                <Download aria-hidden="true" />
+                Експорт
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="grid gap-1">
+              <p className="m-0 mb-1 text-[0.8rem] text-muted-foreground">
+                Завантажте поточний список у машинозчитуваному форматі.
+              </p>
+              <a
+                className="rounded-md px-2 py-1.5 font-[650] text-primary no-underline hover:bg-accent"
+                href={settlementsExportUrl(dictionaryId, "json")}
+              >
+                Експортувати JSON
+              </a>
+              <a
+                className="rounded-md px-2 py-1.5 font-[650] text-primary no-underline hover:bg-accent"
+                href={settlementsExportUrl(dictionaryId, "csv")}
+              >
+                Експортувати CSV
+              </a>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {state.status === "loading" && (
-        <p role="status">Завантажуємо географічні мітки…</p>
-      )}
-      {state.status === "error" && (
-        <p className="form-error" role="alert">
-          {state.message}
-        </p>
-      )}
-      {state.status === "loaded" && (
-        <div className="form-section">
-          <h2>Список географічних міток</h2>
-          <SettlementsTable
-            mappings={state.mappings}
-            onEdit={setEditing}
-            onDelete={handleDelete}
-            onConfirm={(item) => void confirm(item.id)}
-            onUnconfirm={(item) => void unconfirm(item.id)}
-            deleteState={deleteState}
-          />
-        </div>
-      )}
-
-      <SettlementForm
-        dictionaryId={dictionaryId}
-        editing={editing}
-        onSaved={handleSaved}
-        onCancel={() => setEditing(null)}
-      />
-
-      <SettlementImportPanel dictionaryId={dictionaryId} onImported={mergeImported} />
+      <div className="dictionary-form">
+        {state.status === "loading" && (
+          <p role="status">Завантажуємо географічні мітки…</p>
+        )}
+        {state.status === "error" && (
+          <p className="form-error" role="alert">
+            {state.message}
+          </p>
+        )}
+        {state.status === "loaded" && (
+          <div className="form-section">
+            <h2>Список географічних міток</h2>
+            <SettlementsTable
+              dictionaryId={dictionaryId}
+              mappings={state.mappings}
+              onSaved={upsert}
+              onDelete={handleDelete}
+              onConfirm={(item) => void confirm(item.id)}
+              onUnconfirm={(item) => void unconfirm(item.id)}
+              deleteState={deleteState}
+            />
+          </div>
+        )}
+      </div>
     </>
   );
 }
@@ -88,17 +120,5 @@ export function SettlementsPage() {
     return <Navigate replace to="/dictionaries" />;
   }
 
-  return (
-    <>
-      <h2 className="mb-2 text-[1.15rem]">Географічні мітки словника</h2>
-      <p className="max-w-[60ch] text-[0.9rem] text-muted-foreground">
-        Зіставте географічні позначки з оригіналу словника із сучасними
-        населеними пунктами, зберігаючи історичну форму та адміністративну
-        належність.
-      </p>
-      <div className="dictionary-form">
-        <SettlementsWorkspace dictionaryId={dictionaryId} />
-      </div>
-    </>
-  );
+  return <SettlementsWorkspace dictionaryId={dictionaryId} />;
 }

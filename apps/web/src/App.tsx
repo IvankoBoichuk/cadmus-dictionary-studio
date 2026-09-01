@@ -13,7 +13,9 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DictionariesList } from "./pages/DictionariesList";
 import { DictionaryMetadataPage } from "./pages/DictionaryMetadataPage";
 import { DictionaryOverviewPage } from "./pages/DictionaryOverviewPage";
+import { DictionaryTasksPage } from "./pages/DictionaryTasksPage";
 import { DictionaryWorkspacePage } from "./pages/DictionaryWorkspacePage";
+import { EntriesListPage } from "./pages/EntriesListPage";
 import { EntryDetailPage } from "./pages/EntryDetailPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomePage } from "./pages/HomePage";
@@ -22,6 +24,7 @@ import { NewDictionaryPage } from "./pages/NewDictionaryPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { PageRangesPage } from "./pages/PageRangesPage";
 import { ProjectMembersPage } from "./pages/ProjectMembersPage";
+import { ReferenceLexiconPage } from "./pages/ReferenceLexiconPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { SettlementsPage } from "./pages/SettlementsPage";
@@ -58,6 +61,8 @@ export function App() {
             >
               <Route index element={<DictionaryOverviewPage />} />
               <Route path="pages" element={<DictionaryWorkspacePage />} />
+              <Route path="entries" element={<EntriesListPage />} />
+              <Route path="tasks" element={<DictionaryTasksPage />} />
               <Route path="settings" element={<DictionarySettingsLayout />}>
                 <Route index element={<Navigate replace to="metadata" />} />
                 <Route path="metadata" element={<DictionaryMetadataPage />} />
@@ -69,6 +74,10 @@ export function App() {
               </Route>
             </Route>
             <Route path="/entries/:entryId" element={<EntryDetailPage />} />
+            <Route
+              path="/reference-lexicons/:code"
+              element={<ReferenceLexiconPage />}
+            />
           </Route>
         </Routes>
       </AuthProvider>

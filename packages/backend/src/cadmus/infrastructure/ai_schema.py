@@ -39,11 +39,22 @@ _QUEUE_ERRORS: Final = (OperationalError, RedisError, OSError)
 _LEAF_NODE_PROPERTIES: dict[str, Any] = {
     "name": {"type": "string"},
     "role": {"type": "string", "enum": [role.value for role in EntryFieldRole]},
-    "type": {"type": "string", "enum": ["string", "list", "group"]},
+    "type": {
+        "type": "string",
+        "enum": ["string", "number", "boolean", "date", "enum", "list", "group"],
+    },
+    "options": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": (
+            "Allowed string values when type is 'enum'; an empty array for "
+            "every other type."
+        ),
+    },
     "repeatable": {"type": "boolean"},
     "required": {"type": "boolean"},
 }
-_LEAF_NODE_REQUIRED = ["name", "role", "type", "repeatable", "required"]
+_LEAF_NODE_REQUIRED = ["name", "role", "type", "options", "repeatable", "required"]
 _LEAF_NODE: dict[str, Any] = {
     "type": "object",
     "properties": _LEAF_NODE_PROPERTIES,
@@ -81,7 +92,12 @@ _GENERATE_SCHEMA_TOOL: dict[str, Any] = {
         "Propose a structured field schema for a dictionary article, "
         "derived strictly from the editor's free-text description of the "
         "article's structure. Use role 'other' for anything that doesn't "
-        "fit the standard roles."
+        "fit the standard roles. Field 'type' is 'string' for free text, "
+        "'number' for numeric values, 'boolean' for yes/no flags, 'date' "
+        "for calendar dates, 'enum' for a closed set of values (list them "
+        "in 'options'), 'list' for a repeated simple value, or 'group' for "
+        "a node with child fields. 'options' must be an empty array unless "
+        "'type' is 'enum'."
     ),
     "input_schema": {
         "type": "object",

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LexemeResponse, LexemeSuggestion } from "../api";
+import type { CanvasMode } from "../canvasTools";
 import { LexemeCanvas } from "./LexemeCanvas";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -83,6 +84,9 @@ function renderCanvas(
     secondBoxDraftLexemeId: string | null;
     onSecondBoxDrawn: (lexeme: LexemeResponse) => void;
     onCancelSecondBoxDraft: () => void;
+    mode: CanvasMode;
+    zoom: number;
+    onEraseLexeme: (lexemeId: string) => void;
   }> = {},
 ) {
   return render(
@@ -104,6 +108,9 @@ function renderCanvas(
       secondBoxDraftLexemeId={overrides.secondBoxDraftLexemeId ?? null}
       onSecondBoxDrawn={overrides.onSecondBoxDrawn}
       onCancelSecondBoxDraft={overrides.onCancelSecondBoxDraft}
+      mode={overrides.mode ?? "draw"}
+      zoom={overrides.zoom ?? 1}
+      onEraseLexeme={overrides.onEraseLexeme ?? vi.fn()}
     />,
   );
 }
@@ -328,6 +335,39 @@ describe("LexemeCanvas", () => {
     fireEvent.click(await screen.findByTitle("слово"));
 
     expect(onSelectLexeme).toHaveBeenCalledWith("lex-7");
+  });
+
+  it("erase mode deletes a lexeme on a single click of its box", async () => {
+    stubContainerRect();
+    const onEraseLexeme = vi.fn();
+    const onSelectLexeme = vi.fn();
+
+    renderCanvas({
+      mode: "erase",
+      lexemes: [lexemeFixture({ id: "lex-9" })],
+      onEraseLexeme,
+      onSelectLexeme,
+    });
+    await loadImage();
+
+    fireEvent.click(await screen.findByTitle("слово"));
+
+    expect(onEraseLexeme).toHaveBeenCalledWith("lex-9");
+    expect(onSelectLexeme).not.toHaveBeenCalled();
+  });
+
+  it("select mode does not open the draw form on a drag", async () => {
+    stubContainerRect();
+
+    renderCanvas({ mode: "select" });
+    const image = await loadImage();
+    const canvas = image.parentElement as HTMLElement;
+
+    fireEvent.mouseDown(canvas, { clientX: 40, clientY: 40 });
+    fireEvent.mouseMove(canvas, { clientX: 160, clientY: 160 });
+    fireEvent.mouseUp(canvas, { clientX: 160, clientY: 160 });
+
+    expect(screen.queryByLabelText("Текст лексеми")).not.toBeInTheDocument();
   });
 
   it("hides other lexemes' boxes once one is selected", async () => {

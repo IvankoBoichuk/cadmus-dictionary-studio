@@ -1,7 +1,6 @@
 import { Navigate, useParams } from "react-router-dom";
 
 import type { MemberResponse } from "../api";
-import { ProjectMemberForm } from "../components/ProjectMemberForm";
 import { ProjectMembersTable } from "../components/ProjectMembersTable";
 import { useDictionaryMembers } from "../hooks/useDictionaryMembers";
 
@@ -26,21 +25,17 @@ function ProjectMembersWorkspace({ dictionaryId }: { dictionaryId: string }) {
         </p>
       )}
       {state.status === "loaded" && (
-        <>
-          <div className="form-section">
-            <h2>Список учасників</h2>
-            <ProjectMembersTable
-              members={state.members}
-              myRole={state.myRole}
-              actionState={actionState}
-              onChangeRole={(userId, role) => void changeRole(userId, role)}
-              onRemove={handleRemove}
-            />
-          </div>
-          {state.myRole === "owner" && (
-            <ProjectMemberForm actionState={actionState.add} onAdd={add} />
-          )}
-        </>
+        <div className="form-section">
+          <h2>Список учасників</h2>
+          <ProjectMembersTable
+            members={state.members}
+            myRole={state.myRole}
+            actionState={actionState}
+            onChangeRole={(userId, role) => void changeRole(userId, role)}
+            onRemove={handleRemove}
+            onAdd={add}
+          />
+        </div>
       )}
     </>
   );

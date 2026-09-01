@@ -429,6 +429,30 @@ class SqlAlchemyLexicographyRepository:
             select(DictionaryEntry).where(dictionary_entries.c.lexeme_id == lexeme_id)
         )
 
+    def list_entries_for_dictionary(self, dictionary_id: UUID) -> list[DictionaryEntry]:
+        return list(
+            self._session.scalars(
+                select(DictionaryEntry)
+                .where(dictionary_entries.c.dictionary_id == dictionary_id)
+                .order_by(
+                    dictionary_entries.c.headword,
+                    dictionary_entries.c.created_at,
+                )
+            )
+        )
+
+    def count_fields_by_entry(self, dictionary_id: UUID) -> dict[UUID, int]:
+        rows = self._session.execute(
+            select(entry_fields.c.entry_id, func.count())
+            .join(
+                dictionary_entries,
+                entry_fields.c.entry_id == dictionary_entries.c.id,
+            )
+            .where(dictionary_entries.c.dictionary_id == dictionary_id)
+            .group_by(entry_fields.c.entry_id)
+        )
+        return {entry_id: count for entry_id, count in rows}
+
     def update_entry(self, entry: DictionaryEntry) -> None:
         self._session.add(entry)
 

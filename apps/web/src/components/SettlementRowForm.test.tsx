@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SettlementMappingResponse } from "../api";
-import { SettlementForm } from "./SettlementForm";
+import { SettlementRowForm } from "./SettlementRowForm";
 
 const DICTIONARY_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -42,26 +42,34 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-/** Routes every geography lookup made by the embedded search combobox to `[]`. */
 function stubEmptyGeographyLookups(): ReturnType<typeof vi.fn> {
-  return vi.fn().mockImplementation((url: string) => {
-    if (url.includes("/geography/")) return Promise.resolve(jsonResponse(200, []));
-    return Promise.resolve(jsonResponse(200, []));
-  });
+  return vi.fn().mockResolvedValue(jsonResponse(200, []));
 }
 
-describe("SettlementForm", () => {
+function renderRow(ui: React.ReactElement) {
+  return render(
+    <table>
+      <tbody>{ui}</tbody>
+    </table>,
+  );
+}
+
+describe("SettlementRowForm", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("requires a source label (BH-48)", async () => {
     vi.stubGlobal("fetch", stubEmptyGeographyLookups());
-    render(
-      <SettlementForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
+    renderRow(
+      <SettlementRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={vi.fn()}
+      />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Додати" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
 
     await waitFor(() =>
       expect(
@@ -73,37 +81,43 @@ describe("SettlementForm", () => {
   it("saves a new mapping with just a source label", async () => {
     const created = existing();
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/geography/")) return Promise.resolve(jsonResponse(200, []));
-      if (url.includes("/settlements") && url.includes("query="))
+      if (url.includes("/geography/"))
         return Promise.resolve(jsonResponse(200, []));
       return Promise.resolve(jsonResponse(201, created));
     });
     vi.stubGlobal("fetch", fetchMock);
-    const onSaved = vi.fn();
+    const onDone = vi.fn();
 
-    render(
-      <SettlementForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={onSaved} />,
+    renderRow(
+      <SettlementRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={onDone}
+      />,
     );
     fireEvent.change(screen.getByLabelText("Позначка з оригіналу"), {
       target: { value: "Іванівка" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Додати" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith(created));
   });
 
   it("never renders a control that submits status=confirmed (AC9)", () => {
     vi.stubGlobal("fetch", stubEmptyGeographyLookups());
-    render(
-      <SettlementForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
+    renderRow(
+      <SettlementRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={vi.fn()}
+      />,
     );
 
     expect(screen.queryByText(/підтвердж/i)).not.toBeInTheDocument();
   });
 
-  it("picking a search suggestion fills the modern fields and can be cleared (AC8, AC9)", async () => {
+  it("picking a search suggestion fills the modern name and can be cleared (AC8, AC9)", async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/geography/")) return Promise.resolve(jsonResponse(200, []));
       if (url.includes("/search?"))
         return Promise.resolve(
           jsonResponse(200, [
@@ -122,10 +136,17 @@ describe("SettlementForm", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(
-      <SettlementForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
+    renderRow(
+      <SettlementRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={vi.fn()}
+      />,
     );
 
+    fireEvent.click(
+      screen.getByRole("button", { name: "Знайти сучасний населений пункт" }),
+    );
     fireEvent.change(screen.getByLabelText("Пошук населеного пункту"), {
       target: { value: "Іван" },
     });
@@ -138,11 +159,15 @@ describe("SettlementForm", () => {
     fireEvent.click(suggestionButton);
 
     await waitFor(() =>
-      expect(screen.getByText(/Зіставлено з: Іванівка/)).toBeInTheDocument(),
+      expect(screen.getByLabelText("Сучасна назва")).toHaveValue("Іванівка"),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Скасувати зіставлення" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Скасувати зіставлення" }),
+    );
 
-    expect(screen.getByLabelText("Пошук населеного пункту")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Знайти сучасний населений пункт" }),
+    ).toBeInTheDocument();
   });
 });

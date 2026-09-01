@@ -38,6 +38,9 @@ const buttonVariants = cva(
         sm: "px-3 py-[0.4rem] text-sm",
         lg: "px-6 py-[0.85rem]",
         icon: "min-w-[2.4rem] p-[0.4rem] font-bold disabled:opacity-40",
+        "icon-sm":
+          "size-[1.625rem] min-w-0 p-0 font-bold disabled:opacity-40 [&_svg:not([class*='size-'])]:size-[0.9rem]",
+        fab: "size-8 min-w-0 p-0 font-bold [&_svg:not([class*='size-'])]:size-[1.15rem]",
       },
     },
     defaultVariants: {

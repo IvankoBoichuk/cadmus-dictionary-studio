@@ -117,4 +117,79 @@ describe("ArticleSchemaPage", () => {
     await waitFor(() => expect(screen.getByText(/активна/)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Активувати" })).not.toBeInTheDocument();
   });
+
+  it("shows a past version's field tree in the viewer", async () => {
+    const only = schema({
+      version: 1,
+      definition: {
+        fields: [{ name: "unikalne_pole", role: "other", type: "string" }],
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, [only])));
+
+    renderAt(`/dictionaries/${DICTIONARY_ID}/article-schema`);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Переглянути" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Версія 1" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("unikalne_pole")).toBeInTheDocument();
+  });
+
+  it("edits a version and saves it as a new version", async () => {
+    const v1 = schema({ version: 1 });
+    const v2 = schema({
+      id: "44444444-4444-4444-4444-444444444444",
+      version: 2,
+    });
+    const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST") {
+        return Promise.resolve(jsonResponse(201, v2));
+      }
+      return Promise.resolve(jsonResponse(200, fetchMock.mock.calls.length > 2 ? [v1, v2] : [v1]));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt(`/dictionaries/${DICTIONARY_ID}/article-schema`);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Редагувати" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Зберегти як нову версію" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/Версію 2 збережено/)).toBeInTheDocument(),
+    );
+    const postCall = fetchMock.mock.calls.find(
+      (call) => (call[1]?.method ?? "GET") === "POST",
+    );
+    expect(postCall?.[0]).toContain("/article-schemas");
+  });
+
+  it("shows a removed field when comparing two versions", async () => {
+    const v1 = schema({
+      version: 1,
+      definition: {
+        fields: [
+          { name: "meaning", role: "meaning", type: "string" },
+          { name: "example", role: "example", type: "string" },
+        ],
+      },
+    });
+    const v2 = schema({
+      id: "55555555-5555-5555-5555-555555555555",
+      version: 2,
+      definition: { fields: [{ name: "meaning", role: "meaning", type: "string" }] },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, [v1, v2])));
+
+    renderAt(`/dictionaries/${DICTIONARY_ID}/article-schema`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Порівняння версій" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("example")).toBeInTheDocument();
+    expect(screen.getByText("вилучено")).toBeInTheDocument();
+  });
 });

@@ -2,7 +2,8 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -758,6 +759,64 @@ def _walk_schema_nodes(nodes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     return flattened
 
 
+_BOOLEAN_LITERALS = {"так", "ні", "true", "false", "1", "0", "yes", "no"}
+
+
+def _field_path_leaf(field_path: str) -> str:
+    """Last segment of a ``field_path`` with any ``[index]`` suffixes removed
+    (``"senses[0].examples[1]"`` -> ``"examples"``)."""
+    last = field_path.split(".")[-1]
+    bracket = last.find("[")
+    return last[:bracket] if bracket != -1 else last
+
+
+def resolve_schema_node(
+    definition: dict[str, Any], field_path: str
+) -> dict[str, Any] | None:
+    """Find the schema node an ``EntryField.field_path`` points at, matched by
+    the node ``name`` of the path's leaf segment. Returns ``None`` when the
+    path has no counterpart in the schema (e.g. a hand-typed custom path)."""
+    leaf = _field_path_leaf(field_path)
+    if not leaf:
+        return None
+    for node in _walk_schema_nodes(definition.get("fields", [])):
+        if node.get("name") == leaf:
+            return node
+    return None
+
+
+def validate_field_value(node: dict[str, Any], value: str) -> str | None:
+    """Check one entry field's text against the typed constraints of its
+    schema ``node``. Returns an error message, or ``None`` when the value fits
+    (or the node's type carries no value constraint)."""
+    node_type = node.get("type")
+    text = value.strip()
+    if not text:
+        return None
+    if node_type == "enum":
+        options = node.get("options") or []
+        if text not in options:
+            return f"«{value}» не входить до списку допустимих значень."
+        return None
+    if node_type == "number":
+        try:
+            Decimal(text)
+        except (InvalidOperation, ValueError):
+            return "Значення має бути числом."
+        return None
+    if node_type == "boolean":
+        if text.casefold() not in _BOOLEAN_LITERALS:
+            return "Значення має бути «так» або «ні»."  # noqa: RUF001
+        return None
+    if node_type == "date":
+        try:
+            date.fromisoformat(text)
+        except ValueError:
+            return "Значення має бути датою у форматі РРРР-ММ-ДД."  # noqa: RUF001
+        return None
+    return None
+
+
 def validate_entry_against_schema(
     entry: DictionaryEntry,
     fields: Sequence[EntryField],
@@ -790,4 +849,144 @@ def validate_entry_against_schema(
             has_match = path in present_paths
         if not has_match:
             errors[str(path)] = f"Обов'язкове поле «{path}» не заповнене."
+
+    for field in fields:
+        field_node = resolve_schema_node(schema.definition, field.field_path)
+        if field_node is None:
+            continue
+        value = (
+            field.normalized_text
+            if field.normalized_text is not None
+            else field.source_text
+        )
+        message = validate_field_value(field_node, value)
+        if message is not None:
+            errors[field.field_path] = message
     return errors
+
+
+SCHEMA_FIELD_TYPES = (
+    "string",
+    "number",
+    "boolean",
+    "date",
+    "enum",
+    "list",
+    "group",
+)
+SCHEMA_TYPES_WITH_OPTIONS = ("enum",)
+"""Field types whose node carries an ``options`` list of allowed string values."""
+MAX_SCHEMA_DEPTH = 3
+"""A hand-edited schema mirrors the AI tool-schema's three levels (top field ->
+mid child -> leaf grandchild); see ``infrastructure/ai_schema.py``."""
+
+
+def _validate_schema_node(
+    node: Any, path: str, depth: int, errors: dict[str, str]
+) -> None:
+    if not isinstance(node, dict):
+        errors[path] = "Поле схеми має бути об'єктом."  # noqa: RUF001
+        return
+    name = node.get("name")
+    if not isinstance(name, str) or not name.strip():
+        errors[f"{path}.name"] = "Вкажіть назву поля."
+    if node.get("role") not in {role.value for role in EntryFieldRole}:
+        errors[f"{path}.role"] = "Оберіть коректну роль поля."
+    node_type = node.get("type")
+    if node_type not in SCHEMA_FIELD_TYPES:
+        message = "Оберіть коректний тип поля."
+        errors[f"{path}.type"] = message
+    if node_type in SCHEMA_TYPES_WITH_OPTIONS:
+        options = node.get("options")
+        cleaned = (
+            [item.strip() for item in options if isinstance(item, str)]
+            if isinstance(options, list)
+            else []
+        )
+        cleaned = [item for item in cleaned if item]
+        if not isinstance(options, list) or not cleaned:
+            errors[f"{path}.options"] = "Додайте щонайменше одне значення переліку."
+        elif len(set(cleaned)) != len(cleaned):
+            errors[f"{path}.options"] = "Значення переліку не мають повторюватися."
+    for flag in ("repeatable", "required"):
+        if flag in node and not isinstance(node[flag], bool):
+            errors[f"{path}.{flag}"] = "Значення має бути булевим (так / ні)."
+    children = node.get("children")
+    if children in (None, [], ()):
+        return
+    if depth >= MAX_SCHEMA_DEPTH:
+        errors[f"{path}.children"] = (
+            f"Схема підтримує щонайбільше {MAX_SCHEMA_DEPTH} рівні вкладеності."
+        )
+        return
+    _validate_schema_nodes(children, f"{path}.children", depth + 1, errors)
+
+
+def _validate_schema_nodes(
+    nodes: Any, path: str, depth: int, errors: dict[str, str]
+) -> None:
+    if not isinstance(nodes, list):
+        errors[path] = "Список полів має бути масивом."
+        return
+    seen: set[str] = set()
+    for index, node in enumerate(nodes):
+        node_path = f"{path}[{index}]"
+        _validate_schema_node(node, node_path, depth, errors)
+        name = node.get("name") if isinstance(node, dict) else None
+        if isinstance(name, str) and name.strip():
+            if name.strip() in seen:
+                errors[f"{node_path}.name"] = (
+                    f"Назва «{name.strip()}» повторюється на цьому рівні."
+                )
+            seen.add(name.strip())
+
+
+def validate_schema_definition(definition: Any) -> dict[str, str]:
+    """Structural validation for a hand-edited BH-148 article-schema
+    ``definition`` (``{"fields": [Node, ...]}``, Node = ``{name, role, type,
+    repeatable, required, children}``). Errors are keyed by a path such as
+    ``fields[0].children[1].role``; an empty dict means the schema is valid.
+    """
+    if not isinstance(definition, dict):
+        message = "Схема має бути об'єктом з полем «fields»."  # noqa: RUF001
+        return {"definition": message}
+    fields = definition.get("fields")
+    if not isinstance(fields, list) or not fields:
+        return {"fields": "Додайте щонайменше одне поле."}
+    errors: dict[str, str] = {}
+    _validate_schema_nodes(fields, "fields", 1, errors)
+    return errors
+
+
+def normalize_schema_definition(definition: dict[str, Any]) -> dict[str, Any]:
+    """Fill defaults so a hand-edited tree is stored like a generated one:
+    every node carries ``name/role/type/repeatable/required/children``, with
+    ``children`` recursively normalized and dropped past ``MAX_SCHEMA_DEPTH``.
+    Assumes ``definition`` already passed ``validate_schema_definition``.
+    """
+
+    def _node(raw: dict[str, Any], depth: int) -> dict[str, Any]:
+        children = raw.get("children") or []
+        nested = (
+            [_node(child, depth + 1) for child in children]
+            if depth < MAX_SCHEMA_DEPTH and isinstance(children, list)
+            else []
+        )
+        options: list[str] = []
+        if raw["type"] in SCHEMA_TYPES_WITH_OPTIONS:
+            options = [
+                str(item).strip()
+                for item in raw.get("options") or []
+                if str(item).strip()
+            ]
+        return {
+            "name": str(raw.get("name", "")).strip(),
+            "role": raw["role"],
+            "type": raw["type"],
+            "options": options,
+            "repeatable": bool(raw.get("repeatable", False)),
+            "required": bool(raw.get("required", False)),
+            "children": nested,
+        }
+
+    return {"fields": [_node(node, 1) for node in definition.get("fields") or []]}

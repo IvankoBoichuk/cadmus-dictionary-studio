@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from cadmus.access import Permission
@@ -41,15 +42,20 @@ from cadmus.lexicography.domain import (
     SchemaGenerationStatus,
     changed_lexeme_fields,
     find_overlapping_lexeme,
+    normalize_schema_definition,
     resolve_ocr_language,
+    resolve_schema_node,
     validate_entry_against_schema,
+    validate_field_value,
     validate_lexeme_fields,
+    validate_schema_definition,
     validate_second_box_fields,
 )
 from cadmus.lexicography.ports import (
     ArticleSchemaQueue,
     DictionaryScanQueue,
     EntryExtractionQueue,
+    LexicographyUnitOfWork,
     LexicographyUnitOfWorkFactory,
     OcrSuggestionQueue,
 )
@@ -385,6 +391,35 @@ class LexemeQueryService:
 
         with self._unit_of_work_factory() as unit_of_work:
             return unit_of_work.lexicography.list_lexemes_for_page(page.id)
+
+
+class EntryQueryService:
+    """List a dictionary's structured entries (BH-148), scoped to any member."""
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+
+    def list_for_dictionary(
+        self, dictionary_id: UUID, actor_id: UUID
+    ) -> list[tuple[DictionaryEntry, int]]:
+        try:
+            self._dictionary_pages.get(dictionary_id, actor_id)
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        with self._unit_of_work_factory() as unit_of_work:
+            entries = unit_of_work.lexicography.list_entries_for_dictionary(
+                dictionary_id
+            )
+            field_counts = unit_of_work.lexicography.count_fields_by_entry(
+                dictionary_id
+            )
+        return [(entry, field_counts.get(entry.id, 0)) for entry in entries]
 
 
 @dataclass(frozen=True)
@@ -741,6 +776,64 @@ class ActivateArticleSchemaService:
         return schema
 
 
+class SaveArticleSchemaService:
+    """Persist a hand-edited article-schema ``definition`` as a new version.
+
+    Editing never mutates an existing version (they are immutable history);
+    it always appends a fresh ``READY`` version, left inactive until an
+    editor activates it via ``ActivateArticleSchemaService``.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._clock = clock
+
+    def save(
+        self,
+        dictionary_id: UUID,
+        actor_id: UUID,
+        *,
+        definition: dict[str, Any],
+        source_description: str | None = None,
+    ) -> ArticleSchema:
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        errors = validate_schema_definition(definition)
+        if errors:
+            raise ArticleSchemaValidationError(errors)
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            next_version = (
+                len(unit_of_work.lexicography.list_article_schemas(dictionary_id)) + 1
+            )
+            schema = ArticleSchema(
+                id=uuid4(),
+                dictionary_id=dictionary_id,
+                version=next_version,
+                status=SchemaGenerationStatus.READY,
+                source_description=(source_description or "").strip(),
+                definition=normalize_schema_definition(definition),
+                created_at=now,
+                created_by=actor_id,
+                provider_name=None,
+            )
+            unit_of_work.lexicography.add_article_schema(schema)
+            unit_of_work.commit()
+        return schema
+
+
 class PromoteLexemeToEntryService:
     """Promote a ``COMPLETE`` lexeme into a ``DictionaryEntry`` (BH-148).
 
@@ -1037,6 +1130,27 @@ class _EntryFieldWriteService:
             raise EntryAccessError(entry_id) from error
         return entry
 
+    @staticmethod
+    def _reject_invalid_typed_value(
+        unit_of_work: LexicographyUnitOfWork,
+        entry: DictionaryEntry,
+        field_path: str,
+        value: str,
+    ) -> None:
+        """Enforce a schema node's typed constraint (enum options, number,
+        date, boolean) on a field value the editor is saving."""
+        if entry.schema_id is None:
+            return
+        schema = unit_of_work.lexicography.get_article_schema(entry.schema_id)
+        if schema is None:
+            return
+        node = resolve_schema_node(schema.definition, field_path)
+        if node is None:
+            return
+        message = validate_field_value(node, value)
+        if message is not None:
+            raise EntryFieldValidationError({"source_text": message})
+
 
 class CreateEntryFieldService(_EntryFieldWriteService):
     """Manually add a field an automatic pass missed (BH-148)."""
@@ -1064,12 +1178,15 @@ class CreateEntryFieldService(_EntryFieldWriteService):
         parent_field_id: UUID | None = None,
         normalized_text: str | None = None,
     ) -> EntryField:
-        self._authorize(entry_id, actor_id)
+        entry = self._authorize(entry_id, actor_id)
         if not source_text.strip():
             raise EntryFieldValidationError({"source_text": "Вкажіть текст поля."})
 
         now = self._clock()
         with self._unit_of_work_factory() as unit_of_work:
+            self._reject_invalid_typed_value(
+                unit_of_work, entry, field_path, source_text
+            )
             existing = unit_of_work.lexicography.list_fields_for_entry(entry_id)
             field = EntryField(
                 id=uuid4(),
@@ -1116,7 +1233,7 @@ class UpdateEntryFieldService(_EntryFieldWriteService):
         source_text: str | None = None,
         normalized_text: str | None = None,
     ) -> EntryField:
-        self._authorize(entry_id, actor_id)
+        entry = self._authorize(entry_id, actor_id)
         if source_text is not None and not source_text.strip():
             raise EntryFieldValidationError({"source_text": "Вкажіть текст поля."})
 
@@ -1128,7 +1245,14 @@ class UpdateEntryFieldService(_EntryFieldWriteService):
                 raise EntryFieldAccessError(field_id)
 
             if source_text is not None:
+                self._reject_invalid_typed_value(
+                    unit_of_work, entry, field.field_path, source_text
+                )
                 field.source_text = source_text
+            if normalized_text is not None and normalized_text.strip():
+                self._reject_invalid_typed_value(
+                    unit_of_work, entry, field.field_path, normalized_text
+                )
             if role is not None:
                 field.role = role
             if normalized_text is not None:

@@ -230,6 +230,7 @@ describe("DictionaryPageViewer", () => {
 
     expect(await screen.findByText(/ще немає виділених лексем/)).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Виділити текст" }));
     fireEvent.mouseDown(canvas, { clientX: 50, clientY: 50 });
     fireEvent.mouseMove(canvas, { clientX: 150, clientY: 130 });
     fireEvent.mouseUp(canvas, { clientX: 150, clientY: 130 });
@@ -330,5 +331,49 @@ describe("DictionaryPageViewer", () => {
         height2: 40,
       });
     });
+  });
+
+  it("enqueues the whole-dictionary OCR scan queue from the top bar", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/ocr-scan") && init?.method === "POST") {
+        return Promise.resolve(
+          jsonResponse(202, { task_id: "scan-1", status: "queued" }),
+        );
+      }
+      if (url.includes("/lexemes")) return Promise.resolve(jsonResponse(200, []));
+      if (url.includes("/scan-progress")) {
+        return Promise.resolve(
+          jsonResponse(200, { total_pages: 2, processed_pages: 0, pages: [] }),
+        );
+      }
+      return Promise.resolve(jsonResponse(200, { total_pages: 2 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <DictionaryPageViewer dictionaryId="dict-1" pageNumber={1} onNavigate={vi.fn()} />,
+      { wrapper: RouterWrapper },
+    );
+    await screen.findByAltText("Сторінка 1 з 2");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Запустити чергу OCR для всього словника",
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          (call) =>
+            String(call[0]).includes("/ocr-scan") &&
+            (call[1] as RequestInit | undefined)?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Опрацьовуємо чергу…" }),
+    ).toBeDisabled();
   });
 });

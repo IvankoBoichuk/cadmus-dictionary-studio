@@ -11,9 +11,12 @@ from cadmus.lexicography import (
     OcrSuggestionStatus,
     QueueDictionaryScanService,
 )
+from cadmus.processing import ProcessingTaskKind, ProcessingTaskService
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
+
+from cadmus_api.processing_recording import record_enqueued_task
 
 SESSION_COOKIE_NAME = "cadmus_session"
 
@@ -66,6 +69,7 @@ NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
 def create_ocr_scan_router(
     authentication_service: AuthenticationService,
     scan_service: QueueDictionaryScanService,
+    processing_task_service: ProcessingTaskService | None = None,
 ) -> APIRouter:
     """Create whole-dictionary OCR scan routes bound to their use case."""
     router = APIRouter(
@@ -112,6 +116,13 @@ def create_ocr_scan_router(
             task_id = scan_service.enqueue(dictionary_id, user.id)
         except LexemeAccessError:
             return _not_found()
+        record_enqueued_task(
+            processing_task_service,
+            dictionary_id=dictionary_id,
+            kind=ProcessingTaskKind.DICTIONARY_SCAN,
+            celery_task_id=task_id,
+            enqueued_by=user.id,
+        )
         return EnqueueDictionaryScanResponse(task_id=task_id)
 
     @router.get(

@@ -1,14 +1,63 @@
+import {
+  Check,
+  CheckCheck,
+  Columns2,
+  FileOutput,
+  Pencil,
+  SquarePen,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import { isFinePointer } from "../interaction";
 import type { LexemesForPageState } from "../hooks/useLexemesForPage";
 import type { UpdateLexemeState } from "../hooks/useUpdateLexeme";
 import { LEXEME_STATUS_LABELS } from "../lexemeStatusLabels";
+
+/** A single compact, tooltip-labelled row action (revealed on hover/focus). */
+function RowAction({
+  label,
+  icon: Icon,
+  onClick,
+  variant = "secondary",
+  disabled,
+}: {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  variant?: "secondary" | "danger";
+  disabled?: boolean;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon-sm"
+          variant={variant}
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          aria-label={label}
+        >
+          <Icon aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 /** BH-55/BH-56: the list of lexemes saved on the current page, editable and deletable. */
 export function LexemeList({
@@ -91,7 +140,7 @@ export function LexemeList({
 
   return (
     <ul
-      className="m-0 grid max-h-[70vh] list-none gap-2 overflow-y-auto overscroll-contain p-0"
+      className="m-0 grid max-h-[70vh] list-none gap-2 overflow-y-auto overscroll-contain p-0 sm:grid-cols-2"
       aria-label="Лексеми на сторінці"
     >
       {lexemesState.lexemes.map((lexeme) => {
@@ -101,7 +150,7 @@ export function LexemeList({
         const hasSecondBox = lexeme.x2 != null;
         const isComplete = lexeme.status === "complete";
         return (
-          <li key={lexeme.id} className="grid gap-[0.35rem]">
+          <li key={lexeme.id} className="group grid content-start gap-[0.35rem]">
             <button
               type="button"
               ref={(element) => {
@@ -139,7 +188,7 @@ export function LexemeList({
                   {lexeme.source_text}
                 </span>
               )}
-              <span className="text-[0.85rem] text-muted-foreground tabular-nums">
+              <span className="text-[0.8rem] text-muted-foreground tabular-nums">
                 Сторінка {pageNumber} · x={Math.round(lexeme.x)}, y=
                 {Math.round(lexeme.y)}, {Math.round(lexeme.width)}×
                 {Math.round(lexeme.height)}
@@ -157,115 +206,95 @@ export function LexemeList({
                 {updateState.message}
               </p>
             )}
-            <div className="flex flex-wrap gap-[0.4rem] [&_button]:px-[0.6rem] [&_button]:py-[0.35rem] [&_button]:text-[0.85rem]">
+            <div
+              className={cn(
+                "flex flex-wrap gap-1 transition-opacity",
+                "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                "[@media(hover:none)]:opacity-100",
+                (isEditing || isRedrawing || isDraftingSecondBox) && "opacity-100",
+              )}
+            >
               {isComplete ? (
                 <>
-                  <p className="lede">Лексема завершена — редагування заблоковане.</p>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    type="button"
+                  <p className="lede m-0">
+                    Лексема завершена — редагування заблоковане.
+                  </p>
+                  <RowAction
+                    label={
+                      promotingLexemeId === lexeme.id
+                        ? "Створюємо статтю…"
+                        : "Створити статтю зі структурою"
+                    }
+                    icon={FileOutput}
                     onClick={() => onPromoteToEntry?.(lexeme.id)}
                     disabled={promotingLexemeId === lexeme.id}
-                  >
-                    {promotingLexemeId === lexeme.id
-                      ? "Створюємо статтю…"
-                      : "Створити статтю зі структурою"}
-                  </Button>
+                  />
                 </>
               ) : isEditing ? (
                 <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    type="button"
+                  <RowAction
+                    label="Зберегти"
+                    icon={Check}
                     onClick={() => submitText(lexeme.id)}
                     disabled={updateState.status === "submitting"}
-                  >
-                    Зберегти
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    type="button"
+                  />
+                  <RowAction
+                    label="Скасувати"
+                    icon={X}
                     onClick={() => setEditingLexemeId(null)}
-                  >
-                    Скасувати
-                  </Button>
+                  />
                 </>
               ) : (
                 <>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    type="button"
+                  <RowAction
+                    label="Редагувати текст"
+                    icon={Pencil}
                     onClick={() => startEditing(lexeme.id, lexeme.source_text)}
-                  >
-                    Редагувати текст
-                  </Button>
+                  />
                   {isRedrawing ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
+                    <RowAction
+                      label="Скасувати перемальовування"
+                      icon={X}
                       onClick={onCancelRedraw}
-                    >
-                      Скасувати перемальовування
-                    </Button>
+                    />
                   ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
+                    <RowAction
+                      label="Перемалювати область"
+                      icon={SquarePen}
                       onClick={() => onStartRedraw(lexeme.id)}
-                    >
-                      Перемалювати область
-                    </Button>
+                    />
                   )}
                   {isDraftingSecondBox ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      onClick={onCancelSecondBoxDraft}
-                    >
-                      Скасувати другу область
-                    </Button>
+                    <RowAction
+                      label="Скасувати другу область"
+                      icon={X}
+                      onClick={() => onCancelSecondBoxDraft?.()}
+                    />
                   ) : hasSecondBox ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
+                    <RowAction
+                      label="Видалити другу область"
+                      icon={Columns2}
+                      variant="danger"
                       onClick={() => onRemoveSecondBox?.(lexeme.id)}
-                    >
-                      Видалити другу область
-                    </Button>
+                    />
                   ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
+                    <RowAction
+                      label="Додати другу область"
+                      icon={Columns2}
                       onClick={() => onStartAddSecondBox?.(lexeme.id)}
-                    >
-                      Додати другу область
-                    </Button>
+                    />
                   )}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    type="button"
+                  <RowAction
+                    label="Позначити завершеною"
+                    icon={CheckCheck}
                     onClick={() => onMarkComplete?.(lexeme.id)}
-                  >
-                    Позначити завершеною
-                  </Button>
-                  <Button
+                  />
+                  <RowAction
+                    label="Видалити"
+                    icon={Trash2}
                     variant="danger"
-                    size="sm"
-                    type="button"
                     onClick={() => confirmDelete(lexeme.id, lexeme.source_text)}
-                  >
-                    Видалити
-                  </Button>
+                  />
                 </>
               )}
             </div>

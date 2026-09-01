@@ -17,7 +17,10 @@ export function PageRangesPage() {
         статті, щоб Cadmus пропускав обкладинку, зміст та інші службові частини.
       </p>
       <div className="dictionary-form">
-        <PageRangeEditor dictionaryId={dictionaryId} />
+        <PageRangeEditor
+          dictionaryId={dictionaryId}
+          portalActionsInto="dictionary-header-actions"
+        />
       </div>
     </>
   );
