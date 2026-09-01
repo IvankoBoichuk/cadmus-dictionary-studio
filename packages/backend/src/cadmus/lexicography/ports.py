@@ -1,8 +1,8 @@
 """Application-owned ports for lexicography infrastructure."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import TracebackType
-from typing import Protocol, Self
+from typing import Any, Protocol, Self
 from uuid import UUID
 
 from cadmus.lexicography.domain import (
@@ -71,6 +71,10 @@ class LexicographyRepository(Protocol):
 
     def list_entries_for_dictionary(
         self, dictionary_id: UUID
+    ) -> list[DictionaryEntry]: ...
+
+    def list_entries_awaiting_review(
+        self, dictionary_ids: list[UUID]
     ) -> list[DictionaryEntry]: ...
 
     def count_fields_by_entry(self, dictionary_id: UUID) -> dict[UUID, int]: ...
@@ -205,3 +209,16 @@ class AiSchemaProvider(Protocol):
     def extract_fields(
         self, schema: ArticleSchema, segments: Sequence[FragmentSegment]
     ) -> list[ExtractedField]: ...
+
+
+class EntryPresentationRenderer(Protocol):
+    """Worker/API-side port that renders an entry's assembled context through
+    an ``ArticleSchema.presentation_formula`` (a Jinja2 template) into Markdown.
+
+    Kept behind a ``Protocol`` for the same reason as ``AiSchemaProvider``: the
+    Jinja2 engine and its sandbox are an infrastructure concern, so domain and
+    application code depend only on this contract. Implementations raise
+    ``cadmus.lexicography.domain.PresentationTemplateError`` on a bad template.
+    """
+
+    def render(self, template_source: str, context: Mapping[str, Any]) -> str: ...

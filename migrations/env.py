@@ -5,6 +5,7 @@ from logging.config import fileConfig
 import cadmus.infrastructure.identity
 import cadmus.infrastructure.reference_lexicon
 import cadmus.infrastructure.reference_links
+import cadmus.infrastructure.review
 import cadmus.infrastructure.sources  # noqa: F401
 from alembic import context
 from cadmus.config import Settings

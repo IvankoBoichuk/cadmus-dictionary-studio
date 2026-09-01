@@ -27,6 +27,7 @@ import { ProjectMembersPage } from "./pages/ProjectMembersPage";
 import { ReferenceLexiconPage } from "./pages/ReferenceLexiconPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
+import { ReviewQueuePage } from "./pages/ReviewQueuePage";
 import { SettlementsPage } from "./pages/SettlementsPage";
 import { StatusPage } from "./pages/StatusPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
@@ -52,6 +53,7 @@ export function App() {
           </Route>
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/review" element={<ReviewQueuePage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/dictionaries" element={<DictionariesList />} />
             <Route path="/dictionaries/new" element={<NewDictionaryPage />} />

@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 import { API, apiMessageFrom, type ArticleSchemaResponse } from "../api";
 import { SchemaDiffView } from "../components/SchemaDiffView";
@@ -18,6 +19,7 @@ import { SchemaFieldTreeEditor } from "../components/SchemaFieldTreeEditor";
 import { useArticleSchemaEditor } from "../hooks/useArticleSchemaEditor";
 import { useArticleSchemaGeneration } from "../hooks/useArticleSchemaGeneration";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
+import type { SchemaNode } from "../schemaDiff";
 
 const STATUS_LABELS: Record<ArticleSchemaResponse["status"], string> = {
   pending: "Очікує",
@@ -41,6 +43,19 @@ function formatDate(iso: string): string {
   return Number.isNaN(parsed.getTime())
     ? iso
     : parsed.toLocaleString("uk-UA", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formulaVariables(fields: SchemaNode[]): string {
+  const names = fields.map((field) => field.name.trim()).filter(Boolean);
+  return [...names, "headword", "entry", "fields"].join(", ");
+}
+
+function FormulaBlock({ formula }: { formula: string }) {
+  return (
+    <pre className="m-0 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-3 py-2 text-[0.8rem]">
+      {formula}
+    </pre>
+  );
 }
 
 function SchemaMeta({ schema }: { schema: ArticleSchemaResponse }) {
@@ -73,6 +88,14 @@ function SchemaMeta({ schema }: { schema: ArticleSchemaResponse }) {
         <>
           <dt className="text-muted-foreground">Опис структури</dt>
           <dd className="m-0">{schema.source_description}</dd>
+        </>
+      )}
+      {schema.presentation_formula && (
+        <>
+          <dt className="text-muted-foreground">Формула подання</dt>
+          <dd className="m-0">
+            <FormulaBlock formula={schema.presentation_formula} />
+          </dd>
         </>
       )}
     </dl>
@@ -113,6 +136,21 @@ function SchemaEditorPanel({
           value={editor.sourceDescription}
           onChange={(event) => editor.setSourceDescription(event.target.value)}
         />
+      </label>
+
+      <label className="grid gap-1 text-[0.85rem]">
+        Формула подання (Jinja2 → Markdown, необов'язково)
+        <Textarea
+          className="min-h-[7rem] font-mono text-[0.8rem]"
+          value={editor.presentationFormula}
+          onChange={(event) =>
+            editor.setPresentationFormula(event.target.value)
+          }
+        />
+        <span className="section-hint">
+          Доступні змінні: {formulaVariables(editor.fields)}. Приклад:{" "}
+          <code>{"**{{ headword }}** — {{ meaning }}"}</code>.
+        </span>
       </label>
 
       <SchemaFieldTreeEditor editor={editor} />
@@ -304,6 +342,12 @@ function ArticleSchemaWorkspace({ dictionaryId }: { dictionaryId: string }) {
         <div className="form-section">
           <h2>Активна схема (версія {activeSchema.version})</h2>
           <SchemaFieldTree definition={activeSchema.definition} />
+          {activeSchema.presentation_formula && (
+            <div className="grid gap-1 text-[0.85rem]">
+              <span className="text-muted-foreground">Формула подання</span>
+              <FormulaBlock formula={activeSchema.presentation_formula} />
+            </div>
+          )}
           <div className="form-actions">
             <Button
               variant="secondary"

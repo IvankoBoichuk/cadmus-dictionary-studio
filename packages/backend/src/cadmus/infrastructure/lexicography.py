@@ -146,6 +146,7 @@ article_schemas = Table(
     Column("raw_provider_response", JSONB, nullable=True),
     Column("provider_name", String(255), nullable=True),
     Column("error_message", Text, nullable=True),
+    Column("presentation_formula", Text, nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column(
         "created_by",
@@ -438,6 +439,22 @@ class SqlAlchemyLexicographyRepository:
                     dictionary_entries.c.headword,
                     dictionary_entries.c.created_at,
                 )
+            )
+        )
+
+    def list_entries_awaiting_review(
+        self, dictionary_ids: list[UUID]
+    ) -> list[DictionaryEntry]:
+        if not dictionary_ids:
+            return []
+        return list(
+            self._session.scalars(
+                select(DictionaryEntry)
+                .where(
+                    dictionary_entries.c.dictionary_id.in_(dictionary_ids),
+                    dictionary_entries.c.status == EntryStatus.READY_TO_REVIEW.value,
+                )
+                .order_by(dictionary_entries.c.updated_at)
             )
         )
 

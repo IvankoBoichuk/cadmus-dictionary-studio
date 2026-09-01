@@ -27,7 +27,9 @@ export type SchemaFieldType =
   | "date"
   | "enum"
   | "list"
-  | "group";
+  | "group"
+  | "abbreviation"
+  | "geographic_label";
 
 export const TYPE_LABELS: Record<SchemaFieldType, string> = {
   string: "Текст",
@@ -37,7 +39,16 @@ export const TYPE_LABELS: Record<SchemaFieldType, string> = {
   enum: "Перелік",
   list: "Список",
   group: "Група",
+  abbreviation: "Скорочення",
+  geographic_label: "Географічна мітка",
 };
+
+/** Field types whose entry-editor value is picked from a dictionary reference
+ * list (BH-29 abbreviations / BH-30 settlements) rather than typed freely. */
+export const REFERENCE_TYPES = new Set<SchemaFieldType>([
+  "abbreviation",
+  "geographic_label",
+]);
 
 export const TYPE_OPTIONS: { value: SchemaFieldType; label: string }[] =
   Object.entries(TYPE_LABELS).map(([value, label]) => ({

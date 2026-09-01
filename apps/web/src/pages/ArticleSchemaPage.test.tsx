@@ -33,6 +33,7 @@ function schema(overrides: Partial<ArticleSchemaResponse> = {}): ArticleSchemaRe
     definition: { fields: [{ name: "meaning", role: "meaning", type: "string" }] },
     provider_name: "anthropic:claude-opus-5",
     error_message: null,
+    presentation_formula: null,
     created_at: "2026-08-15T12:00:00Z",
     activated_at: null,
     ...overrides,
@@ -165,6 +166,48 @@ describe("ArticleSchemaPage", () => {
       (call) => (call[1]?.method ?? "GET") === "POST",
     );
     expect(postCall?.[0]).toContain("/article-schemas");
+  });
+
+  it("round-trips a presentation formula through the editor", async () => {
+    const v1 = schema({ version: 1 });
+    const v2 = schema({
+      id: "44444444-4444-4444-4444-444444444444",
+      version: 2,
+      presentation_formula: "**{{ headword }}**",
+    });
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((_url: string, init?: RequestInit) => {
+        if ((init?.method ?? "GET") === "POST") {
+          return Promise.resolve(jsonResponse(201, v2));
+        }
+        return Promise.resolve(
+          jsonResponse(200, fetchMock.mock.calls.length > 2 ? [v1, v2] : [v1]),
+        );
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAt(`/dictionaries/${DICTIONARY_ID}/article-schema`);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Редагувати" }));
+    fireEvent.change(
+      await screen.findByLabelText(/Формула подання/),
+      { target: { value: "**{{ headword }}**" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Зберегти як нову версію" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/Версію 2 збережено/)).toBeInTheDocument(),
+    );
+    const postCall = fetchMock.mock.calls.find(
+      (call) => (call[1]?.method ?? "GET") === "POST",
+    );
+    const body = JSON.parse((postCall![1] as RequestInit).body as string);
+    expect(body.presentation_formula).toBe("**{{ headword }}**");
+    // and the saved version's formula is shown back in the viewer
+    expect(await screen.findByText("**{{ headword }}**")).toBeInTheDocument();
   });
 
   it("shows a removed field when comparing two versions", async () => {

@@ -1,4 +1,11 @@
-import { LayoutDashboard, Library, Menu, UserRound, X } from "lucide-react";
+import {
+  ClipboardCheck,
+  LayoutDashboard,
+  Library,
+  Menu,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet } from "react-router-dom";
 
@@ -11,6 +18,7 @@ import { useLogout } from "../hooks/useLogout";
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Дашборд", icon: LayoutDashboard, end: true },
   { to: "/dictionaries", label: "Словники", icon: Library, end: false },
+  { to: "/review", label: "Черга рецензування", icon: ClipboardCheck, end: true },
 ] as const;
 
 /** Chrome for authenticated routes: persistent sidebar + guarded `<main>`.

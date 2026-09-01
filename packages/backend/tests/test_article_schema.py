@@ -545,3 +545,67 @@ def test_normalize_schema_definition_carries_enum_options_only() -> None:
     fields = normalized["fields"]
     assert fields[0]["options"] == ["ч.", "ж."]
     assert fields[1]["options"] == []
+
+
+def test_save_persists_a_trimmed_presentation_formula() -> None:
+    fixture = Fixture()
+
+    saved = fixture.save_service.save(
+        fixture.dictionary.id,
+        fixture.owner_id,
+        definition=_VALID_DEFINITION,
+        presentation_formula="  # {{ headword }}  ",
+    )
+
+    assert saved.presentation_formula == "# {{ headword }}"
+
+
+def test_save_leaves_presentation_formula_none_when_omitted_or_blank() -> None:
+    fixture = Fixture()
+
+    omitted = fixture.save_service.save(
+        fixture.dictionary.id, fixture.owner_id, definition=_VALID_DEFINITION
+    )
+    blank = fixture.save_service.save(
+        fixture.dictionary.id,
+        fixture.owner_id,
+        definition=_VALID_DEFINITION,
+        presentation_formula="   ",
+    )
+
+    assert omitted.presentation_formula is None
+    assert blank.presentation_formula is None
+
+
+def test_validate_schema_definition_accepts_reference_field_types() -> None:
+    errors = validate_schema_definition(
+        {
+            "fields": [
+                {"name": "abbr", "role": "abbreviation", "type": "abbreviation"},
+                {
+                    "name": "place",
+                    "role": "geographic_label",
+                    "type": "geographic_label",
+                },
+            ]
+        }
+    )
+
+    assert errors == {}
+
+
+def test_normalize_schema_definition_drops_options_for_reference_types() -> None:
+    normalized = normalize_schema_definition(
+        {
+            "fields": [
+                {
+                    "name": "abbr",
+                    "role": "abbreviation",
+                    "type": "abbreviation",
+                    "options": ["leftover"],
+                }
+            ]
+        }
+    )
+
+    assert normalized["fields"][0]["options"] == []

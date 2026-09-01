@@ -276,6 +276,7 @@ export type EntryStatus = components["schemas"]["EntryStatus"];
 export type EntryFieldRole = components["schemas"]["EntryFieldRole"];
 export type EntryFieldOrigin = components["schemas"]["EntryFieldOrigin"];
 export type EntryResponse = components["schemas"]["EntryResponse"];
+export type EntryRenderResponse = components["schemas"]["EntryRenderResponse"];
 export type EntryFieldResponse = components["schemas"]["EntryFieldResponse"];
 export type EntryFragmentResponse = components["schemas"]["EntryFragmentResponse"];
 export type EntrySummaryResponse = components["schemas"]["EntrySummaryResponse"];
@@ -320,6 +321,21 @@ type DeleteEntryFieldOperation =
   paths["/entries/{entry_id}/fields/{field_id}"]["delete"];
 type DeleteEntryFieldNotFoundResponse =
   DeleteEntryFieldOperation["responses"][404]["content"]["application/json"];
+
+export type ReviewQueueItemResponse =
+  components["schemas"]["ReviewQueueItemResponse"];
+type ReviewDecisionRequest = components["schemas"]["ReviewDecisionRequest"];
+export type ReviewDecisionResponse =
+  components["schemas"]["ReviewDecisionResponse"];
+
+type ApproveReviewOperation =
+  paths["/review/entries/{entry_id}/approve"]["post"];
+export type ApproveReviewFieldErrorsResponse =
+  ApproveReviewOperation["responses"][422]["content"]["application/json"];
+type ReviewEntryNotFoundResponse =
+  ApproveReviewOperation["responses"][404]["content"]["application/json"];
+export type ReviewConflictResponse =
+  ApproveReviewOperation["responses"][409]["content"]["application/json"];
 
 export type OcrSuggestionStatus = components["schemas"]["OcrSuggestionStatus"];
 export type LexemeSuggestion = components["schemas"]["LexemeSuggestionResponse"];
@@ -682,8 +698,24 @@ function entryExtractionTaskPath(entryId: string, taskId: string): keyof paths {
   return `/entries/${entryId}/extract/${taskId}` as keyof paths;
 }
 
+function entryRenderPath(entryId: string): keyof paths {
+  return `/entries/${entryId}/render` as keyof paths;
+}
+
 function entryFieldsPath(entryId: string): keyof paths {
   return `/entries/${entryId}/fields` as keyof paths;
+}
+
+function reviewQueuePath(): keyof paths {
+  return "/review/queue";
+}
+
+function reviewApprovePath(entryId: string): keyof paths {
+  return `/review/entries/${entryId}/approve` as keyof paths;
+}
+
+function reviewSendBackPath(entryId: string): keyof paths {
+  return `/review/entries/${entryId}/send-back` as keyof paths;
 }
 
 function entryFieldPath(entryId: string, fieldId: string): keyof paths {
@@ -1653,6 +1685,16 @@ export const API = {
       return get<EntryResponse, EntryNotFoundResponse>(entryPath(entryId), options);
     },
 
+    render(
+      entryId: string,
+      options?: RequestOptions,
+    ): Promise<EntryRenderResponse> {
+      return get<EntryRenderResponse, EntryNotFoundResponse>(
+        entryRenderPath(entryId),
+        options,
+      );
+    },
+
     listForDictionary(
       dictionaryId: string,
       options?: RequestOptions,
@@ -1758,6 +1800,38 @@ export const API = {
         entryReferenceLinkPath(entryId, linkId),
         options,
       );
+    },
+  },
+
+  review: {
+    queue(options?: RequestOptions): Promise<ReviewQueueItemResponse[]> {
+      return get<ReviewQueueItemResponse[], never>(reviewQueuePath(), options);
+    },
+
+    approve(
+      entryId: string,
+      body: ReviewDecisionRequest = {},
+      options?: RequestOptions,
+    ): Promise<ReviewDecisionResponse> {
+      return post<
+        ReviewDecisionRequest,
+        ReviewDecisionResponse,
+        | ApproveReviewFieldErrorsResponse
+        | ReviewEntryNotFoundResponse
+        | ReviewConflictResponse
+      >(reviewApprovePath(entryId), body, options);
+    },
+
+    sendBack(
+      entryId: string,
+      body: ReviewDecisionRequest = {},
+      options?: RequestOptions,
+    ): Promise<ReviewDecisionResponse> {
+      return post<
+        ReviewDecisionRequest,
+        ReviewDecisionResponse,
+        ReviewEntryNotFoundResponse | ReviewConflictResponse
+      >(reviewSendBackPath(entryId), body, options);
     },
   },
 

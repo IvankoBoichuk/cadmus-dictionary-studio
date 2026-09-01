@@ -1,6 +1,7 @@
 """Lexicography domain objects and invariants (BH-54: manual lexeme selection)."""
 
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -531,6 +532,16 @@ class ArticleSchemaAccessError(LookupError):
         self.schema_id = schema_id
 
 
+class PresentationTemplateError(ValueError):
+    """Raised when an ``ArticleSchema.presentation_formula`` fails to compile or
+    render (syntax error, undefined access the template forbids, or a sandbox
+    security violation). Carries a human-readable ``message`` for the editor."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 class EntryValidationError(ValueError):
     """Field-addressable BH-148 dictionary entry validation errors."""
 
@@ -599,6 +610,24 @@ class ArticleSchema:
     error_message: str | None = None
     activated_at: datetime | None = None
     activated_by: UUID | None = None
+    presentation_formula: str | None = None
+    """A Jinja2 template that composes an entry's fields into Markdown
+    (BH-148). Rendered by ``build_entry_presentation_context`` + the
+    infra-only ``EntryPresentationRenderer`` port. ``None`` until an editor
+    writes one; AI-generated versions never carry one."""
+
+
+@dataclass(frozen=True)
+class EntryRenderResult:
+    """Outcome of rendering one entry through its schema's presentation
+    formula. ``markdown`` is the rendered article, or ``None`` when it could
+    not be produced -- ``reason`` then says why (``"no_schema"``,
+    ``"no_formula"`` or ``"template_error"``) and ``error`` carries the
+    template message for the last case."""
+
+    markdown: str | None
+    reason: str | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -793,6 +822,10 @@ def validate_field_value(node: dict[str, Any], value: str) -> str | None:
     text = value.strip()
     if not text:
         return None
+    if node_type in ("abbreviation", "geographic_label"):
+        # Reference field types: the entry editor offers the dictionary's own
+        # BH-29/BH-30 lists as a soft hint, but a value outside them is kept.
+        return None
     if node_type == "enum":
         options = node.get("options") or []
         if text not in options:
@@ -873,7 +906,12 @@ SCHEMA_FIELD_TYPES = (
     "enum",
     "list",
     "group",
+    "abbreviation",
+    "geographic_label",
 )
+"""``abbreviation`` / ``geographic_label`` are reference types: structurally the
+same as ``string`` (no ``options``), but the entry editor offers the
+dictionary's own BH-29 abbreviation / BH-30 settlement lists as a soft picker."""
 SCHEMA_TYPES_WITH_OPTIONS = ("enum",)
 """Field types whose node carries an ``options`` list of allowed string values."""
 MAX_SCHEMA_DEPTH = 3
@@ -990,3 +1028,182 @@ def normalize_schema_definition(definition: dict[str, Any]) -> dict[str, Any]:
         }
 
     return {"fields": [_node(node, 1) for node in definition.get("fields") or []]}
+
+
+_PATH_SEGMENT_RE = re.compile(r"^(?P<name>[^\[.]+)(?:\[(?P<idx>\d+)\])?$")
+
+_PathSegments = list[tuple[str, int | None]]
+
+
+def _parse_field_path(path: str) -> _PathSegments | None:
+    """Parse an ``EntryField.field_path`` (``"senses[0].examples[1]"``) into
+    ``[(segment_name, index_or_None), ...]``. Returns ``None`` for a malformed
+    path -- such a field is left out of the nested render tree (but still
+    appears in the flat ``context["fields"]`` escape hatch)."""
+    segments: _PathSegments = []
+    for raw in path.split("."):
+        match = _PATH_SEGMENT_RE.match(raw.strip())
+        if match is None:
+            return None
+        idx = match.group("idx")
+        segments.append((match.group("name"), int(idx) if idx is not None else None))
+    return segments
+
+
+def _prefix_matches(segments: _PathSegments, prefix: _PathSegments) -> bool:
+    """True when ``segments`` starts with ``prefix``. A ``None`` index in
+    ``prefix`` is a wildcard (used for non-repeatable nodes, whose fields may be
+    addressed as either ``meaning`` or ``meaning[0]``)."""
+    if len(segments) < len(prefix):
+        return False
+    for (seg_name, seg_idx), (pre_name, pre_idx) in zip(segments, prefix, strict=False):
+        if seg_name != pre_name:
+            return False
+        if pre_idx is not None and seg_idx != pre_idx:
+            return False
+    return True
+
+
+class _RenderValue(str):
+    """A field's text that also exposes rule-tagged children as attributes:
+    ``{{ meaning }}`` renders the text, ``{{ meaning.abbreviations }}`` the
+    list. A plain ``str`` for every other purpose."""
+
+    def __new__(
+        cls, text: str, attrs: Mapping[str, Any] | None = None
+    ) -> "_RenderValue":
+        self = super().__new__(cls, text)
+        for key, value in (attrs or {}).items():
+            object.__setattr__(self, key, value)
+        return self
+
+
+_RULE_CHILD_KEYS = {
+    "abbreviation": "abbreviations",
+    "geographic_label": "geographic_labels",
+}
+
+
+def build_entry_presentation_context(
+    entry: "DictionaryEntry",
+    fields: Sequence["EntryField"],
+    schema: "ArticleSchema",
+) -> dict[str, Any]:
+    """Assemble the flat ``fields`` list into the nested structure an
+    ``ArticleSchema.presentation_formula`` (Jinja2) iterates.
+
+    Keys mirror schema node ``name``s. A non-repeatable leaf node becomes a
+    ``_RenderValue`` (its text, plus ``abbreviations``/``geographic_labels``
+    lists gathered from RULE-tagged children); a repeatable node becomes a list
+    of those (index gaps compacted); a node with children becomes a ``dict``
+    whose own text is under ``"value"``. ``headword``, ``entry`` and a flat
+    ``fields`` list are always present. The per-field value is
+    ``normalized_text`` when set, else ``source_text`` (matching
+    ``validate_entry_against_schema``)."""
+    parsed: list[tuple[_PathSegments, EntryField]] = []
+    for field in fields:
+        segments = _parse_field_path(field.field_path)
+        if segments is not None:
+            parsed.append((segments, field))
+
+    def _value(field: EntryField) -> str:
+        if field.normalized_text is not None:
+            return field.normalized_text
+        return field.source_text
+
+    def _rule_children(inst_prefix: _PathSegments) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {"abbreviations": [], "geographic_labels": []}
+        want = len(inst_prefix) + 1
+        for segments, field in parsed:
+            if len(segments) != want or not _prefix_matches(segments, inst_prefix):
+                continue
+            key = _RULE_CHILD_KEYS.get(segments[-1][0])
+            if key is not None:
+                out[key].append(_value(field))
+        return out
+
+    def _instance(
+        child_nodes: Sequence[dict[str, Any]],
+        inst_prefix: _PathSegments,
+        own_val: str,
+    ) -> Any:
+        rule_attrs = _rule_children(inst_prefix)
+        if child_nodes:
+            nested = _assemble(child_nodes, inst_prefix)
+            nested["value"] = own_val
+            nested.update(rule_attrs)
+            return nested
+        return _RenderValue(own_val, rule_attrs)
+
+    def _assemble(
+        nodes: Sequence[dict[str, Any]], prefix: _PathSegments
+    ) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        depth = len(prefix)
+        for node in nodes:
+            key = str(node.get("name") or "").strip()
+            if not key:
+                continue
+            child_nodes = node.get("children") or []
+            matches = [
+                (segments, field)
+                for segments, field in parsed
+                if len(segments) > depth
+                and segments[depth][0] == key
+                and _prefix_matches(segments, prefix)
+            ]
+            own = sorted(
+                (pair for pair in matches if len(pair[0]) == depth + 1),
+                key=lambda pair: pair[1].position,
+            )
+
+            if node.get("repeatable") is True:
+                explicit_indices: set[int] = set()
+                for segments, _ in matches:
+                    idx = segments[depth][1]
+                    if idx is not None:
+                        explicit_indices.add(idx)
+                explicit = sorted(explicit_indices)
+                instances: list[Any] = []
+                if explicit:
+                    for original_idx in explicit:
+                        own_val = next(
+                            (
+                                _value(field)
+                                for segments, field in own
+                                if segments[depth][1] == original_idx
+                            ),
+                            "",
+                        )
+                        instances.append(
+                            _instance(
+                                child_nodes, [*prefix, (key, original_idx)], own_val
+                            )
+                        )
+                else:
+                    for _, field in own:
+                        instances.append(
+                            _instance(
+                                child_nodes, [*prefix, (key, None)], _value(field)
+                            )
+                        )
+                out[key] = instances
+                continue
+
+            own_val = _value(own[0][1]) if own else ""
+            out[key] = _instance(child_nodes, [*prefix, (key, None)], own_val)
+        return out
+
+    context = _assemble(schema.definition.get("fields", []), [])
+    context.setdefault("headword", entry.headword)
+    context["entry"] = {"headword": entry.headword, "status": entry.status.value}
+    context["fields"] = [
+        {
+            "field_path": field.field_path,
+            "role": field.role.value,
+            "value": _value(field),
+            "origin": field.origin.value,
+        }
+        for field in sorted(fields, key=lambda f: f.position)
+    ]
+    return context
