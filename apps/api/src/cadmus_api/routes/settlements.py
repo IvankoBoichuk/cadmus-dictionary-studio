@@ -54,9 +54,27 @@ class SettlementMappingRequest(BaseModel):
 
     source_label: str = Field(min_length=1, max_length=512)
     source_note: str | None = Field(default=None, max_length=2000)
+    district: str | None = Field(default=None, max_length=64)
     modern_settlement_name: str | None = Field(default=None, max_length=255)
     settlement_category: str | None = Field(default=None, max_length=64)
     settlement_id: UUID | None = None
+
+
+class SetDistrictByCommunityRequest(BaseModel):
+    """Set the raion short form for every mapping of one community (BH-30)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    community_id: UUID
+    district: str | None = Field(default=None, max_length=64)
+
+
+class SetDistrictByCommunityResponse(BaseModel):
+    """How many mappings the bulk district update touched."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    updated: int
 
 
 class SettlementMappingResponse(BaseModel):
@@ -68,6 +86,7 @@ class SettlementMappingResponse(BaseModel):
     source_label: str
     status: SettlementMappingStatus
     source_note: str | None
+    district: str | None
     modern_settlement_name: str | None
     settlement_category: str | None
     area_id: UUID | None
@@ -199,6 +218,7 @@ def _mapping_response(
         source_label=mapping.source_label,
         status=mapping.status,
         source_note=mapping.source_note,
+        district=mapping.district,
         modern_settlement_name=mapping.modern_settlement_name,
         settlement_category=mapping.settlement_category,
         area_id=mapping.area_id,
@@ -239,6 +259,7 @@ def _to_input(
     return SettlementMappingInput(
         source_label=request.source_label,
         source_note=request.source_note,
+        district=request.district,
         modern_settlement_name=request.modern_settlement_name,
         settlement_category=request.settlement_category,
         settlement_id=request.settlement_id,
@@ -353,6 +374,37 @@ def create_settlements_router(
         except DictionaryAccessError:
             return _not_found()
         return _mapping_response(mapping)
+
+    @router.post(
+        "/district-by-community",
+        response_model=SetDistrictByCommunityResponse,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **NOT_FOUND_RESPONSE,
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": FieldErrorsResponse,
+                "description": "The district value is invalid",
+            },
+        },
+        summary="Set the raion short form for every mapping of one community",
+    )
+    def set_district_by_community(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+        request: SetDistrictByCommunityRequest,
+    ) -> SetDistrictByCommunityResponse | JSONResponse:
+        try:
+            updated = mapping_crud_service.set_district_for_community(
+                dictionary_id, request.community_id, request.district, user.id
+            )
+        except SettlementMappingValidationError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"errors": error.errors},
+            )
+        except DictionaryAccessError:
+            return _not_found()
+        return SetDistrictByCommunityResponse(updated=updated)
 
     @router.patch(
         "/{mapping_id}",

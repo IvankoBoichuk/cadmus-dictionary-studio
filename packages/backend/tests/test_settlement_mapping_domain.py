@@ -58,6 +58,16 @@ def test_max_length_modern_settlement_name_is_accepted() -> None:
     assert "modern_settlement_name" not in errors
 
 
+def test_too_long_district_is_rejected() -> None:
+    errors = _errors(district="a" * 65)
+    assert "district" in errors
+
+
+def test_max_length_district_is_accepted() -> None:
+    errors = _errors(district="a" * 64)
+    assert "district" not in errors
+
+
 def test_duplicate_key_trims_whitespace() -> None:
     assert settlement_mapping_duplicate_key("  Іванівка  ") == "Іванівка"
 

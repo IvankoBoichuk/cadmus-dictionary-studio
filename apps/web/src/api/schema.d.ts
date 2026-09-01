@@ -764,6 +764,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dictionaries/{dictionary_id}/settlements/district-by-community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the raion short form for every mapping of one community */
+        post: operations["set_district_by_community_dictionaries__dictionary_id__settlements_district_by_community_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dictionaries/{dictionary_id}/settlements/export": {
         parameters: {
             query?: never;
@@ -1688,6 +1705,8 @@ export interface components {
             /** Parent Field Id */
             parent_field_id?: string | null;
             role: components["schemas"]["EntryFieldRole"];
+            /** Settlement Mapping Id */
+            settlement_mapping_id?: string | null;
             /** Source End */
             source_end: number;
             /** Source Start */
@@ -2036,6 +2055,8 @@ export interface components {
             /** Position */
             position: number;
             role: components["schemas"]["EntryFieldRole"];
+            /** Settlement Mapping Id */
+            settlement_mapping_id: string | null;
             /** Source End */
             source_end: number | null;
             /** Source Start */
@@ -2960,6 +2981,27 @@ export interface components {
             user_agent: string | null;
         };
         /**
+         * SetDistrictByCommunityRequest
+         * @description Set the raion short form for every mapping of one community (BH-30).
+         */
+        SetDistrictByCommunityRequest: {
+            /**
+             * Community Id
+             * Format: uuid
+             */
+            community_id: string;
+            /** District */
+            district?: string | null;
+        };
+        /**
+         * SetDistrictByCommunityResponse
+         * @description How many mappings the bulk district update touched.
+         */
+        SetDistrictByCommunityResponse: {
+            /** Updated */
+            updated: number;
+        };
+        /**
          * SettlementMappingRequest
          * @description One BH-30 settlement mapping submission (AC7, AC11, AC12).
          *
@@ -2968,6 +3010,8 @@ export interface components {
          *     reach ``confirmed`` is the dedicated confirm endpoint below.
          */
         SettlementMappingRequest: {
+            /** District */
+            district?: string | null;
             /** Modern Settlement Name */
             modern_settlement_name?: string | null;
             /** Settlement Category */
@@ -3003,6 +3047,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** District */
+            district: string | null;
             /** External Community Id */
             external_community_id: string | null;
             /**
@@ -3150,6 +3196,8 @@ export interface components {
             /** Normalized Text */
             normalized_text?: string | null;
             role?: components["schemas"]["EntryFieldRole"] | null;
+            /** Settlement Mapping Id */
+            settlement_mapping_id?: string | null;
             /** Source Text */
             source_text?: string | null;
         };
@@ -6304,6 +6352,61 @@ export interface operations {
                 };
             };
             /** @description Settlement mapping fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__settlements__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    set_district_by_community_dictionaries__dictionary_id__settlements_district_by_community_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDistrictByCommunityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetDistrictByCommunityResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or settlement mapping does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The district value is invalid */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -184,6 +184,7 @@ def test_sync_then_match_and_confirm_a_settlement_mapping() -> None:
             SettlementMappingInput(
                 source_label="Історична Іванувка",
                 source_note="стара форма з тексту",
+                district=None,
                 modern_settlement_name=None,
                 settlement_category=None,
                 settlement_id=None,
@@ -214,6 +215,7 @@ def test_sync_then_match_and_confirm_a_settlement_mapping() -> None:
             SettlementMappingInput(
                 source_label="Історична Іванувка",
                 source_note="стара форма з тексту",
+                district=None,
                 modern_settlement_name=suggestion.title,
                 settlement_category=suggestion.category,
                 settlement_id=suggestion.settlement_id,

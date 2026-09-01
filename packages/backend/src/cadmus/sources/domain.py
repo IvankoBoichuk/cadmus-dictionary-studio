@@ -355,6 +355,10 @@ class DictionarySettlementMapping:
     created_by: UUID
     updated_by: UUID
     source_note: str | None = None
+    district: str | None = None
+    """The raion short form as written in the source ("Хот."), set per mapping
+    or in bulk for a whole community. Not part of the confirmation snapshot --
+    it is dictionary-editor metadata, editable regardless of ``status`` (BH-30)."""
     modern_settlement_name: str | None = None
     settlement_category: str | None = None
     area_id: UUID | None = None
@@ -718,6 +722,7 @@ def validate_settlement_mapping_fields(
     source_label: str,
     source_note: str | None,
     modern_settlement_name: str | None,
+    district: str | None = None,
 ) -> dict[str, str]:
     """Validate one BH-30 settlement mapping entry's fields (BH-48)."""
     errors: dict[str, str] = {}
@@ -736,6 +741,9 @@ def validate_settlement_mapping_fields(
         errors["modern_settlement_name"] = (
             "Назва сучасного населеного пункту занадто довга (максимум 255 символів)."
         )
+
+    if district is not None and len(district) > 64:
+        errors["district"] = "Скорочення району занадто довге (максимум 64 символи)."
 
     return errors
 

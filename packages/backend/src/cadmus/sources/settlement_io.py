@@ -11,6 +11,7 @@ Every imported row is created with ``status=unresolved``, regardless of what
 * ``source_label``            -- required; the historical/original label,
   stored verbatim (AC7).
 * ``source_note``              -- optional.
+* ``district``                 -- optional; the raion short form ("Хот.").
 * ``modern_settlement_name``   -- optional, free text (not a search match).
 * ``settlement_category``      -- optional, free text.
 
@@ -44,6 +45,7 @@ from cadmus.sources.ports import SourcesUnitOfWorkFactory
 CSV_FIELDS: tuple[str, ...] = (
     "source_label",
     "source_note",
+    "district",
     "modern_settlement_name",
     "settlement_category",
     "status",
@@ -132,6 +134,9 @@ def _row_to_input(
         source_note if isinstance(source_note, str) and source_note.strip() else None
     )
 
+    district = row.get("district")
+    district = district if isinstance(district, str) and district.strip() else None
+
     modern_settlement_name = row.get("modern_settlement_name")
     modern_settlement_name = (
         modern_settlement_name
@@ -150,6 +155,7 @@ def _row_to_input(
         source_label=source_label,
         source_note=source_note,
         modern_settlement_name=modern_settlement_name,
+        district=district,
     )
     if field_errors:
         return None, field_errors
@@ -158,6 +164,7 @@ def _row_to_input(
         SettlementMappingInput(
             source_label=source_label.strip(),
             source_note=source_note,
+            district=district,
             modern_settlement_name=modern_settlement_name,
             settlement_category=settlement_category,
             settlement_id=None,
@@ -246,6 +253,7 @@ class SettlementMappingImportService:
                     source_label=data.source_label,
                     source_note=data.source_note,
                     modern_settlement_name=data.modern_settlement_name,
+                    district=data.district,
                 )
                 if errors:
                     skipped.append(
@@ -287,6 +295,7 @@ class SettlementMappingImportService:
                     created_by=actor_id,
                     updated_by=actor_id,
                     source_note=(data.source_note or "").strip() or None,
+                    district=(data.district or "").strip() or None,
                     modern_settlement_name=(data.modern_settlement_name or "").strip()
                     or None,
                     settlement_category=data.settlement_category,
@@ -311,6 +320,7 @@ def export_settlement_mappings_json(
         {
             "source_label": item.source_label,
             "source_note": item.source_note,
+            "district": item.district,
             "modern_settlement_name": item.modern_settlement_name,
             "settlement_category": item.settlement_category,
             "status": item.status.value,
@@ -342,6 +352,7 @@ def export_settlement_mappings_csv(
             {
                 "source_label": item.source_label,
                 "source_note": item.source_note or "",
+                "district": item.district or "",
                 "modern_settlement_name": item.modern_settlement_name or "",
                 "settlement_category": item.settlement_category or "",
                 "status": item.status.value,

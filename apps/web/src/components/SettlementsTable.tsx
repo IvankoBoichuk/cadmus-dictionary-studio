@@ -70,6 +70,7 @@ export function SettlementsTable({
           <TableHead scope="col">Позначка з оригіналу</TableHead>
           <TableHead scope="col">Сучасна відповідність</TableHead>
           <TableHead scope="col">Громада</TableHead>
+          <TableHead scope="col">Район</TableHead>
           <TableHead scope="col">Статус</TableHead>
           <TableHead scope="col">Дії</TableHead>
         </TableRow>
@@ -77,7 +78,7 @@ export function SettlementsTable({
       <TableBody>
         {mappings.length === 0 && !adding && (
           <TableRow>
-            <TableCell colSpan={5} className="text-muted-foreground">
+            <TableCell colSpan={6} className="text-muted-foreground">
               Географічних міток ще немає. Натисніть + щоб додати першу.
             </TableCell>
           </TableRow>
@@ -103,6 +104,7 @@ export function SettlementsTable({
               <TableCell>{item.source_label}</TableCell>
               <TableCell>{item.modern_settlement_name ?? "—"}</TableCell>
               <TableCell>{item.community_name ?? "—"}</TableCell>
+              <TableCell>{item.district ?? "—"}</TableCell>
               <TableCell>
                 <Badge variant={STATUS_BADGE_VARIANT[item.status]}>
                   {STATUS_LABELS[item.status]}
@@ -197,7 +199,7 @@ export function SettlementsTable({
       </TableBody>
       <TableFooter>
         <TableRow>
-          <TableCell colSpan={5} className="text-center">
+          <TableCell colSpan={6} className="text-center">
             {!adding && (
               <Tooltip>
                 <TooltipTrigger asChild>

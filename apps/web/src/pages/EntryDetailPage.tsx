@@ -20,6 +20,7 @@ import {
   type EntryFieldRole,
   type EntryFragmentResponse,
   type EntryResponse,
+  type SettlementMappingResponse,
 } from "../api";
 
 import { Badge } from "@/components/ui/badge";
@@ -458,6 +459,7 @@ function FieldRow({
   schemaOptions,
   abbreviationItems,
   settlementItems,
+  settlementMappings,
   linked,
   onHoverChange,
   onSaved,
@@ -470,6 +472,7 @@ function FieldRow({
   schemaOptions: SchemaFieldOption[];
   abbreviationItems: string[];
   settlementItems: string[];
+  settlementMappings: SettlementMappingResponse[];
   /** Highlighted because the hovered/focused row is its parent or child. */
   linked: boolean;
   onHoverChange: (fieldId: string | null) => void;
@@ -498,6 +501,11 @@ function FieldRow({
     draftText.trim().length > 0 &&
     !(refItems ?? []).includes(draftText.trim());
 
+  const isGeoLabel = field.role === "geographic_label";
+  const linkedMapping = isGeoLabel
+    ? settlementMappings.find((m) => m.id === field.settlement_mapping_id)
+    : undefined;
+
   const hasCrop =
     pageNumber != null &&
     field.x != null &&
@@ -516,9 +524,16 @@ function FieldRow({
     setSaving(true);
     setError(null);
     try {
+      const geoNow = draftRole === "geographic_label";
+      const mappingId = geoNow
+        ? (settlementMappings.find(
+            (m) => m.source_label === draftText.trim(),
+          )?.id ?? null)
+        : undefined;
       const updated = await API.entries.updateField(entryId, field.id, {
         normalized_text: draftText.trim() || null,
         role: draftRole,
+        ...(geoNow ? { settlement_mapping_id: mappingId } : {}),
       });
       onSaved(updated);
       setEditing(false);
@@ -692,6 +707,42 @@ function FieldRow({
               {field.field_path}
             </span>
           </div>
+          {isGeoLabel &&
+            (linkedMapping ? (
+              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-[0.75rem]">
+                <dt className="text-muted-foreground">Населений пункт</dt>
+                <dd className="m-0">
+                  {linkedMapping.modern_settlement_name ??
+                    linkedMapping.source_label}
+                </dd>
+                <dt className="text-muted-foreground">Район</dt>
+                <dd className="m-0">{linkedMapping.district ?? "—"}</dd>
+                <dt className="text-muted-foreground">Громада</dt>
+                <dd className="m-0">{linkedMapping.community_name ?? "—"}</dd>
+                <dt className="text-muted-foreground">Статус</dt>
+                <dd className="m-0">
+                  <Badge
+                    variant={
+                      linkedMapping.status === "confirmed"
+                        ? "secondary"
+                        : linkedMapping.status === "suggested"
+                          ? "info"
+                          : "warning"
+                    }
+                  >
+                    {linkedMapping.status === "confirmed"
+                      ? "підтверджено"
+                      : linkedMapping.status === "suggested"
+                        ? "запропоновано"
+                        : "не зіставлено"}
+                  </Badge>
+                </dd>
+              </dl>
+            ) : (
+              <p className="m-0 text-[0.75rem] text-muted-foreground">
+                Не прив'язано до довідника географічних міток.
+              </p>
+            ))}
         </>
       )}
       {error && (
@@ -788,13 +839,17 @@ function EntryBody({
         : [],
     [abbreviationsState],
   );
-  const settlementItems = useMemo(
+  const settlementMappings = useMemo(
     () =>
       settlementsState.status === "loaded" &&
       Array.isArray(settlementsState.mappings)
-        ? settlementsState.mappings.map((item) => item.source_label).filter(Boolean)
+        ? settlementsState.mappings
         : [],
     [settlementsState],
+  );
+  const settlementItems = useMemo(
+    () => settlementMappings.map((item) => item.source_label).filter(Boolean),
+    [settlementMappings],
   );
 
   const entryId = entry.id;
@@ -1066,6 +1121,7 @@ function EntryBody({
                           schemaOptions={schemaOptions}
                           abbreviationItems={abbreviationItems}
                           settlementItems={settlementItems}
+                          settlementMappings={settlementMappings}
                           linked={linkedFieldIds.has(field.id)}
                           onHoverChange={setHoveredFieldId}
                           onSaved={handleFieldSaved}

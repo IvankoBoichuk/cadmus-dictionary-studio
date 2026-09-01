@@ -20,7 +20,13 @@ from cadmus.lexicography import (
     RuleBasedAnnotationService,
     SchemaGenerationStatus,
 )
-from cadmus.sources import Dictionary, DictionaryStatus, SourcesRepository
+from cadmus.sources import (
+    Dictionary,
+    DictionarySettlementMapping,
+    DictionaryStatus,
+    SettlementMappingStatus,
+    SourcesRepository,
+)
 from cadmus_worker import entry_extraction_tasks
 from cadmus_worker.entry_extraction_tasks import (
     _EntryExtractionDependencies,
@@ -103,6 +109,18 @@ class MemoryLexicographyRepository:
 
     def list_fields_for_entry(self, entry_id: UUID) -> list[EntryField]:
         return list(self.fields.get(entry_id, []))
+
+    def update_field(self, entry_field: EntryField) -> None:
+        bucket = self.fields.setdefault(entry_field.entry_id, [])
+        for index, existing in enumerate(bucket):
+            if existing.id == entry_field.id:
+                bucket[index] = entry_field
+                return
+        bucket.append(entry_field)
+
+    def delete_field(self, field_id: UUID) -> None:
+        for bucket in self.fields.values():
+            bucket[:] = [f for f in bucket if f.id != field_id]
 
 
 class MemoryLexicographyUnitOfWork:
@@ -386,3 +404,38 @@ def test_extract_entry_fields_no_active_schema_does_not_crash(
 
     assert result["status"] == "failed"
     assert result["error"] == "no active article schema"
+
+
+def test_extract_entry_fields_links_a_geographic_label_to_its_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = Fixture(
+        definition={
+            "fields": [{"name": "place", "role": "geographic_label", "type": "string"}]
+        },
+        fragment_text="Атаки Хот.",
+        items=[ExtractedField("place", EntryFieldRole.GEOGRAPHIC_LABEL, "Атаки", 0.9)],
+    )
+    mapping = DictionarySettlementMapping(
+        id=uuid4(),
+        dictionary_id=fixture.dictionary.id,
+        source_label="Атаки",
+        status=SettlementMappingStatus.CONFIRMED,
+        created_at=NOW,
+        updated_at=NOW,
+        created_by=fixture.dictionary.owner_id,
+        updated_by=fixture.dictionary.owner_id,
+        modern_settlement_name="Атаки",
+        community_name="Хотинська територіальна громада",
+        district="Хот.",
+    )
+    fixture.sources_repository.settlements[fixture.dictionary.id] = [mapping]
+    fixture.install(monkeypatch)
+
+    fixture.run("task-geo")
+
+    geo = next(
+        f for f in fixture.stored_fields() if f.role is EntryFieldRole.GEOGRAPHIC_LABEL
+    )
+    assert geo.settlement_mapping_id == mapping.id
+    assert geo.normalized_text == "Атаки"

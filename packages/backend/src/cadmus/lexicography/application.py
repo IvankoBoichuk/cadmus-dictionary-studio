@@ -68,6 +68,7 @@ from cadmus.sources import (
     Dictionary,
     DictionaryAccessError,
     DictionaryPage,
+    DictionarySettlementMapping,
     DictionaryStatus,
     MarkDictionaryScannedService,
     ProcessingSignals,
@@ -1063,6 +1064,54 @@ class RuleBasedAnnotationService:
                 unit_of_work.commit()
         return created
 
+    def resolve_geographic_labels(
+        self, dictionary_id: UUID, entry_id: UUID, actor_id: UUID
+    ) -> list[EntryField]:
+        """Link each of the entry's ``geographic_label`` fields to the BH-30
+        settlement mapping whose ``source_label`` / ``modern_settlement_name``
+        it matches (case/space-insensitive), stamping ``settlement_mapping_id``
+        and ``normalized_text``. Leaves the район abbreviation alone. Returns
+        the fields it changed."""
+        with self._sources_unit_of_work_factory() as sources_unit_of_work:
+            settlements = sources_unit_of_work.sources.list_settlement_mappings(
+                dictionary_id
+            )
+
+        def _key(text: str) -> str:
+            return " ".join(text.split()).casefold()
+
+        by_key: dict[str, DictionarySettlementMapping] = {}
+        for mapping in settlements:
+            for label in (mapping.source_label, mapping.modern_settlement_name):
+                if label and label.strip():
+                    by_key.setdefault(_key(label), mapping)
+        if not by_key:
+            return []
+
+        now = self._clock()
+        changed: list[EntryField] = []
+        with self._unit_of_work_factory() as unit_of_work:
+            for field in unit_of_work.lexicography.list_fields_for_entry(entry_id):
+                if (
+                    field.role is not EntryFieldRole.GEOGRAPHIC_LABEL
+                    or field.settlement_mapping_id is not None
+                ):
+                    continue
+                value = (field.normalized_text or field.source_text).strip()
+                match = by_key.get(_key(value)) if value else None
+                if match is None:
+                    continue
+                field.settlement_mapping_id = match.id
+                if match.modern_settlement_name:
+                    field.normalized_text = match.modern_settlement_name
+                field.updated_at = now
+                field.updated_by = actor_id
+                unit_of_work.lexicography.update_field(field)
+                changed.append(field)
+            if changed:
+                unit_of_work.commit()
+        return changed
+
 
 class ValidateEntryService:
     """Check an entry against its ``ArticleSchema`` and gate the
@@ -1287,6 +1336,7 @@ class CreateEntryFieldService(_EntryFieldWriteService):
         source_end: int,
         parent_field_id: UUID | None = None,
         normalized_text: str | None = None,
+        settlement_mapping_id: UUID | None = None,
     ) -> EntryField:
         entry = self._authorize(entry_id, actor_id)
         if not source_text.strip():
@@ -1310,6 +1360,7 @@ class CreateEntryFieldService(_EntryFieldWriteService):
                 source_start=source_start,
                 source_end=source_end,
                 normalized_text=normalized_text,
+                settlement_mapping_id=settlement_mapping_id,
                 origin=EntryFieldOrigin.MANUAL,
                 created_at=now,
                 created_by=actor_id,
@@ -1342,6 +1393,8 @@ class UpdateEntryFieldService(_EntryFieldWriteService):
         role: EntryFieldRole | None = None,
         source_text: str | None = None,
         normalized_text: str | None = None,
+        settlement_mapping_id: UUID | None = None,
+        settlement_mapping_id_set: bool = False,
     ) -> EntryField:
         entry = self._authorize(entry_id, actor_id)
         if source_text is not None and not source_text.strip():
@@ -1367,6 +1420,8 @@ class UpdateEntryFieldService(_EntryFieldWriteService):
                 field.role = role
             if normalized_text is not None:
                 field.normalized_text = normalized_text
+            if settlement_mapping_id_set:
+                field.settlement_mapping_id = settlement_mapping_id
             field.origin = EntryFieldOrigin.MANUAL
             field.updated_at = now
             field.updated_by = actor_id

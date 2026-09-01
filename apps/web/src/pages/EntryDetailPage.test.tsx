@@ -127,6 +127,7 @@ function baseEntry(overrides: Partial<EntryResponse> = {}): EntryResponse {
         normalized_text: null,
         confidence: 0.9,
         origin: "model",
+        settlement_mapping_id: null,
         created_at: "2026-08-15T12:00:00Z",
         updated_at: "2026-08-15T12:00:00Z",
       },
@@ -707,5 +708,41 @@ describe("EntryDetailPage", () => {
 
     fireEvent.mouseEnter(geoRow);
     expect(exampleRow).toHaveAttribute("data-linked", "true");
+  });
+
+  it("shows the район / громада for a geo label linked to a settlement mapping", async () => {
+    const template = baseEntry().fields[0]!;
+    const geoLabel = {
+      ...template,
+      id: "geo00000-0000-0000-0000-00000000000a",
+      field_path: "sense[0].settlement",
+      role: "geographic_label" as const,
+      source_text: "Атаки",
+      normalized_text: "Атаки",
+      settlement_mapping_id: "map00000-0000-0000-0000-00000000000b",
+    };
+    stubFetch({
+      entry: baseEntry({ fields: [geoLabel] }),
+      settlements: [
+        {
+          id: "map00000-0000-0000-0000-00000000000b",
+          source_label: "Атаки",
+          status: "confirmed",
+          district: "Хот.",
+          modern_settlement_name: "Атаки",
+          community_name: "Хотинська територіальна громада",
+        },
+      ],
+    });
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    await screen.findByText("Атаки");
+    expect(screen.getByText("Район")).toBeInTheDocument();
+    const districtTerm = screen.getByText("Район");
+    expect(districtTerm.nextElementSibling).toHaveTextContent("Хот.");
+    expect(
+      screen.getByText("Хотинська територіальна громада"),
+    ).toBeInTheDocument();
   });
 });

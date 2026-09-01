@@ -436,7 +436,14 @@ def _abbreviation(dictionary_id: UUID, text: str) -> Abbreviation:
     )
 
 
-def _settlement(dictionary_id: UUID, label: str) -> DictionarySettlementMapping:
+def _settlement(
+    dictionary_id: UUID,
+    label: str,
+    *,
+    modern_settlement_name: str | None = None,
+    community_name: str | None = None,
+    district: str | None = None,
+) -> DictionarySettlementMapping:
     return DictionarySettlementMapping(
         id=uuid4(),
         dictionary_id=dictionary_id,
@@ -446,6 +453,9 @@ def _settlement(dictionary_id: UUID, label: str) -> DictionarySettlementMapping:
         updated_at=NOW,
         created_by=dictionary_id,
         updated_by=dictionary_id,
+        modern_settlement_name=modern_settlement_name,
+        community_name=community_name,
+        district=district,
     )
 
 
@@ -583,3 +593,65 @@ def test_tag_abbreviations_and_geography_returns_empty_without_reference_data() 
     )
 
     assert created == []
+
+
+def test_resolve_geographic_labels_links_a_field_to_its_mapping() -> None:
+    fixture = _AnnotationFixture()
+    fixture.sources_repository.settlements[fixture.dictionary.id] = [
+        _settlement(
+            fixture.dictionary.id,
+            "Атаки",
+            modern_settlement_name="Атаки",
+            community_name="Хотинська територіальна громада",
+            district="Хот.",
+        )
+    ]
+    geo = _field(
+        fixture.entry_id,
+        fixture.fragment_id,
+        source_text="Атаки",
+        role=EntryFieldRole.GEOGRAPHIC_LABEL,
+    )
+    other = _field(
+        fixture.entry_id,
+        fixture.fragment_id,
+        source_text="десь інде",
+        role=EntryFieldRole.GEOGRAPHIC_LABEL,
+    )
+    fixture.lexicography_repository.add_field(geo)
+    fixture.lexicography_repository.add_field(other)
+
+    changed = fixture.service.resolve_geographic_labels(
+        fixture.dictionary.id, fixture.entry_id, fixture.owner_id
+    )
+
+    assert [f.id for f in changed] == [geo.id]
+    mapping_id = fixture.sources_repository.settlements[fixture.dictionary.id][0].id
+    assert geo.settlement_mapping_id == mapping_id
+    assert geo.normalized_text == "Атаки"
+    assert other.settlement_mapping_id is None
+
+
+def test_resolve_geographic_labels_skips_already_linked_and_non_geo_fields() -> None:
+    fixture = _AnnotationFixture()
+    mapping = _settlement(fixture.dictionary.id, "Атаки")
+    fixture.sources_repository.settlements[fixture.dictionary.id] = [mapping]
+    linked = _field(
+        fixture.entry_id,
+        fixture.fragment_id,
+        source_text="Атаки",
+        role=EntryFieldRole.GEOGRAPHIC_LABEL,
+    )
+    linked.settlement_mapping_id = uuid4()
+    meaning = _field(
+        fixture.entry_id, fixture.fragment_id, source_text="Атаки"
+    )  # role MEANING
+    fixture.lexicography_repository.add_field(linked)
+    fixture.lexicography_repository.add_field(meaning)
+
+    changed = fixture.service.resolve_geographic_labels(
+        fixture.dictionary.id, fixture.entry_id, fixture.owner_id
+    )
+
+    assert changed == []
+    assert meaning.settlement_mapping_id is None

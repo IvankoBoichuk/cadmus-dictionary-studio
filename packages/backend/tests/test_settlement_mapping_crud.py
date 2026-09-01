@@ -364,6 +364,7 @@ def _input(**overrides: object) -> SettlementMappingInput:
     defaults: dict[str, object] = {
         "source_label": "Іванівка",
         "source_note": None,
+        "district": None,
         "modern_settlement_name": None,
         "settlement_category": None,
         "settlement_id": None,
@@ -675,3 +676,68 @@ def test_mappings_are_isolated_between_dictionaries() -> None:
 
     assert service.list_for_dictionary(dictionary_b.id, owner_id) == []
     assert len(service.list_for_dictionary(dictionary_a.id, owner_id)) == 1
+
+
+def test_create_and_update_round_trip_the_district() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _dictionary(owner_id)
+    repository.add_dictionary(dictionary)
+    service = _service(repository)
+
+    created = service.create(dictionary.id, owner_id, _input(district="  Хот.  "))
+    assert created.district == "Хот."
+
+    updated = service.update(dictionary.id, created.id, owner_id, _input(district=""))
+    assert updated.district is None
+
+
+def test_set_district_for_community_only_touches_that_community() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _dictionary(owner_id)
+    repository.add_dictionary(dictionary)
+    service = _service(repository)
+    community_a, community_b = uuid4(), uuid4()
+
+    a1 = service.create(dictionary.id, owner_id, _input(source_label="Атаки"))
+    a1.community_id = community_a
+    repository.update_settlement_mapping(a1)
+    a2 = service.create(dictionary.id, owner_id, _input(source_label="Долиняни"))
+    a2.community_id = community_a
+    repository.update_settlement_mapping(a2)
+    b1 = service.create(dictionary.id, owner_id, _input(source_label="Клішківці"))
+    b1.community_id = community_b
+    repository.update_settlement_mapping(b1)
+    service.create(dictionary.id, owner_id, _input(source_label="Без громади"))
+
+    changed = service.set_district_for_community(
+        dictionary.id, community_a, "Хот.", owner_id
+    )
+
+    assert changed == 2
+    assert repository.mappings[a1.id].district == "Хот."
+    assert repository.mappings[a2.id].district == "Хот."
+    assert repository.mappings[b1.id].district is None
+    # a second identical call is a no-op
+    assert (
+        service.set_district_for_community(dictionary.id, community_a, "Хот.", owner_id)
+        == 0
+    )
+    # blank clears
+    assert (
+        service.set_district_for_community(dictionary.id, community_a, "", owner_id)
+        == 2
+    )
+    assert repository.mappings[a1.id].district is None
+
+
+def test_set_district_for_community_rejects_a_too_long_value() -> None:
+    repository = MemorySourcesRepository()
+    owner_id = uuid4()
+    dictionary = _dictionary(owner_id)
+    repository.add_dictionary(dictionary)
+    service = _service(repository)
+
+    with pytest.raises(SettlementMappingValidationError):
+        service.set_district_for_community(dictionary.id, uuid4(), "a" * 65, owner_id)

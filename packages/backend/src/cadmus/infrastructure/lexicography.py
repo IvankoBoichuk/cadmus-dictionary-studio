@@ -286,6 +286,12 @@ entry_fields = Table(
     Column("y", Float, nullable=True),
     Column("width", Float, nullable=True),
     Column("height", Float, nullable=True),
+    Column(
+        "settlement_mapping_id",
+        Uuid(as_uuid=True),
+        ForeignKey("cadmus.dictionary_settlement_mappings.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column(
         "created_by",

@@ -1315,6 +1315,7 @@ class SettlementMappingInput:
 
     source_label: str
     source_note: str | None
+    district: str | None
     modern_settlement_name: str | None
     settlement_category: str | None
     settlement_id: UUID | None
@@ -1410,6 +1411,7 @@ class SettlementMappingCrudService:
                 created_by=actor_id,
                 updated_by=actor_id,
                 source_note=(data.source_note or "").strip() or None,
+                district=(data.district or "").strip() or None,
                 modern_settlement_name=(data.modern_settlement_name or "").strip()
                 or None,
                 settlement_category=settlement_category,
@@ -1466,6 +1468,7 @@ class SettlementMappingCrudService:
             existing.source_label = data.source_label.strip()
             existing.status = data.status
             existing.source_note = (data.source_note or "").strip() or None
+            existing.district = (data.district or "").strip() or None
             existing.modern_settlement_name = (
                 data.modern_settlement_name or ""
             ).strip() or None
@@ -1528,6 +1531,49 @@ class SettlementMappingCrudService:
             unit_of_work.commit()
         return existing
 
+    def set_district_for_community(
+        self,
+        dictionary_id: UUID,
+        community_id: UUID,
+        district: str | None,
+        actor_id: UUID,
+    ) -> int:
+        """Set ``district`` on every mapping of this dictionary tied to
+        ``community_id`` (BH-30 bulk). A single settlement can still be
+        overridden afterwards via ``update``. Returns the number changed."""
+        value = (district or "").strip() or None
+        errors = validate_settlement_mapping_fields(
+            source_label="x",
+            source_note=None,
+            modern_settlement_name=None,
+            district=value,
+        )
+        if "district" in errors:
+            raise SettlementMappingValidationError({"district": errors["district"]})
+
+        now = self._clock()
+        changed = 0
+        with self._unit_of_work_factory() as unit_of_work:
+            dictionary = unit_of_work.sources.get_dictionary(dictionary_id)
+            _authorize(
+                self._authorization,
+                dictionary,
+                dictionary_id,
+                actor_id,
+                Permission.EDIT,
+            )
+            for mapping in unit_of_work.sources.list_settlement_mappings(dictionary_id):
+                if mapping.community_id != community_id or mapping.district == value:
+                    continue
+                mapping.district = value
+                mapping.updated_at = now
+                mapping.updated_by = actor_id
+                unit_of_work.sources.update_settlement_mapping(mapping)
+                changed += 1
+            if changed:
+                unit_of_work.commit()
+        return changed
+
     def _resolve_settlement(
         self, settlement_id: UUID | None, settlement_category: str | None
     ) -> tuple[str | None, UUID | None, UUID | None, UUID | None]:
@@ -1561,6 +1607,7 @@ class SettlementMappingCrudService:
             source_label=data.source_label,
             source_note=data.source_note,
             modern_settlement_name=data.modern_settlement_name,
+            district=data.district,
         )
         if data.status is SettlementMappingStatus.CONFIRMED:
             errors["status"] = (

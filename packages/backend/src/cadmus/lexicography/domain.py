@@ -721,6 +721,10 @@ class EntryField:
     y: float | None = None
     width: float | None = None
     height: float | None = None
+    settlement_mapping_id: UUID | None = None
+    """For a ``geographic_label`` field: the BH-30 ``DictionarySettlementMapping``
+    it was resolved to (`RuleBasedAnnotationService.resolve_geographic_labels`),
+    so the editor can show its район / громада / status."""
 
 
 @dataclass(frozen=True)

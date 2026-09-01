@@ -21,6 +21,7 @@ function row(
     source_label: "Іванівка",
     status: "suggested",
     source_note: null,
+    district: null,
     modern_settlement_name: "Іванівка",
     settlement_category: "село",
     area_id: null,
@@ -71,6 +72,19 @@ describe("SettlementsTable", () => {
 
     expect(screen.getByLabelText("Позначка з оригіналу")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Зберегти" })).toBeInTheDocument();
+  });
+
+  it("shows the район column value", () => {
+    renderTable([row({ district: "Хот." })]);
+    const header = screen.getByRole("columnheader", { name: "Район" });
+    expect(header).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Хот." })).toBeInTheDocument();
+  });
+
+  it("edits the район inline", () => {
+    renderTable([row({ district: "Хот." })]);
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати" }));
+    expect(screen.getByLabelText("Скорочення району")).toHaveValue("Хот.");
   });
 
   it("swaps a data row for the inline form when the edit action is used", () => {

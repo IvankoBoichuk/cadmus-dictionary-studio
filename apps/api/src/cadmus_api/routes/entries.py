@@ -81,6 +81,7 @@ class EntryFieldResponse(BaseModel):
     normalized_text: str | None
     confidence: float | None
     origin: EntryFieldOrigin
+    settlement_mapping_id: UUID | None
     created_at: datetime
     updated_at: datetime
 
@@ -164,6 +165,7 @@ class CreateEntryFieldRequest(BaseModel):
     source_end: int = Field(ge=0)
     parent_field_id: UUID | None = None
     normalized_text: str | None = Field(default=None, max_length=10_000)
+    settlement_mapping_id: UUID | None = None
 
 
 class UpdateEntryFieldRequest(BaseModel):
@@ -174,6 +176,7 @@ class UpdateEntryFieldRequest(BaseModel):
     role: EntryFieldRole | None = None
     source_text: str | None = Field(default=None, max_length=10_000)
     normalized_text: str | None = Field(default=None, max_length=10_000)
+    settlement_mapping_id: UUID | None = None
 
 
 class DuplicateEntryResponse(BaseModel):
@@ -234,6 +237,30 @@ def _page_numbers(
     return {page.id: ordinal for ordinal, page in enumerate(pages, start=1)}
 
 
+def _entry_field_response(field: EntryField) -> EntryFieldResponse:
+    return EntryFieldResponse(
+        id=field.id,
+        fragment_id=field.fragment_id,
+        parent_field_id=field.parent_field_id,
+        field_path=field.field_path,
+        role=field.role,
+        position=field.position,
+        source_text=field.source_text,
+        source_start=field.source_start,
+        source_end=field.source_end,
+        x=field.x,
+        y=field.y,
+        width=field.width,
+        height=field.height,
+        normalized_text=field.normalized_text,
+        confidence=field.confidence,
+        origin=field.origin,
+        settlement_mapping_id=field.settlement_mapping_id,
+        created_at=field.created_at,
+        updated_at=field.updated_at,
+    )
+
+
 def _entry_response(
     entry: DictionaryEntry,
     fragments: list[EntryFragment],
@@ -267,29 +294,7 @@ def _entry_response(
             )
             for fragment in fragments
         ],
-        fields=[
-            EntryFieldResponse(
-                id=field.id,
-                fragment_id=field.fragment_id,
-                parent_field_id=field.parent_field_id,
-                field_path=field.field_path,
-                role=field.role,
-                position=field.position,
-                source_text=field.source_text,
-                source_start=field.source_start,
-                source_end=field.source_end,
-                x=field.x,
-                y=field.y,
-                width=field.width,
-                height=field.height,
-                normalized_text=field.normalized_text,
-                confidence=field.confidence,
-                origin=field.origin,
-                created_at=field.created_at,
-                updated_at=field.updated_at,
-            )
-            for field in fields
-        ],
+        fields=[_entry_field_response(field) for field in fields],
     )
 
 
@@ -520,6 +525,7 @@ def create_entries_router(
                 source_end=request.source_end,
                 parent_field_id=request.parent_field_id,
                 normalized_text=request.normalized_text,
+                settlement_mapping_id=request.settlement_mapping_id,
             )
         except EntryFieldValidationError as error:
             return JSONResponse(
@@ -528,26 +534,7 @@ def create_entries_router(
             )
         except EntryAccessError:
             return _not_found()
-        return EntryFieldResponse(
-            id=field.id,
-            fragment_id=field.fragment_id,
-            parent_field_id=field.parent_field_id,
-            field_path=field.field_path,
-            role=field.role,
-            position=field.position,
-            source_text=field.source_text,
-            source_start=field.source_start,
-            source_end=field.source_end,
-            x=field.x,
-            y=field.y,
-            width=field.width,
-            height=field.height,
-            normalized_text=field.normalized_text,
-            confidence=field.confidence,
-            origin=field.origin,
-            created_at=field.created_at,
-            updated_at=field.updated_at,
-        )
+        return _entry_field_response(field)
 
     @router.patch(
         "/entries/{entry_id}/fields/{field_id}",
@@ -576,6 +563,10 @@ def create_entries_router(
                 role=request.role,
                 source_text=request.source_text,
                 normalized_text=request.normalized_text,
+                settlement_mapping_id=request.settlement_mapping_id,
+                settlement_mapping_id_set=(
+                    "settlement_mapping_id" in request.model_fields_set
+                ),
             )
         except EntryFieldValidationError as error:
             return JSONResponse(
@@ -584,26 +575,7 @@ def create_entries_router(
             )
         except (EntryAccessError, EntryFieldAccessError):
             return _not_found()
-        return EntryFieldResponse(
-            id=field.id,
-            fragment_id=field.fragment_id,
-            parent_field_id=field.parent_field_id,
-            field_path=field.field_path,
-            role=field.role,
-            position=field.position,
-            source_text=field.source_text,
-            source_start=field.source_start,
-            source_end=field.source_end,
-            x=field.x,
-            y=field.y,
-            width=field.width,
-            height=field.height,
-            normalized_text=field.normalized_text,
-            confidence=field.confidence,
-            origin=field.origin,
-            created_at=field.created_at,
-            updated_at=field.updated_at,
-        )
+        return _entry_field_response(field)
 
     @router.delete(
         "/entries/{entry_id}/fields/{field_id}",

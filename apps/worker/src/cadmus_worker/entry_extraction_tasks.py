@@ -184,7 +184,14 @@ def extract_entry_fields(task: Task, entry_id: str, actor_id: str) -> dict[str, 
     )
     created_fields += len(tagged)
 
+    resolved = deps.annotation_service.resolve_geographic_labels(
+        entry.dictionary_id, entry_uuid, actor_uuid
+    )
+
     _log_task_event(
-        "entry_extraction_succeeded", task_id, created_fields=created_fields
+        "entry_extraction_succeeded",
+        task_id,
+        created_fields=created_fields,
+        resolved_geo_labels=len(resolved),
     )
     return {"status": "succeeded", "created_fields": created_fields}

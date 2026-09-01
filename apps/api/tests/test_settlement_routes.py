@@ -79,6 +79,8 @@ class StubMappingCrudService:
     dictionary_id: UUID = DICTIONARY_ID
     raise_on_create: Exception | None = None
     raise_on_update: Exception | None = None
+    raise_on_bulk_district: Exception | None = None
+    bulk_district_updated: int = 3
 
     def _check_access(self, dictionary_id: UUID, actor_id: UUID) -> None:
         if dictionary_id != self.dictionary_id or actor_id != self.owner_id:
@@ -122,6 +124,18 @@ class StubMappingCrudService:
         if existing is None:
             raise SettlementMappingAccessError(mapping_id)
         self.mappings.remove(existing)
+
+    def set_district_for_community(
+        self,
+        dictionary_id: UUID,
+        community_id: UUID,
+        district: str | None,
+        actor_id: UUID,
+    ) -> int:
+        self._check_access(dictionary_id, actor_id)
+        if self.raise_on_bulk_district is not None:
+            raise self.raise_on_bulk_district
+        return self.bulk_district_updated
 
     def unconfirm(
         self, dictionary_id: UUID, mapping_id: UUID, actor_id: UUID
@@ -311,6 +325,31 @@ def test_update_mapping_edits_an_existing_entry() -> None:
     assert response.json()["source_note"] == "уточнення"
 
 
+def test_set_district_by_community_reports_the_count() -> None:
+    service = StubMappingCrudService(mappings=[_mapping()], bulk_district_updated=4)
+    with client_for(mapping_crud_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(
+            f"/dictionaries/{DICTIONARY_ID}/settlements/district-by-community",
+            json={"community_id": str(uuid4()), "district": "Хот."},
+        )
+    assert response.status_code == 200
+    assert response.json() == {"updated": 4}
+
+
+def test_set_district_by_community_returns_404_for_a_foreign_dictionary() -> None:
+    service = StubMappingCrudService(
+        raise_on_bulk_district=DictionaryAccessError(DICTIONARY_ID)
+    )
+    with client_for(mapping_crud_service=service) as client:
+        client.cookies.set("cadmus_session", "token")
+        response = client.post(
+            f"/dictionaries/{DICTIONARY_ID}/settlements/district-by-community",
+            json={"community_id": str(uuid4()), "district": "Хот."},
+        )
+    assert response.status_code == 404
+
+
 def test_delete_mapping_removes_it() -> None:
     existing = _mapping()
     service = StubMappingCrudService(mappings=[existing])
@@ -414,6 +453,7 @@ def test_import_preview_reports_rows() -> None:
                 input=SettlementMappingInput(
                     source_label="Іванівка",
                     source_note=None,
+                    district=None,
                     modern_settlement_name=None,
                     settlement_category=None,
                     settlement_id=None,

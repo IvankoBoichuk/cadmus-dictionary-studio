@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 
 import { settlementsExportUrl, type SettlementMappingResponse } from "../api";
+import { DistrictByCommunityPanel } from "../components/DistrictByCommunityPanel";
 import { SettlementImportPanel } from "../components/SettlementImportPanel";
 import { SettlementsTable } from "../components/SettlementsTable";
 import { useSettlements } from "../hooks/useSettlements";
@@ -22,6 +23,7 @@ function SettlementsWorkspace({ dictionaryId }: { dictionaryId: string }) {
     mergeImported,
     confirm,
     unconfirm,
+    reload,
   } = useSettlements(dictionaryId);
 
   const handleDelete = (item: SettlementMappingResponse) => {
@@ -95,18 +97,25 @@ function SettlementsWorkspace({ dictionaryId }: { dictionaryId: string }) {
           </p>
         )}
         {state.status === "loaded" && (
-          <div className="form-section">
-            <h2>Список географічних міток</h2>
-            <SettlementsTable
+          <>
+            <DistrictByCommunityPanel
               dictionaryId={dictionaryId}
               mappings={state.mappings}
-              onSaved={upsert}
-              onDelete={handleDelete}
-              onConfirm={(item) => void confirm(item.id)}
-              onUnconfirm={(item) => void unconfirm(item.id)}
-              deleteState={deleteState}
+              onApplied={reload}
             />
-          </div>
+            <div className="form-section">
+              <h2>Список географічних міток</h2>
+              <SettlementsTable
+                dictionaryId={dictionaryId}
+                mappings={state.mappings}
+                onSaved={upsert}
+                onDelete={handleDelete}
+                onConfirm={(item) => void confirm(item.id)}
+                onUnconfirm={(item) => void unconfirm(item.id)}
+                deleteState={deleteState}
+              />
+            </div>
+          </>
         )}
       </div>
     </>

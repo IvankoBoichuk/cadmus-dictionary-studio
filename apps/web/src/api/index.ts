@@ -448,6 +448,8 @@ export type SettlementMappingRequest =
   components["schemas"]["SettlementMappingRequest"];
 export type SettlementMappingResponse =
   components["schemas"]["SettlementMappingResponse"];
+export type SetDistrictByCommunityResponse =
+  components["schemas"]["SetDistrictByCommunityResponse"];
 export type SettlementSuggestionResponse =
   components["schemas"]["SettlementSuggestionResponse"];
 export type DuplicateSettlementMappingResponse =
@@ -865,6 +867,10 @@ function settlementsPath(dictionaryId: string): keyof paths {
 
 function settlementPath(dictionaryId: string, mappingId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/settlements/${mappingId}` as keyof paths;
+}
+
+function settlementDistrictByCommunityPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/district-by-community` as keyof paths;
 }
 
 function settlementConfirmPath(dictionaryId: string, mappingId: string): keyof paths {
@@ -1574,6 +1580,18 @@ export const API = {
         settlementPath(dictionaryId, mappingId),
         options,
       );
+    },
+
+    setDistrictByCommunity(
+      dictionaryId: string,
+      body: { community_id: string; district: string | null },
+      options?: RequestOptions,
+    ): Promise<SetDistrictByCommunityResponse> {
+      return post<
+        { community_id: string; district: string | null },
+        SetDistrictByCommunityResponse,
+        SettlementMappingFieldErrorsResponse | SettlementMappingsNotFoundResponse
+      >(settlementDistrictByCommunityPath(dictionaryId), body, options);
     },
 
     confirm(
