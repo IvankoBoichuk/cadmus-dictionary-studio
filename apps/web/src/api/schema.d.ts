@@ -427,7 +427,8 @@ export interface paths {
         /** List every article-schema version generated for a dictionary */
         get: operations["list_article_schemas_dictionaries__dictionary_id__article_schemas_get"];
         put?: never;
-        post?: never;
+        /** Save a hand-edited article-schema definition as a new version */
+        post: operations["save_article_schema_dictionaries__dictionary_id__article_schemas_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -462,6 +463,23 @@ export interface paths {
         put?: never;
         /** Confirm readiness and mark a draft as configured (BH-31 AC5, AC6) */
         post: operations["configure_dictionary_dictionaries__dictionary_id__configure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a dictionary's structured entries */
+        get: operations["list_entries_dictionaries__dictionary_id__entries_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -877,6 +895,40 @@ export interface paths {
         get: operations["download_source_dictionaries__dictionary_id__source_download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recorded async jobs for a dictionary, newest first */
+        get: operations["list_tasks_dictionaries__dictionary_id__tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dictionaries/{dictionary_id}/tasks/{task_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-run a failed job as a new tracked task */
+        post: operations["retry_task_dictionaries__dictionary_id__tasks__task_id__retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2042,6 +2094,32 @@ export interface components {
          */
         EntryStatus: "draft" | "ready_to_review" | "complete";
         /**
+         * EntrySummaryResponse
+         * @description One row of a dictionary's entries list (BH-148).
+         */
+        EntrySummaryResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Field Count */
+            field_count: number;
+            /** Headword */
+            headword: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            status: components["schemas"]["EntryStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * ErrorResponse
          * @description Stable, non-sensitive error contract for a single failure reason.
          */
@@ -2375,6 +2453,62 @@ export interface components {
          */
         PasswordResetFailure: "invalid" | "expired" | "used";
         /**
+         * ProcessingTaskKind
+         * @description The async capability a tracked task belongs to.
+         * @enum {string}
+         */
+        ProcessingTaskKind: "dictionary_scan" | "entry_extraction" | "article_schema_generation" | "ocr_suggestions";
+        /**
+         * ProcessingTaskResponse
+         * @description One recorded background-job run for a dictionary.
+         */
+        ProcessingTaskResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Dictionary Id
+             * Format: uuid
+             */
+            dictionary_id: string;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["ProcessingTaskKind"];
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Retry Of Id */
+            retry_of_id: string | null;
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["ProcessingTaskStatus"];
+            /** Target Id */
+            target_id: string | null;
+            /** Target Label */
+            target_label: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ProcessingTaskStatus
+         * @description Transport-neutral lifecycle state, derived from Celery signals.
+         * @enum {string}
+         */
+        ProcessingTaskStatus: "queued" | "running" | "succeeded" | "failed";
+        /**
          * PublishDictionaryResponse
          * @description The dictionary's id and its status after publishing.
          */
@@ -2554,6 +2688,18 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "editor" | "reviewer" | "viewer";
+        /**
+         * SaveArticleSchemaRequest
+         * @description A hand-edited article-schema definition to persist as a new version.
+         */
+        SaveArticleSchemaRequest: {
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Source Description */
+            source_description?: string | null;
+        };
         /**
          * SaveMetadataRequest
          * @description Full BH-27 metadata submission; missing required fields are allowed.
@@ -4587,6 +4733,61 @@ export interface operations {
             };
         };
     };
+    save_article_schema_dictionaries__dictionary_id__article_schemas_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveArticleSchemaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArticleSchemaResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or article schema does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The edited schema definition is structurally invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__article_schemas__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
     activate_article_schema_dictionaries__dictionary_id__article_schemas__schema_id__activate_post: {
         parameters: {
             query?: never;
@@ -4686,6 +4887,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadinessBlockersResponse"];
+                };
+            };
+        };
+    };
+    list_entries_dictionaries__dictionary_id__entries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntrySummaryResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6370,6 +6622,122 @@ export interface operations {
             };
             /** @description The dictionary does not exist or is not owned by the caller */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tasks_dictionaries__dictionary_id__tasks_get: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["ProcessingTaskKind"][] | null;
+                status?: components["schemas"]["ProcessingTaskStatus"][] | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                dictionary_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingTaskResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or task does not exist for this caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_task_dictionaries__dictionary_id__tasks__task_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dictionary_id: string;
+                task_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessingTaskResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary or task does not exist for this caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The task has not failed, or its kind cannot be retried */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

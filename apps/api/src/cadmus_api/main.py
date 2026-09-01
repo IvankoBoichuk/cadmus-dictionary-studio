@@ -30,6 +30,9 @@ from cadmus.infrastructure.ocr import (
     CeleryDictionaryScanQueue,
     CeleryOcrSuggestionQueue,
 )
+from cadmus.infrastructure.processing import (
+    create_processing_unit_of_work_factory,
+)
 from cadmus.infrastructure.reference_lexicon import (
     create_reference_lexicon_unit_of_work_factory,
 )
@@ -51,6 +54,7 @@ from cadmus.lexicography import (
     CreateLexemeService,
     DeleteEntryFieldService,
     DeleteLexemeService,
+    EntryQueryService,
     FinishScanningService,
     LexemeQueryService,
     ManageEntryReferenceLinksService,
@@ -58,13 +62,18 @@ from cadmus.lexicography import (
     QueueArticleSchemaGenerationService,
     QueueDictionaryScanService,
     QueueEntryFieldExtractionService,
+    SaveArticleSchemaService,
     ScanProgressService,
     SuggestLexemesService,
     UpdateEntryFieldService,
     UpdateLexemeService,
     ValidateEntryService,
 )
-from cadmus.processing import TaskQueue
+from cadmus.processing import (
+    ProcessingTaskKind,
+    ProcessingTaskService,
+    TaskQueue,
+)
 from cadmus.reference_lexicon import ReferenceLexiconQueryService
 from cadmus.sources import (
     AbbreviationCrudService,
@@ -104,6 +113,7 @@ from cadmus_api.routes.ocr_scan import create_ocr_scan_router
 from cadmus_api.routes.ocr_suggestions import create_ocr_suggestions_router
 from cadmus_api.routes.page_ranges import create_page_ranges_router
 from cadmus_api.routes.pages import create_pages_router
+from cadmus_api.routes.processing_tasks import create_processing_tasks_router
 from cadmus_api.routes.project_members import create_project_members_router
 from cadmus_api.routes.publish_dictionary import create_publish_dictionary_router
 from cadmus_api.routes.reference_lexicons import create_reference_lexicons_router
@@ -116,6 +126,7 @@ def create_app(
     settings: Settings | None = None,
     database_engine: Engine | None = None,
     task_queue: TaskQueue | None = None,
+    processing_task_service: ProcessingTaskService | None = None,
     object_storage: ObjectStorage | None = None,
     registration_service: RegistrationService | None = None,
     authentication_service: AuthenticationService | None = None,
@@ -152,6 +163,7 @@ def create_app(
         QueueArticleSchemaGenerationService | None
     ) = None,
     activate_article_schema_service: ActivateArticleSchemaService | None = None,
+    save_article_schema_service: SaveArticleSchemaService | None = None,
     promote_lexeme_to_entry_service: PromoteLexemeToEntryService | None = None,
     queue_entry_field_extraction_service: QueueEntryFieldExtractionService
     | None = None,
@@ -159,6 +171,7 @@ def create_app(
     update_entry_field_service: UpdateEntryFieldService | None = None,
     delete_entry_field_service: DeleteEntryFieldService | None = None,
     validate_entry_service: ValidateEntryService | None = None,
+    entry_query_service: EntryQueryService | None = None,
     reference_lexicon_query_service: ReferenceLexiconQueryService | None = None,
     manage_entry_reference_links_service: (
         ManageEntryReferenceLinksService | None
@@ -457,6 +470,14 @@ def create_app(
             dictionary_pages=app.state.get_dictionary_service,
         )
     )
+    app.state.save_article_schema_service = (
+        save_article_schema_service
+        if save_article_schema_service is not None
+        else SaveArticleSchemaService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
     app.state.promote_lexeme_to_entry_service = (
         promote_lexeme_to_entry_service
         if promote_lexeme_to_entry_service is not None
@@ -504,6 +525,49 @@ def create_app(
         else ValidateEntryService(
             unit_of_work_factory=lexicography_unit_of_work_factory,
             dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.entry_query_service = (
+        entry_query_service
+        if entry_query_service is not None
+        else EntryQueryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.processing_task_service = (
+        processing_task_service
+        if processing_task_service is not None
+        else ProcessingTaskService(
+            create_processing_unit_of_work_factory(engine),
+            reenqueuers={
+                ProcessingTaskKind.DICTIONARY_SCAN: (
+                    lambda task, actor: app.state.queue_dictionary_scan_service.enqueue(
+                        task.dictionary_id, actor
+                    )
+                ),
+                ProcessingTaskKind.ARTICLE_SCHEMA_GENERATION: (
+                    lambda task, actor: (
+                        app.state.queue_article_schema_generation_service.enqueue(
+                            task.dictionary_id, actor
+                        )
+                    )
+                ),
+                ProcessingTaskKind.ENTRY_EXTRACTION: (
+                    lambda task, actor: (
+                        app.state.queue_entry_field_extraction_service.enqueue(
+                            task.target_id, actor
+                        )
+                    )
+                ),
+                ProcessingTaskKind.OCR_SUGGESTIONS: (
+                    lambda task, actor: app.state.suggest_lexemes_service.enqueue(
+                        task.dictionary_id,
+                        actor,
+                        int(str(task.rerun_params.get("page_number", 0))),
+                    )
+                ),
+            },
         )
     )
     app.state.abbreviation_crud_service = (
@@ -629,12 +693,14 @@ def create_app(
         create_ocr_suggestions_router(
             app.state.authentication_service,
             app.state.suggest_lexemes_service,
+            app.state.processing_task_service,
         )
     )
     app.include_router(
         create_ocr_scan_router(
             app.state.authentication_service,
             app.state.queue_dictionary_scan_service,
+            app.state.processing_task_service,
         )
     )
     app.include_router(
@@ -649,6 +715,8 @@ def create_app(
             app.state.authentication_service,
             app.state.queue_article_schema_generation_service,
             app.state.activate_article_schema_service,
+            app.state.save_article_schema_service,
+            app.state.processing_task_service,
         )
     )
     app.include_router(
@@ -660,7 +728,16 @@ def create_app(
             app.state.update_entry_field_service,
             app.state.delete_entry_field_service,
             app.state.validate_entry_service,
+            app.state.entry_query_service,
             app.state.get_dictionary_service,
+            app.state.processing_task_service,
+        )
+    )
+    app.include_router(
+        create_processing_tasks_router(
+            app.state.authentication_service,
+            app.state.get_dictionary_service,
+            app.state.processing_task_service,
         )
     )
     app.include_router(

@@ -174,6 +174,13 @@ type ActivateArticleSchemaOperation =
 export type ActivateArticleSchemaFieldErrorsResponse =
   ActivateArticleSchemaOperation["responses"][422]["content"]["application/json"];
 
+type SaveArticleSchemaOperation =
+  paths["/dictionaries/{dictionary_id}/article-schemas"]["post"];
+export type SaveArticleSchemaRequest =
+  SaveArticleSchemaOperation["requestBody"]["content"]["application/json"];
+export type SaveArticleSchemaFieldErrorsResponse =
+  SaveArticleSchemaOperation["responses"][422]["content"]["application/json"];
+
 type GetPageRangesOperation =
   paths["/dictionaries/{dictionary_id}/page-ranges"]["get"];
 export type PageRangesResponse =
@@ -226,12 +233,52 @@ type DeleteLexemeOperation =
 type DeleteLexemeNotFoundResponse =
   DeleteLexemeOperation["responses"][404]["content"]["application/json"];
 
+export type ReferenceRelationType =
+  components["schemas"]["ReferenceRelationType"];
+export type ReferenceMatchType = components["schemas"]["ReferenceMatchType"];
+export type MorphologyFeatures = components["schemas"]["MorphologyFeatures"];
+export type ReferenceLexiconResponse =
+  components["schemas"]["ReferenceLexiconResponse"];
+export type ReferenceLemmaResponse =
+  components["schemas"]["ReferenceLemmaResponse"];
+export type EntryReferenceLinkResponse =
+  components["schemas"]["EntryReferenceLinkResponse"];
+export type CreateEntryReferenceLinkRequest =
+  components["schemas"]["CreateEntryReferenceLinkRequest"];
+
+type GetReferenceLexiconOperation = paths["/reference-lexicons/{code}"]["get"];
+type ReferenceLexiconNotFoundResponse =
+  GetReferenceLexiconOperation["responses"][404]["content"]["application/json"];
+
+type CreateEntryReferenceLinkOperation =
+  paths["/entries/{entry_id}/reference-links"]["post"];
+export type CreateEntryReferenceLinkErrorResponse =
+  | CreateEntryReferenceLinkOperation["responses"][404]["content"]["application/json"]
+  | CreateEntryReferenceLinkOperation["responses"][422]["content"]["application/json"];
+
+export type ProcessingTaskKind = components["schemas"]["ProcessingTaskKind"];
+export type ProcessingTaskStatus = components["schemas"]["ProcessingTaskStatus"];
+export type ProcessingTaskResponse =
+  components["schemas"]["ProcessingTaskResponse"];
+
+type ListProcessingTasksOperation =
+  paths["/dictionaries/{dictionary_id}/tasks"]["get"];
+type ProcessingTasksNotFoundResponse =
+  ListProcessingTasksOperation["responses"][404]["content"]["application/json"];
+
+type RetryProcessingTaskOperation =
+  paths["/dictionaries/{dictionary_id}/tasks/{task_id}/retry"]["post"];
+export type RetryProcessingTaskErrorResponse =
+  | RetryProcessingTaskOperation["responses"][404]["content"]["application/json"]
+  | RetryProcessingTaskOperation["responses"][409]["content"]["application/json"];
+
 export type EntryStatus = components["schemas"]["EntryStatus"];
 export type EntryFieldRole = components["schemas"]["EntryFieldRole"];
 export type EntryFieldOrigin = components["schemas"]["EntryFieldOrigin"];
 export type EntryResponse = components["schemas"]["EntryResponse"];
 export type EntryFieldResponse = components["schemas"]["EntryFieldResponse"];
 export type EntryFragmentResponse = components["schemas"]["EntryFragmentResponse"];
+export type EntrySummaryResponse = components["schemas"]["EntrySummaryResponse"];
 export type DuplicateEntryResponse = components["schemas"]["DuplicateEntryResponse"];
 
 type PromoteLexemeOperation =
@@ -619,6 +666,10 @@ function entryPath(entryId: string): keyof paths {
   return `/entries/${entryId}` as keyof paths;
 }
 
+function dictionaryEntriesPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/entries` as keyof paths;
+}
+
 function entryCompletePath(entryId: string): keyof paths {
   return `/entries/${entryId}/complete` as keyof paths;
 }
@@ -637,6 +688,65 @@ function entryFieldsPath(entryId: string): keyof paths {
 
 function entryFieldPath(entryId: string, fieldId: string): keyof paths {
   return `/entries/${entryId}/fields/${fieldId}` as keyof paths;
+}
+
+export type ReferenceLemmaSearchParams = {
+  query: string;
+  standardOnly?: boolean;
+  limit?: number;
+};
+
+function referenceLexiconPath(code: string): keyof paths {
+  return `/reference-lexicons/${encodeURIComponent(code)}` as keyof paths;
+}
+
+function referenceLexiconLemmasPath(
+  code: string,
+  params: ReferenceLemmaSearchParams,
+): keyof paths {
+  const search = new URLSearchParams({ q: params.query });
+  if (params.standardOnly !== undefined) {
+    search.set("standard_only", String(params.standardOnly));
+  }
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
+  return `/reference-lexicons/${encodeURIComponent(
+    code,
+  )}/lemmas?${search.toString()}` as keyof paths;
+}
+
+function entryReferenceLinksPath(entryId: string): keyof paths {
+  return `/entries/${entryId}/reference-links` as keyof paths;
+}
+
+function entryReferenceLinkPath(entryId: string, linkId: string): keyof paths {
+  return `/entries/${entryId}/reference-links/${linkId}` as keyof paths;
+}
+
+export type ProcessingTaskFilters = {
+  kinds?: ProcessingTaskKind[];
+  statuses?: ProcessingTaskStatus[];
+  limit?: number;
+};
+
+function dictionaryTasksPath(
+  dictionaryId: string,
+  filters: ProcessingTaskFilters = {},
+): keyof paths {
+  const search = new URLSearchParams();
+  for (const kind of filters.kinds ?? []) search.append("kind", kind);
+  for (const status of filters.statuses ?? []) search.append("status", status);
+  if (filters.limit !== undefined) search.set("limit", String(filters.limit));
+  const query = search.toString();
+  return `/dictionaries/${dictionaryId}/tasks${
+    query ? `?${query}` : ""
+  }` as keyof paths;
+}
+
+function dictionaryTaskRetryPath(
+  dictionaryId: string,
+  taskId: string,
+): keyof paths {
+  return `/dictionaries/${dictionaryId}/tasks/${taskId}/retry` as keyof paths;
 }
 
 function ocrSuggestionsPath(dictionaryId: string, pageNumber: number): keyof paths {
@@ -1524,11 +1634,33 @@ export const API = {
         ActivateArticleSchemaFieldErrorsResponse | ArticleSchemaNotFoundResponse
       >(activateArticleSchemaPath(dictionaryId, schemaId), options);
     },
+
+    save(
+      dictionaryId: string,
+      body: SaveArticleSchemaRequest,
+      options?: RequestOptions,
+    ): Promise<ArticleSchemaResponse> {
+      return post<
+        SaveArticleSchemaRequest,
+        ArticleSchemaResponse,
+        SaveArticleSchemaFieldErrorsResponse | ArticleSchemaNotFoundResponse
+      >(articleSchemasPath(dictionaryId), body, options);
+    },
   },
 
   entries: {
     get(entryId: string, options?: RequestOptions): Promise<EntryResponse> {
       return get<EntryResponse, EntryNotFoundResponse>(entryPath(entryId), options);
+    },
+
+    listForDictionary(
+      dictionaryId: string,
+      options?: RequestOptions,
+    ): Promise<EntrySummaryResponse[]> {
+      return get<EntrySummaryResponse[], EntryNotFoundResponse>(
+        dictionaryEntriesPath(dictionaryId),
+        options,
+      );
     },
 
     complete(entryId: string, options?: RequestOptions): Promise<EntryResponse> {
@@ -1593,6 +1725,86 @@ export const API = {
         entryFieldPath(entryId, fieldId),
         options,
       );
+    },
+
+    listReferenceLinks(
+      entryId: string,
+      options?: RequestOptions,
+    ): Promise<EntryReferenceLinkResponse[]> {
+      return get<EntryReferenceLinkResponse[], EntryNotFoundResponse>(
+        entryReferenceLinksPath(entryId),
+        options,
+      );
+    },
+
+    createReferenceLink(
+      entryId: string,
+      body: CreateEntryReferenceLinkRequest,
+      options?: RequestOptions,
+    ): Promise<EntryReferenceLinkResponse> {
+      return post<
+        CreateEntryReferenceLinkRequest,
+        EntryReferenceLinkResponse,
+        CreateEntryReferenceLinkErrorResponse
+      >(entryReferenceLinksPath(entryId), body, options);
+    },
+
+    deleteReferenceLink(
+      entryId: string,
+      linkId: string,
+      options?: RequestOptions,
+    ): Promise<void> {
+      return del<EntryNotFoundResponse>(
+        entryReferenceLinkPath(entryId, linkId),
+        options,
+      );
+    },
+  },
+
+  referenceLexicons: {
+    get(
+      code: string,
+      options?: RequestOptions,
+    ): Promise<ReferenceLexiconResponse> {
+      return get<ReferenceLexiconResponse, ReferenceLexiconNotFoundResponse>(
+        referenceLexiconPath(code),
+        options,
+      );
+    },
+
+    searchLemmas(
+      code: string,
+      params: ReferenceLemmaSearchParams,
+      options?: RequestOptions,
+    ): Promise<ReferenceLemmaResponse[]> {
+      return get<ReferenceLemmaResponse[], ReferenceLexiconNotFoundResponse>(
+        referenceLexiconLemmasPath(code, params),
+        options,
+      );
+    },
+  },
+
+  tasks: {
+    listForDictionary(
+      dictionaryId: string,
+      filters: ProcessingTaskFilters = {},
+      options?: RequestOptions,
+    ): Promise<ProcessingTaskResponse[]> {
+      return get<ProcessingTaskResponse[], ProcessingTasksNotFoundResponse>(
+        dictionaryTasksPath(dictionaryId, filters),
+        options,
+      );
+    },
+
+    retry(
+      dictionaryId: string,
+      taskId: string,
+      options?: RequestOptions,
+    ): Promise<ProcessingTaskResponse> {
+      return postWithoutBody<
+        ProcessingTaskResponse,
+        RetryProcessingTaskErrorResponse
+      >(dictionaryTaskRetryPath(dictionaryId, taskId), options);
     },
   },
 } as const;

@@ -17,6 +17,7 @@ from cadmus.lexicography import (
     EntryFieldOrigin,
     EntryFieldRole,
     EntryFragment,
+    EntryQueryService,
     EntryStatus,
     EntryValidationError,
     Lexeme,
@@ -95,6 +96,28 @@ class MemoryLexicographyRepository:
 
     def get_entry(self, entry_id: UUID) -> DictionaryEntry | None:
         return self.entries.get(entry_id)
+
+    def list_entries_for_dictionary(self, dictionary_id: UUID) -> list[DictionaryEntry]:
+        return sorted(
+            (
+                entry
+                for entry in self.entries.values()
+                if entry.dictionary_id == dictionary_id
+            ),
+            key=lambda entry: (entry.headword, entry.created_at),
+        )
+
+    def count_fields_by_entry(self, dictionary_id: UUID) -> dict[UUID, int]:
+        entry_ids = {
+            entry.id
+            for entry in self.entries.values()
+            if entry.dictionary_id == dictionary_id
+        }
+        return {
+            entry_id: len(bucket)
+            for entry_id, bucket in self.fields.items()
+            if entry_id in entry_ids and bucket
+        }
 
     def update_entry(self, entry: DictionaryEntry) -> None:
         self.entries[entry.id] = entry
@@ -200,6 +223,8 @@ def _field(
     fragment_id: UUID,
     field_path: str,
     role: EntryFieldRole = EntryFieldRole.MEANING,
+    source_text: str = "значення",
+    normalized_text: str | None = None,
 ) -> EntryField:
     return EntryField(
         id=uuid4(),
@@ -208,7 +233,8 @@ def _field(
         field_path=field_path,
         role=role,
         position=0,
-        source_text="значення",
+        source_text=source_text,
+        normalized_text=normalized_text,
         source_start=0,
         source_end=8,
         origin=EntryFieldOrigin.MODEL,
@@ -254,6 +280,39 @@ class Fixture:
             dictionary_pages=self.dictionary_pages,
             clock=lambda: NOW,
         )
+        self.query_service = EntryQueryService(
+            unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
+                self.lexicography_repository
+            ),
+            dictionary_pages=self.dictionary_pages,
+        )
+
+    def add_entry(
+        self,
+        headword: str,
+        *,
+        dictionary_id: UUID | None = None,
+        status: EntryStatus = EntryStatus.DRAFT,
+        field_count: int = 0,
+    ) -> DictionaryEntry:
+        entry = DictionaryEntry(
+            id=uuid4(),
+            dictionary_id=dictionary_id or self.dictionary.id,
+            lexeme_id=uuid4(),
+            headword=headword,
+            status=status,
+            created_at=NOW,
+            updated_at=NOW,
+            created_by=self.owner_id,
+            updated_by=self.owner_id,
+            schema_id=None,
+        )
+        self.lexicography_repository.entries[entry.id] = entry
+        for index in range(field_count):
+            self.lexicography_repository.add_field(
+                _field(entry.id, uuid4(), f"field_{index}")
+            )
+        return entry
 
     def add_lexeme(self, status: LexemeStatus = LexemeStatus.COMPLETE) -> Lexeme:
         lexeme = _lexeme(self.dictionary.id, status)
@@ -452,6 +511,79 @@ def test_validate_entry_against_schema_reports_missing_required_field() -> None:
     assert "meaning" in errors
 
 
+def _typed_schema(node_type: str, options: list[str] | None = None) -> ArticleSchema:
+    node: dict[str, object] = {"name": "attr", "role": "other", "type": node_type}
+    if options is not None:
+        node["options"] = options
+    return ArticleSchema(
+        id=uuid4(),
+        dictionary_id=uuid4(),
+        version=1,
+        status=SchemaGenerationStatus.READY,
+        source_description="",
+        definition={"fields": [node]},
+        created_at=NOW,
+        created_by=uuid4(),
+    )
+
+
+def test_validate_entry_against_schema_rejects_value_outside_enum_options() -> None:
+    schema = _typed_schema("enum", ["ч.", "ж.", "с."])  # noqa: RUF001
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(entry.id, uuid4(), "attr", EntryFieldRole.OTHER, source_text="мн.")
+    ]
+
+    errors = validate_entry_against_schema(entry, fields, schema)
+
+    assert "attr" in errors
+
+
+def test_validate_entry_against_schema_accepts_value_in_enum_options() -> None:
+    schema = _typed_schema("enum", ["ч.", "ж.", "с."])  # noqa: RUF001
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [_field(entry.id, uuid4(), "attr", EntryFieldRole.OTHER, source_text="ж.")]
+
+    assert validate_entry_against_schema(entry, fields, schema) == {}
+
+
+def test_validate_entry_against_schema_flags_non_numeric_number_field() -> None:
+    schema = _typed_schema("number")
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(entry.id, uuid4(), "attr", EntryFieldRole.OTHER, source_text="кілька")
+    ]
+
+    assert "attr" in validate_entry_against_schema(entry, fields, schema)
+
+
+def test_validate_entry_against_schema_flags_malformed_date_field() -> None:
+    schema = _typed_schema("date")
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(entry.id, uuid4(), "attr", EntryFieldRole.OTHER, source_text="1917 рік")
+    ]
+
+    assert "attr" in validate_entry_against_schema(entry, fields, schema)
+
+
+def test_validate_entry_against_schema_checks_normalized_text_over_source() -> None:
+    schema = _typed_schema("enum", ["ч.", "ж.", "с."])  # noqa: RUF001
+    entry = _entry(schema.dictionary_id, schema.id)
+    fields = [
+        _field(
+            entry.id,
+            uuid4(),
+            "attr",
+            EntryFieldRole.OTHER,
+            source_text="ж.",
+            normalized_text="не-опція",
+        )
+    ]
+
+    assert "attr" in validate_entry_against_schema(entry, fields, schema)
+
+
 def test_validate_service_blocks_completion_when_fields_missing() -> None:
     fixture = Fixture()
     schema = fixture.add_schema(
@@ -491,3 +623,57 @@ def test_validate_service_allows_completion_when_schema_satisfied() -> None:
     )
 
     assert completed.status is EntryStatus.COMPLETE
+
+
+# --- EntryQueryService ---------------------------------------------------------
+
+
+def test_list_for_dictionary_returns_only_this_dictionary_ordered_by_headword() -> None:
+    fixture = Fixture()
+    other_dictionary = uuid4()
+    fixture.add_entry("яблуко")
+    fixture.add_entry("абетка")
+    fixture.add_entry("мова")
+    fixture.add_entry("чужа", dictionary_id=other_dictionary)
+
+    rows = fixture.query_service.list_for_dictionary(
+        fixture.dictionary.id, fixture.owner_id
+    )
+
+    assert [entry.headword for entry, _ in rows] == ["абетка", "мова", "яблуко"]
+
+
+def test_list_for_dictionary_reports_the_field_count_per_entry() -> None:
+    fixture = Fixture()
+    fixture.add_entry("абетка", field_count=3)
+    fixture.add_entry("мова", field_count=0)
+
+    counts = {
+        entry.headword: field_count
+        for entry, field_count in fixture.query_service.list_for_dictionary(
+            fixture.dictionary.id, fixture.owner_id
+        )
+    }
+
+    assert counts == {"абетка": 3, "мова": 0}
+
+
+def test_list_for_dictionary_is_empty_for_a_dictionary_without_entries() -> None:
+    fixture = Fixture()
+
+    assert (
+        fixture.query_service.list_for_dictionary(
+            fixture.dictionary.id, fixture.owner_id
+        )
+        == []
+    )
+
+
+def test_list_for_dictionary_denies_a_non_member() -> None:
+    from cadmus.lexicography import LexemeAccessError
+
+    fixture = Fixture()
+    fixture.add_entry("абетка")
+
+    with pytest.raises(LexemeAccessError):
+        fixture.query_service.list_for_dictionary(fixture.dictionary.id, uuid4())

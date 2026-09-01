@@ -16,7 +16,12 @@ from cadmus.lexicography import (
     LexemeAccessError,
     OcrSuggestionStatus,
     QueueArticleSchemaGenerationService,
+    SaveArticleSchemaService,
     SchemaGenerationStatus,
+)
+from cadmus.lexicography.domain import (
+    normalize_schema_definition,
+    validate_schema_definition,
 )
 from cadmus.sources import (
     Dictionary,
@@ -181,6 +186,13 @@ class Fixture:
             dictionary_pages=self.dictionary_pages,
             clock=lambda: NOW,
         )
+        self.save_service = SaveArticleSchemaService(
+            unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
+                self.lexicography_repository
+            ),
+            dictionary_pages=self.dictionary_pages,
+            clock=lambda: NOW,
+        )
 
     def add_schema(self, schema: ArticleSchema) -> None:
         self.lexicography_repository.article_schemas[schema.id] = schema
@@ -322,3 +334,214 @@ def test_activate_schema_from_another_dictionary_raises_access_error() -> None:
         fixture.activate_service.activate(
             fixture.dictionary.id, schema.id, fixture.owner_id
         )
+
+
+_VALID_DEFINITION = {
+    "fields": [
+        {
+            "name": "meaning",
+            "role": "meaning",
+            "type": "group",
+            "repeatable": True,
+            "required": True,
+            "children": [
+                {"name": "example", "role": "example", "type": "string"},
+            ],
+        }
+    ]
+}
+
+
+def test_save_appends_a_ready_inactive_version() -> None:
+    fixture = Fixture()
+    fixture.add_schema(_schema(fixture.dictionary.id, version=1))
+
+    saved = fixture.save_service.save(
+        fixture.dictionary.id,
+        fixture.owner_id,
+        definition=_VALID_DEFINITION,
+        source_description="  headword; meaning  ",
+    )
+
+    assert saved.version == 2
+    assert saved.status is SchemaGenerationStatus.READY
+    assert saved.activated_at is None
+    assert saved.provider_name is None
+    assert saved.source_description == "headword; meaning"
+    assert fixture.lexicography_repository.article_schemas[saved.id] is saved
+
+
+def test_save_normalizes_the_stored_definition() -> None:
+    fixture = Fixture()
+
+    saved = fixture.save_service.save(
+        fixture.dictionary.id, fixture.owner_id, definition=_VALID_DEFINITION
+    )
+
+    top = saved.definition["fields"][0]
+    assert top["repeatable"] is True and top["required"] is True
+    child = top["children"][0]
+    assert child["repeatable"] is False
+    assert child["required"] is False
+    assert child["children"] == []
+
+
+def test_save_rejects_a_structurally_invalid_definition() -> None:
+    fixture = Fixture()
+
+    with pytest.raises(ArticleSchemaValidationError) as caught:
+        fixture.save_service.save(
+            fixture.dictionary.id,
+            fixture.owner_id,
+            definition={
+                "fields": [
+                    {"name": "", "role": "nonsense", "type": "weird"},
+                    {"name": "ok", "role": "meaning", "type": "string"},
+                ]
+            },
+        )
+
+    errors = caught.value.errors
+    assert "fields[0].name" in errors
+    assert "fields[0].role" in errors
+    assert "fields[0].type" in errors
+
+
+def test_save_rejects_an_empty_field_list() -> None:
+    fixture = Fixture()
+
+    with pytest.raises(ArticleSchemaValidationError):
+        fixture.save_service.save(
+            fixture.dictionary.id, fixture.owner_id, definition={"fields": []}
+        )
+
+
+def test_save_actor_other_than_owner_raises_access_error() -> None:
+    fixture = Fixture()
+
+    with pytest.raises(LexemeAccessError):
+        fixture.save_service.save(
+            fixture.dictionary.id, uuid4(), definition=_VALID_DEFINITION
+        )
+
+
+def test_validate_schema_definition_flags_deep_nesting_and_duplicate_names() -> None:
+    errors = validate_schema_definition(
+        {
+            "fields": [
+                {"name": "dup", "role": "meaning", "type": "string"},
+                {
+                    "name": "dup",
+                    "role": "meaning",
+                    "type": "group",
+                    "children": [
+                        {
+                            "name": "a",
+                            "role": "other",
+                            "type": "group",
+                            "children": [
+                                {
+                                    "name": "b",
+                                    "role": "other",
+                                    "type": "group",
+                                    "children": [
+                                        {"name": "c", "role": "other", "type": "string"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            ]
+        }
+    )
+
+    assert "fields[1].name" in errors  # duplicate sibling name
+    assert "fields[1].children[0].children[0].children" in errors  # 4th level
+
+
+def test_normalize_schema_definition_is_idempotent() -> None:
+    once = normalize_schema_definition(_VALID_DEFINITION)
+    twice = normalize_schema_definition(once)
+    assert once == twice
+
+
+def test_validate_schema_definition_accepts_the_new_field_types() -> None:
+    errors = validate_schema_definition(
+        {
+            "fields": [
+                {"name": "count", "role": "other", "type": "number"},
+                {"name": "archaic", "role": "other", "type": "boolean"},
+                {"name": "first_attested", "role": "other", "type": "date"},
+            ]
+        }
+    )
+
+    assert errors == {}
+
+
+def test_validate_schema_definition_requires_options_for_enum() -> None:
+    errors = validate_schema_definition(
+        {"fields": [{"name": "gender", "role": "other", "type": "enum"}]}
+    )
+
+    assert "fields[0].options" in errors
+
+
+def test_validate_schema_definition_rejects_duplicate_enum_options() -> None:
+    errors = validate_schema_definition(
+        {
+            "fields": [
+                {
+                    "name": "gender",
+                    "role": "other",
+                    "type": "enum",
+                    "options": ["ч.", "ж.", "ч."],
+                }
+            ]
+        }
+    )
+
+    assert "fields[0].options" in errors
+
+
+def test_validate_schema_definition_accepts_a_well_formed_enum() -> None:
+    errors = validate_schema_definition(
+        {
+            "fields": [
+                {
+                    "name": "gender",
+                    "role": "other",
+                    "type": "enum",
+                    "options": ["ч.", "ж.", "с."],  # noqa: RUF001
+                }
+            ]
+        }
+    )
+
+    assert errors == {}
+
+
+def test_normalize_schema_definition_carries_enum_options_only() -> None:
+    normalized = normalize_schema_definition(
+        {
+            "fields": [
+                {
+                    "name": "gender",
+                    "role": "other",
+                    "type": "enum",
+                    "options": ["  ч.  ", "ж.", ""],
+                },
+                {
+                    "name": "note",
+                    "role": "other",
+                    "type": "string",
+                    "options": ["leftover"],
+                },
+            ]
+        }
+    )
+
+    fields = normalized["fields"]
+    assert fields[0]["options"] == ["ч.", "ж."]
+    assert fields[1]["options"] == []

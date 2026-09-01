@@ -83,6 +83,14 @@ it("renders the header, primary tabs and passes the dictionary to child routes",
   expect(
     screen.getByRole("link", { name: "Сторінки та слова" }),
   ).toHaveAttribute("href", "/dictionaries/d1/pages");
+  expect(screen.getByRole("link", { name: "Статті" })).toHaveAttribute(
+    "href",
+    "/dictionaries/d1/entries",
+  );
+  expect(screen.getByRole("link", { name: "Задачі" })).toHaveAttribute(
+    "href",
+    "/dictionaries/d1/tasks",
+  );
   expect(screen.getByRole("link", { name: "Налаштування" })).toHaveAttribute(
     "href",
     "/dictionaries/d1/settings",

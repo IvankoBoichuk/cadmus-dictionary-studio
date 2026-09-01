@@ -8,14 +8,17 @@ from uuid import UUID, uuid4
 
 import pytest
 from cadmus.lexicography import (
+    ArticleSchema,
     CreateEntryFieldService,
     DeleteEntryFieldService,
     EntryField,
     EntryFieldAccessError,
     EntryFieldOrigin,
     EntryFieldRole,
+    EntryFieldValidationError,
     LexicographyRepository,
     RuleBasedAnnotationService,
+    SchemaGenerationStatus,
     UpdateEntryFieldService,
 )
 from cadmus.sources import (
@@ -248,6 +251,85 @@ def test_create_entry_field_rejects_blank_text() -> None:
             source_text="   ",
             source_start=0,
             source_end=0,
+        )
+
+
+def _attach_enum_schema(fixture: _EntryFieldFixture, options: list[str]) -> None:
+    schema = ArticleSchema(
+        id=uuid4(),
+        dictionary_id=fixture.dictionary.id,
+        version=1,
+        status=SchemaGenerationStatus.READY,
+        source_description="",
+        definition={
+            "fields": [
+                {
+                    "name": "gender",
+                    "role": "other",
+                    "type": "enum",
+                    "options": options,
+                }
+            ]
+        },
+        created_at=NOW,
+        created_by=fixture.owner_id,
+    )
+    fixture._entry.schema_id = schema.id
+    fixture.lexicography_repository.get_article_schema = (  # type: ignore[attr-defined]
+        lambda schema_id: schema if schema_id == schema.id else None
+    )
+
+
+def test_create_entry_field_rejects_value_outside_enum_options() -> None:
+    fixture = _EntryFieldFixture()
+    _attach_enum_schema(fixture, ["ч.", "ж.", "с."])  # noqa: RUF001
+
+    with pytest.raises(EntryFieldValidationError):
+        fixture.create_service.create(
+            fixture.entry_id,
+            fixture.owner_id,
+            fragment_id=fixture.fragment_id,
+            field_path="gender",
+            role=EntryFieldRole.OTHER,
+            source_text="мн.",
+            source_start=0,
+            source_end=0,
+        )
+
+
+def test_create_entry_field_accepts_value_in_enum_options() -> None:
+    fixture = _EntryFieldFixture()
+    _attach_enum_schema(fixture, ["ч.", "ж.", "с."])  # noqa: RUF001
+
+    created = fixture.create_service.create(
+        fixture.entry_id,
+        fixture.owner_id,
+        fragment_id=fixture.fragment_id,
+        field_path="gender",
+        role=EntryFieldRole.OTHER,
+        source_text="ж.",
+        source_start=0,
+        source_end=0,
+    )
+
+    assert created.source_text == "ж."
+
+
+def test_update_entry_field_rejects_normalized_text_outside_enum_options() -> None:
+    fixture = _EntryFieldFixture()
+    _attach_enum_schema(fixture, ["ч.", "ж.", "с."])  # noqa: RUF001
+    existing = _field(
+        fixture.entry_id, fixture.fragment_id, origin=EntryFieldOrigin.MODEL
+    )
+    existing.field_path = "gender"
+    fixture.lexicography_repository.add_field(existing)
+
+    with pytest.raises(EntryFieldValidationError):
+        fixture.update_service.update(
+            fixture.entry_id,
+            existing.id,
+            fixture.owner_id,
+            normalized_text="не-опція",
         )
 
 

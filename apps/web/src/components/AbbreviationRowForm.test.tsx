@@ -3,11 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AbbreviationResponse } from "../api";
-import { AbbreviationForm } from "./AbbreviationForm";
+import { AbbreviationRowForm } from "./AbbreviationRowForm";
 
 const DICTIONARY_ID = "11111111-1111-1111-1111-111111111111";
 
-function existing(overrides: Partial<AbbreviationResponse> = {}): AbbreviationResponse {
+function existing(
+  overrides: Partial<AbbreviationResponse> = {},
+): AbbreviationResponse {
   return {
     id: "22222222-2222-2222-2222-222222222222",
     abbreviation: "розм.",
@@ -30,20 +32,32 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-describe("AbbreviationForm", () => {
+function renderRow(ui: React.ReactElement) {
+  return render(
+    <table>
+      <tbody>{ui}</tbody>
+    </table>,
+  );
+}
+
+describe("AbbreviationRowForm", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("requires a full form unless the entry is marked unresolved (AC2)", async () => {
-    render(
-      <AbbreviationForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
+    renderRow(
+      <AbbreviationRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={vi.fn()}
+      />,
     );
 
     fireEvent.change(screen.getByLabelText("Скорочення"), {
       target: { value: "заст." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Додати" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
 
     await waitFor(() =>
       expect(screen.getByText(/Вкажіть повну форму/)).toBeInTheDocument(),
@@ -54,37 +68,60 @@ describe("AbbreviationForm", () => {
     const user = userEvent.setup();
     const created = existing({ unresolved: true, full_form: null });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(201, created)));
-    const onSaved = vi.fn();
+    const onDone = vi.fn();
 
-    render(
-      <AbbreviationForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={onSaved} />,
+    renderRow(
+      <AbbreviationRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={onDone}
+      />,
     );
     fireEvent.change(screen.getByLabelText("Скорочення"), {
       target: { value: "??" },
     });
     await user.click(screen.getByRole("combobox", { name: "Категорія" }));
     await user.click(screen.getByRole("option", { name: "Інше" }));
-    fireEvent.click(
-      screen.getByLabelText("Розшифрування поки невідоме (нерозшифрований запис)"),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Додати" }));
+    fireEvent.click(screen.getByLabelText("Розшифрування поки невідоме"));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
 
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith(created));
   });
 
-  it("adds and removes spelling variants", () => {
-    render(
-      <AbbreviationForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
+  it("splits the comma-separated variants field into an array on save", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(201, existing()));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    renderRow(
+      <AbbreviationRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={vi.fn()}
+      />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Додати варіант написання" }));
-    fireEvent.change(screen.getByLabelText("Варіант написання"), {
-      target: { value: "розм" },
+    fireEvent.change(screen.getByLabelText("Скорочення"), {
+      target: { value: "розм." },
     });
-    expect(screen.getByLabelText("Варіант написання")).toHaveValue("розм");
+    await user.click(screen.getByRole("combobox", { name: "Категорія" }));
+    await user.click(screen.getByRole("option", { name: "Вживання" }));
+    fireEvent.change(screen.getByLabelText("Повна форма"), {
+      target: { value: "розмовне" },
+    });
+    fireEvent.change(
+      screen.getByLabelText("Варіанти написання (через кому)"),
+      { target: { value: "розм; р. ,, розмовн" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Видалити варіант/ }));
-    expect(screen.queryByLabelText("Варіант написання")).not.toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(
+      (fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string,
+    );
+    expect(body.variants).toEqual(["розм", "р.", "розмовн"]);
   });
 
   it("surfaces a duplicate warning from the server (AC4)", async () => {
@@ -100,8 +137,12 @@ describe("AbbreviationForm", () => {
     );
 
     const user = userEvent.setup();
-    render(
-      <AbbreviationForm dictionaryId={DICTIONARY_ID} editing={null} onSaved={vi.fn()} />,
+    renderRow(
+      <AbbreviationRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={null}
+        onDone={vi.fn()}
+      />,
     );
     fireEvent.change(screen.getByLabelText("Скорочення"), {
       target: { value: "розм." },
@@ -111,23 +152,26 @@ describe("AbbreviationForm", () => {
     fireEvent.change(screen.getByLabelText("Повна форма"), {
       target: { value: "розмовне" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Додати" }));
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
 
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("вже існує"),
     );
   });
 
-  it("pre-fills the form when editing an existing entry (AC3)", () => {
-    const editing = existing({ variants: ["р.", "розм"] });
-
-    render(
-      <AbbreviationForm dictionaryId={DICTIONARY_ID} editing={editing} onSaved={vi.fn()} />,
+  it("pre-fills the row when editing an existing entry (AC3)", () => {
+    renderRow(
+      <AbbreviationRowForm
+        dictionaryId={DICTIONARY_ID}
+        editing={existing({ variants: ["р.", "розм"] })}
+        onDone={vi.fn()}
+      />,
     );
 
     expect(screen.getByLabelText("Скорочення")).toHaveValue("розм.");
     expect(screen.getByLabelText("Повна форма")).toHaveValue("розмовне");
-    expect(screen.getAllByLabelText("Варіант написання")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Зберегти зміни" })).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Варіанти написання (через кому)"),
+    ).toHaveValue("р., розм");
   });
 });

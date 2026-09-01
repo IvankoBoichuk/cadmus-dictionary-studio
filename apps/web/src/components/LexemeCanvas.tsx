@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import type { LexemeResponse, LexemeSuggestion } from "../api";
+import type { CanvasMode } from "../canvasTools";
 import { isFinePointer, scrollIntoViewOptions } from "../interaction";
 import { useCreateLexeme } from "../hooks/useCreateLexeme";
 import { lexemeToUpdateInput, type UpdateLexemeInput } from "../hooks/useUpdateLexeme";
@@ -132,6 +133,9 @@ export function LexemeCanvas({
   secondBoxDraftLexemeId = null,
   onSecondBoxDrawn,
   onCancelSecondBoxDraft,
+  mode = "select",
+  zoom = 1,
+  onEraseLexeme,
 }: {
   dictionaryId: string;
   pageNumber: number;
@@ -153,10 +157,15 @@ export function LexemeCanvas({
   secondBoxDraftLexemeId?: string | null;
   onSecondBoxDrawn?: (lexeme: LexemeResponse) => void;
   onCancelSecondBoxDraft?: () => void;
+  mode?: CanvasMode;
+  zoom?: number;
+  onEraseLexeme?: (lexemeId: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [naturalSize, setNaturalSize] = useState<Size | null>(null);
   const [displayedSize, setDisplayedSize] = useState<Size | null>(null);
+  const [fitWidth, setFitWidth] = useState<number | null>(null);
   const [drag, setDrag] = useState<{ start: Point; current: Point } | null>(null);
   const [pendingBox, setPendingBox] = useState<Rect | null>(null);
   const [text, setText] = useState("");
@@ -171,22 +180,35 @@ export function LexemeCanvas({
     pageNumber,
   );
 
+  // The image is rendered at `fitWidth * zoom` px wide; the frame scrolls when
+  // that exceeds the panel. `displayedSize` (and thus `scale`) is derived from
+  // it, so every `scaleRect` call downstream stays correct as the user zooms.
   useEffect(() => {
-    function updateDisplayedSize() {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      setDisplayedSize({ width: rect.width, height: rect.height });
+    function measureFit() {
+      if (scrollRef.current) {
+        setFitWidth(scrollRef.current.getBoundingClientRect().width);
+      }
     }
-    window.addEventListener("resize", updateDisplayedSize);
-    return () => window.removeEventListener("resize", updateDisplayedSize);
+    measureFit();
+    window.addEventListener("resize", measureFit);
+    return () => window.removeEventListener("resize", measureFit);
   }, []);
+
+  useEffect(() => {
+    if (fitWidth === null || !naturalSize || naturalSize.width === 0) return;
+    const width = fitWidth * zoom;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derived layout sync
+    setDisplayedSize({
+      width,
+      height: width * (naturalSize.height / naturalSize.width),
+    });
+  }, [fitWidth, zoom, naturalSize]);
 
   const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      setDisplayedSize({ width: rect.width, height: rect.height });
+    if (scrollRef.current) {
+      setFitWidth(scrollRef.current.getBoundingClientRect().width);
     }
   };
 
@@ -201,6 +223,11 @@ export function LexemeCanvas({
     return scaleRect(displayedRect, naturalSize.width / displayedSize.width);
   };
 
+  const drawingAllowed =
+    mode === "draw" ||
+    redrawingLexemeId !== null ||
+    secondBoxDraftLexemeId !== null;
+
   const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     const point = pointFromEvent(event);
     if (!point) return;
@@ -214,7 +241,7 @@ export function LexemeCanvas({
     ) {
       onSelectLexeme(null);
     }
-    setDrag({ start: point, current: point });
+    if (drawingAllowed) setDrag({ start: point, current: point });
   };
 
   const handleMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -395,8 +422,19 @@ export function LexemeCanvas({
     });
   };
 
+  const cursorClass = drawingAllowed
+    ? "cursor-crosshair"
+    : mode === "erase"
+      ? "cursor-pointer"
+      : "cursor-default";
+
+  const handleBoxActivate = (lexemeId: string) => {
+    if (mode === "erase") onEraseLexeme?.(lexemeId);
+    else onSelectLexeme(lexemeId);
+  };
+
   return (
-    <div className="grid justify-items-center gap-3">
+    <div className="grid gap-3">
       {redrawingLexemeId && (
         <p className="lede" role="status">
           Намалюйте нову область для вибраної лексеми.{" "}
@@ -419,20 +457,27 @@ export function LexemeCanvas({
         </p>
       )}
       <div
-        ref={containerRef}
-        className="relative inline-block cursor-crosshair select-none"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        ref={scrollRef}
+        className="max-h-[80vh] w-full overflow-auto overscroll-contain rounded-[0.75rem] border bg-surface"
       >
-        <img
-          className="block max-h-[80vh] max-w-full rounded-[0.75rem] border bg-surface"
-          src={imageUrl}
-          alt={imageAlt}
-          onLoad={handleImageLoad}
-          draggable={false}
-        />
+        <div
+          ref={containerRef}
+          className={cn("relative w-max select-none", cursorClass)}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          <img
+            className="block"
+            style={
+              displayedSize ? { width: `${displayedSize.width}px` } : undefined
+            }
+            src={imageUrl}
+            alt={imageAlt}
+            onLoad={handleImageLoad}
+            draggable={false}
+          />
         {scale !== null &&
           lexemes
             .filter((lexeme) => selectedLexemeId === null || lexeme.id === selectedLexemeId)
@@ -470,7 +515,7 @@ export function LexemeCanvas({
                       selected={isSelected}
                       title={lexeme.source_text}
                       showHandles={isSelected && !isDraftingSecondBox && !isComplete}
-                      onSelect={() => onSelectLexeme(lexeme.id)}
+                      onSelect={() => handleBoxActivate(lexeme.id)}
                       onHandleMouseDown={(handle, event) =>
                         startHandleDrag(lexeme, 1, handle, event)
                       }
@@ -483,7 +528,7 @@ export function LexemeCanvas({
                       selected={isSelected}
                       title={lexeme.source_text}
                       showHandles={isSelected && !isComplete}
-                      onSelect={() => onSelectLexeme(lexeme.id)}
+                      onSelect={() => handleBoxActivate(lexeme.id)}
                       onHandleMouseDown={(handle, event) =>
                         startHandleDrag(lexeme, 2, handle, event)
                       }
@@ -534,6 +579,7 @@ export function LexemeCanvas({
             }}
           />
         )}
+        </div>
       </div>
 
       {pendingBox && (

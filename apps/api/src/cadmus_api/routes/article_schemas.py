@@ -13,11 +13,15 @@ from cadmus.lexicography import (
     LexemeAccessError,
     OcrSuggestionStatus,
     QueueArticleSchemaGenerationService,
+    SaveArticleSchemaService,
     SchemaGenerationStatus,
 )
+from cadmus.processing import ProcessingTaskKind, ProcessingTaskService
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
+
+from cadmus_api.processing_recording import record_enqueued_task
 
 SESSION_COOKIE_NAME = "cadmus_session"
 
@@ -57,6 +61,15 @@ class ArticleSchemaResponse(BaseModel):
     error_message: str | None
     created_at: datetime
     activated_at: datetime | None
+
+
+class SaveArticleSchemaRequest(BaseModel):
+    """A hand-edited article-schema definition to persist as a new version."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    definition: dict[str, Any]
+    source_description: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -117,6 +130,8 @@ def create_article_schemas_router(
     authentication_service: AuthenticationService,
     generation_service: QueueArticleSchemaGenerationService,
     activate_service: ActivateArticleSchemaService,
+    save_service: SaveArticleSchemaService,
+    processing_task_service: ProcessingTaskService | None = None,
 ) -> APIRouter:
     """Create BH-148 article-schema routes bound to application use cases."""
     router = APIRouter(prefix="/dictionaries/{dictionary_id}", tags=["article-schemas"])
@@ -154,6 +169,13 @@ def create_article_schemas_router(
             task_id = generation_service.enqueue(dictionary_id, user.id)
         except LexemeAccessError:
             return _not_found()
+        record_enqueued_task(
+            processing_task_service,
+            dictionary_id=dictionary_id,
+            kind=ProcessingTaskKind.ARTICLE_SCHEMA_GENERATION,
+            celery_task_id=task_id,
+            enqueued_by=user.id,
+        )
         return EnqueueGenerationResponse(task_id=task_id)
 
     @router.get(
@@ -193,6 +215,41 @@ def create_article_schemas_router(
         except LexemeAccessError:
             return _not_found()
         return [_article_schema_response(version) for version in versions]
+
+    @router.post(
+        "/article-schemas",
+        response_model=ArticleSchemaResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **NOT_FOUND_RESPONSE,
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": FieldErrorsResponse,
+                "description": "The edited schema definition is structurally invalid",
+            },
+        },
+        summary="Save a hand-edited article-schema definition as a new version",
+    )
+    def save_article_schema(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+        body: SaveArticleSchemaRequest,
+    ) -> ArticleSchemaResponse | JSONResponse:
+        try:
+            schema = save_service.save(
+                dictionary_id,
+                user.id,
+                definition=body.definition,
+                source_description=body.source_description,
+            )
+        except ArticleSchemaValidationError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"errors": error.errors},
+            )
+        except LexemeAccessError:
+            return _not_found()
+        return _article_schema_response(schema)
 
     @router.post(
         "/article-schemas/{schema_id}/activate",

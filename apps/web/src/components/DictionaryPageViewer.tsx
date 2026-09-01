@@ -11,13 +11,19 @@ import {
   type LexemeResponse,
   type LexemeSuggestion,
 } from "../api";
+import { clampZoom, ZOOM_STEP, type CanvasMode } from "../canvasTools";
+import { formatNumber } from "../format";
 import { useDeleteLexeme } from "../hooks/useDeleteLexeme";
 import { useDictionaryPagesSummary } from "../hooks/useDictionaryPagesSummary";
+import { useDictionaryScan } from "../hooks/useDictionaryScan";
 import { useLexemesForPage } from "../hooks/useLexemesForPage";
 import { useOcrSuggestions } from "../hooks/useOcrSuggestions";
+import { useScanProgress } from "../hooks/useScanProgress";
 import { lexemeToUpdateInput, useUpdateLexeme } from "../hooks/useUpdateLexeme";
+import { CanvasToolbar } from "./CanvasToolbar";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
+import { PageNavigator } from "./PageNavigator";
 import { ScanProgressBar } from "./ScanProgressBar";
 
 /** BH-53: paginated viewer over a dictionary's rendered, in-range pages. */
@@ -55,6 +61,7 @@ export function DictionaryPageViewer({
     dismissSuggestion,
     reset: resetOcrSuggestions,
   } = useOcrSuggestions(dictionaryId, currentPage);
+  const { state: scanState, trigger: triggerScan } = useDictionaryScan(dictionaryId);
 
   const [promotingLexemeId, setPromotingLexemeId] = useState<string | null>(null);
   const [promoteError, setPromoteError] = useState<string | null>(null);
@@ -63,6 +70,8 @@ export function DictionaryPageViewer({
   const [secondBoxDraftLexemeId, setSecondBoxDraftLexemeId] = useState<string | null>(
     null,
   );
+  const [mode, setMode] = useState<CanvasMode>("select");
+  const [zoom, setZoom] = useState(1);
   const pageKey = `${dictionaryId}:${currentPage}`;
   const [previousPageKey, setPreviousPageKey] = useState(pageKey);
   if (pageKey !== previousPageKey) {
@@ -73,8 +82,38 @@ export function DictionaryPageViewer({
     resetOcrSuggestions();
   }
 
+  const lexemeCount =
+    lexemesState.status === "loaded" ? lexemesState.lexemes.length : 0;
+
+  // Derived (not effect-driven) from the queue's own progress counters, so the
+  // page grid + bar below refetch live as the queue works, without a render pass.
+  const scanToken =
+    scanState.status === "queued" || scanState.status === "running"
+      ? scanState.processedPages * 1000 + scanState.createdLexemes
+      : scanState.status === "succeeded"
+        ? 1_000_000 + scanState.processedPages * 1000 + scanState.createdLexemes
+        : 0;
+  const scanProgress = useScanProgress(dictionaryId, lexemeCount + scanToken);
+  const progressPages =
+    scanProgress.status === "loaded" ? scanProgress.progress.pages : [];
+  const processedPages =
+    scanProgress.status === "loaded" ? scanProgress.progress.processed_pages : 0;
+  const progressTotalPages =
+    scanProgress.status === "loaded"
+      ? scanProgress.progress.total_pages
+      : (totalPages ?? 0);
+
   const suggestions: LexemeSuggestion[] =
     ocrState.status === "succeeded" ? ocrState.suggestions : [];
+
+  const ocrRunning =
+    ocrState.status === "starting" ||
+    ocrState.status === "queued" ||
+    ocrState.status === "running";
+  const scanRunning =
+    scanState.status === "starting" ||
+    scanState.status === "queued" ||
+    scanState.status === "running";
 
   if (summary.status === "loading") {
     return <p role="status">Завантажуємо сторінки…</p>;
@@ -190,29 +229,29 @@ export function DictionaryPageViewer({
   };
 
   return (
-    <div
-      className="grid justify-items-center gap-4"
-      aria-labelledby="page-viewer-heading"
-    >
+    <div className="grid gap-4" aria-labelledby="page-viewer-heading">
       <h2 id="page-viewer-heading" className="sr-only">
         Перегляд сторінки словника
       </h2>
-      <div className="mb-3 flex items-center gap-3">
+
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="secondary"
           type="button"
           onClick={() => void triggerOcrSuggestions()}
-          disabled={
-            ocrState.status === "starting" ||
-            ocrState.status === "queued" ||
-            ocrState.status === "running"
-          }
+          disabled={ocrRunning}
         >
-          {ocrState.status === "starting" ||
-          ocrState.status === "queued" ||
-          ocrState.status === "running"
-            ? "Розпізнаємо слова…"
-            : "Автоматично знайти слова (OCR)"}
+          {ocrRunning ? "Розпізнаємо слова…" : "Автоматично знайти слова (OCR)"}
+        </Button>
+        <Button
+          variant="secondary"
+          type="button"
+          onClick={() => void triggerScan()}
+          disabled={scanRunning}
+        >
+          {scanRunning
+            ? "Опрацьовуємо чергу…"
+            : "Запустити чергу OCR для всього словника"}
         </Button>
         {ocrState.status === "succeeded" && (
           <span className="lede" role="status">
@@ -224,33 +263,73 @@ export function DictionaryPageViewer({
             {ocrState.message}
           </span>
         )}
+        {(scanState.status === "queued" || scanState.status === "running") && (
+          <span className="lede" role="status">
+            Опрацьовано {formatNumber(scanState.processedPages)} /{" "}
+            {formatNumber(scanState.totalPages)} сторінок, створено лексем:{" "}
+            {formatNumber(scanState.createdLexemes)}
+          </span>
+        )}
+        {scanState.status === "succeeded" && (
+          <span className="lede" role="status">
+            Чергу завершено: опрацьовано {formatNumber(scanState.processedPages)}{" "}
+            сторінок, створено лексем: {formatNumber(scanState.createdLexemes)}
+          </span>
+        )}
+        {scanState.status === "failed" && (
+          <span className="form-error" role="alert">
+            {scanState.message}
+          </span>
+        )}
       </div>
+
       {promoteError && (
         <p className="form-error" role="alert">
           {promoteError}
         </p>
       )}
-      <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)] items-start gap-6 max-md:grid-cols-[1fr]">
-        <LexemeCanvas
-          dictionaryId={dictionaryId}
-          pageNumber={currentPage}
-          imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
-          imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
-          lexemes={lexemesState.status === "loaded" ? lexemesState.lexemes : []}
-          onLexemeCreated={addLexeme}
-          selectedLexemeId={selectedLexemeId}
-          onSelectLexeme={setSelectedLexemeId}
-          redrawingLexemeId={redrawingLexemeId}
-          onLexemeRedrawn={handleLexemeRedrawn}
-          onCancelRedraw={() => setRedrawingLexemeId(null)}
-          onSubmitUpdate={submitUpdate}
-          suggestions={suggestions}
-          onAcceptSuggestion={dismissSuggestion}
-          secondBoxDraftLexemeId={secondBoxDraftLexemeId}
-          onSecondBoxDrawn={handleSecondBoxDrawn}
-          onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
-        />
-        <aside
+
+      <div className="grid w-full items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(24rem,1fr)]">
+        <div className="grid gap-3 rounded-xl border border-border bg-surface p-3">
+          <CanvasToolbar
+            mode={mode}
+            onModeChange={setMode}
+            zoom={zoom}
+            onZoomIn={() => setZoom((value) => clampZoom(value + ZOOM_STEP))}
+            onZoomOut={() => setZoom((value) => clampZoom(value - ZOOM_STEP))}
+            onZoomReset={() => setZoom(1)}
+          />
+          <PageNavigator
+            pages={progressPages}
+            currentPage={currentPage}
+            totalPages={summary.totalPages}
+            onNavigate={onNavigate}
+          />
+          <LexemeCanvas
+            dictionaryId={dictionaryId}
+            pageNumber={currentPage}
+            imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
+            imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
+            lexemes={lexemesState.status === "loaded" ? lexemesState.lexemes : []}
+            onLexemeCreated={addLexeme}
+            selectedLexemeId={selectedLexemeId}
+            onSelectLexeme={setSelectedLexemeId}
+            redrawingLexemeId={redrawingLexemeId}
+            onLexemeRedrawn={handleLexemeRedrawn}
+            onCancelRedraw={() => setRedrawingLexemeId(null)}
+            onSubmitUpdate={submitUpdate}
+            suggestions={suggestions}
+            onAcceptSuggestion={dismissSuggestion}
+            secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+            onSecondBoxDrawn={handleSecondBoxDrawn}
+            onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
+            mode={mode}
+            zoom={zoom}
+            onEraseLexeme={handleDelete}
+          />
+        </div>
+
+        <section
           className="grid content-start gap-[0.6rem]"
           aria-labelledby="lexeme-list-heading"
         >
@@ -276,40 +355,10 @@ export function DictionaryPageViewer({
             onPromoteToEntry={handlePromoteToEntry}
             promotingLexemeId={promotingLexemeId}
           />
-        </aside>
+        </section>
       </div>
-      <ScanProgressBar
-        dictionaryId={dictionaryId}
-        currentPage={currentPage}
-        refreshToken={
-          lexemesState.status === "loaded" ? lexemesState.lexemes.length : 0
-        }
-        onNavigate={onNavigate}
-      />
-      <div className="flex items-center gap-4">
-        <Button
-          variant="secondary"
-          type="button"
-          onClick={() => onNavigate(currentPage - 1)}
-          disabled={currentPage <= 1}
-        >
-          ← Попередня
-        </Button>
-        <span
-          className="min-w-40 text-center font-[650] tabular-nums"
-          role="status"
-        >
-          Сторінка {currentPage} / {summary.totalPages}
-        </span>
-        <Button
-          variant="secondary"
-          type="button"
-          onClick={() => onNavigate(currentPage + 1)}
-          disabled={currentPage >= summary.totalPages}
-        >
-          Наступна →
-        </Button>
-      </div>
+
+      <ScanProgressBar processed={processedPages} total={progressTotalPages} />
     </div>
   );
 }

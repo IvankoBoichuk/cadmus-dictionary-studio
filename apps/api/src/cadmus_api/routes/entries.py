@@ -17,6 +17,7 @@ from cadmus.lexicography import (
     EntryFieldRole,
     EntryFieldValidationError,
     EntryFragment,
+    EntryQueryService,
     EntryStatus,
     EntryValidationError,
     LexemeAccessError,
@@ -27,10 +28,13 @@ from cadmus.lexicography import (
     UpdateEntryFieldService,
     ValidateEntryService,
 )
+from cadmus.processing import ProcessingTaskKind, ProcessingTaskService
 from cadmus.sources import GetDictionaryService
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+
+from cadmus_api.processing_recording import record_enqueued_task
 
 SESSION_COOKIE_NAME = "cadmus_session"
 
@@ -95,6 +99,19 @@ class EntryResponse(BaseModel):
     updated_at: datetime
     fragments: list[EntryFragmentResponse]
     fields: list[EntryFieldResponse]
+
+
+class EntrySummaryResponse(BaseModel):
+    """One row of a dictionary's entries list (BH-148)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    headword: str
+    status: EntryStatus
+    field_count: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class EnqueueExtractionResponse(BaseModel):
@@ -274,7 +291,9 @@ def create_entries_router(
     update_field_service: UpdateEntryFieldService,
     delete_field_service: DeleteEntryFieldService,
     validate_service: ValidateEntryService,
+    entry_query_service: EntryQueryService,
     dictionary_service: GetDictionaryService,
+    processing_task_service: ProcessingTaskService | None = None,
 ) -> APIRouter:
     """Create BH-148 dictionary entry routes bound to application use cases."""
     router = APIRouter(tags=["entries"])
@@ -342,6 +361,32 @@ def create_entries_router(
         return _entry_response(entry, fragments, fields, page_numbers)
 
     @router.get(
+        "/dictionaries/{dictionary_id}/entries",
+        response_model=list[EntrySummaryResponse],
+        responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
+        summary="List a dictionary's structured entries",
+    )
+    def list_entries(
+        user: AuthenticatedUser,
+        dictionary_id: Annotated[UUID, Path()],
+    ) -> list[EntrySummaryResponse] | JSONResponse:
+        try:
+            rows = entry_query_service.list_for_dictionary(dictionary_id, user.id)
+        except LexemeAccessError:
+            return _not_found()
+        return [
+            EntrySummaryResponse(
+                id=entry.id,
+                headword=entry.headword,
+                status=entry.status,
+                field_count=field_count,
+                created_at=entry.created_at,
+                updated_at=entry.updated_at,
+            )
+            for entry, field_count in rows
+        ]
+
+    @router.get(
         "/entries/{entry_id}",
         response_model=EntryResponse,
         responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
@@ -370,9 +415,19 @@ def create_entries_router(
         entry_id: Annotated[UUID, Path()],
     ) -> EnqueueExtractionResponse | JSONResponse:
         try:
+            entry, _fragments, _fields = extraction_service.get(entry_id, user.id)
             task_id = extraction_service.enqueue(entry_id, user.id)
         except EntryAccessError:
             return _not_found()
+        record_enqueued_task(
+            processing_task_service,
+            dictionary_id=entry.dictionary_id,
+            kind=ProcessingTaskKind.ENTRY_EXTRACTION,
+            celery_task_id=task_id,
+            enqueued_by=user.id,
+            target_id=entry_id,
+            target_label=entry.headword,
+        )
         return EnqueueExtractionResponse(task_id=task_id)
 
     @router.get(

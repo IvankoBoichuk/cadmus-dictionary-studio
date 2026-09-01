@@ -10,9 +10,12 @@ from cadmus.lexicography import (
     OcrSuggestionStatus,
     SuggestLexemesService,
 )
+from cadmus.processing import ProcessingTaskKind, ProcessingTaskService
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
+
+from cadmus_api.processing_recording import record_enqueued_task
 
 SESSION_COOKIE_NAME = "cadmus_session"
 
@@ -78,6 +81,7 @@ NOT_FOUND_RESPONSE: dict[int | str, dict[str, object]] = {
 def create_ocr_suggestions_router(
     authentication_service: AuthenticationService,
     suggest_service: SuggestLexemesService,
+    processing_task_service: ProcessingTaskService | None = None,
 ) -> APIRouter:
     """Create OCR word-suggestion routes bound to their application use case."""
     router = APIRouter(
@@ -125,6 +129,15 @@ def create_ocr_suggestions_router(
             task_id = suggest_service.enqueue(dictionary_id, user.id, page_number)
         except (LexemeAccessError, LexemePageNotFoundError):
             return _not_found()
+        record_enqueued_task(
+            processing_task_service,
+            dictionary_id=dictionary_id,
+            kind=ProcessingTaskKind.OCR_SUGGESTIONS,
+            celery_task_id=task_id,
+            enqueued_by=user.id,
+            target_label=f"Сторінка {page_number}",
+            rerun_params={"page_number": page_number},
+        )
         return EnqueueSuggestionsResponse(task_id=task_id)
 
     @router.get(

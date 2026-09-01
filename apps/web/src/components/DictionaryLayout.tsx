@@ -15,6 +15,8 @@ import type { DictionaryContext } from "./dictionaryContext";
 const TABS = [
   { to: ".", label: "Огляд", end: true },
   { to: "pages", label: "Сторінки та слова", end: false },
+  { to: "entries", label: "Статті", end: false },
+  { to: "tasks", label: "Задачі", end: false },
   { to: "settings", label: "Налаштування", end: false },
 ] as const;
 
