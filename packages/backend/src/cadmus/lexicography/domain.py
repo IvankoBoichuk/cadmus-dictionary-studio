@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -687,11 +687,11 @@ class EntryField:
 
     Two, independently optional kinds of source span: ``source_start``/
     ``source_end`` are character offsets into the fragment's
-    ``recognized_text`` (set by the manual-add flow, which lets an editor
-    type/select text directly); ``x``/``y``/``width``/``height`` are a real
-    page-pixel bounding box (set by ALTO segment-based extraction --
-    BH-148 experimental variant 1 -- as the union of the OCR segments the
-    field was extracted from). A field may have either, both, or neither.
+    ``recognized_text`` (set by the manual-add flow and by AI extraction,
+    which both work off that text); ``x``/``y``/``width``/``height`` are a
+    real page-pixel bounding box, only ever set by the retired ALTO
+    segment-based extraction experiment (see ADR-0008). A field may have
+    either, both, or neither.
     ``parent_field_id`` lets fields nest (e.g. an ``example`` under a
     ``meaning``) and repeat (several fields sharing the same
     ``parent_field_id`` and role, ordered by ``position``). ``field_path``
@@ -769,17 +769,66 @@ class ExtractedField:
     Ephemeral by design: never persisted directly -- the application layer
     wraps it into a new ``EntryField`` row (``origin=EntryFieldOrigin.MODEL``).
 
-    ``segment_start``/``segment_end`` are an inclusive index range into the
-    ``FragmentSegment`` list the provider was given -- the field's text and
-    bounding box are derived by the caller from the segments they cover.
+    ``value`` is meant to be a verbatim slice of the fragment's
+    ``recognized_text``; the caller locates it there to derive
+    ``source_start``/``source_end`` (BH-148, per ADR-0008). No bounding box:
+    the AI extraction path is plain-text only.
     """
 
     field_path: str
     role: EntryFieldRole
     value: str
-    segment_start: int
-    segment_end: int
     confidence: float
+
+
+def dedupe_extracted_fields(
+    schema: "ArticleSchema", items: Sequence[ExtractedField]
+) -> list[ExtractedField]:
+    """Collapse an AI extraction result's noise (BH-148).
+
+    - exact ``(field_path, value)`` repeats (case/space-insensitive on the
+      value) become one item, keeping the highest ``confidence``;
+    - a ``field_path`` whose schema node is not ``repeatable`` keeps only its
+      single best item;
+    - first-seen order is otherwise preserved.
+    """
+    best: dict[tuple[str, str], ExtractedField] = {}
+    order: list[tuple[str, str]] = []
+    for raw in items:
+        item = (
+            raw
+            if raw.value == raw.value.strip()
+            else replace(raw, value=raw.value.strip())
+        )
+        key = (item.field_path, " ".join(item.value.split()).casefold())
+        current = best.get(key)
+        if current is None:
+            best[key] = item
+            order.append(key)
+        elif item.confidence > current.confidence:
+            # keep the first-seen spelling (likeliest to match the text);
+            # only raise its confidence to the best a duplicate reported
+            best[key] = replace(current, confidence=item.confidence)
+
+    def _repeatable(field_path: str) -> bool:
+        node = resolve_schema_node(schema.definition, field_path)
+        # unknown path -> keep every value (don't silently drop data)
+        return node is None or bool(node.get("repeatable"))
+
+    kept: list[ExtractedField] = []
+    singleton_index: dict[str, int] = {}  # field_path -> its slot in ``kept``
+    for key in order:
+        item = best[key]
+        if _repeatable(item.field_path):
+            kept.append(item)
+            continue
+        slot = singleton_index.get(item.field_path)
+        if slot is None:
+            singleton_index[item.field_path] = len(kept)
+            kept.append(item)
+        elif item.confidence > kept[slot].confidence:
+            kept[slot] = item  # a non-repeatable field keeps only its best value
+    return kept
 
 
 def _walk_schema_nodes(nodes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:

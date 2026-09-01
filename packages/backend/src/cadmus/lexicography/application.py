@@ -1032,7 +1032,10 @@ class RuleBasedAnnotationService:
                 if source_field.origin == EntryFieldOrigin.RULE:
                     continue  # don't re-tag matches found by this same pass
                 haystack = source_field.source_text.lower()
+                whole = source_field.source_text.strip().casefold()
                 for needle, role in needles:
+                    if whole == needle.strip().casefold():
+                        continue  # the field already *is* this abbreviation/label
                     start = haystack.find(needle.lower())
                     if start < 0:
                         continue

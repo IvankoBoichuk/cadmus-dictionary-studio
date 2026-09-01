@@ -539,6 +539,38 @@ def test_tag_abbreviations_and_geography_skips_fields_already_tagged_by_rule() -
     assert created == []
 
 
+def test_tag_abbreviations_and_geography_skips_a_field_that_is_the_abbreviation() -> (
+    None
+):
+    fixture = _AnnotationFixture()
+    fixture.sources_repository.abbreviations[fixture.dictionary.id] = [
+        _abbreviation(fixture.dictionary.id, "ж.")
+    ]
+    # a MODEL field whose entire value already *is* the abbreviation -- it must
+    # not spawn a redundant "<path>.abbreviation" child
+    whole = _field(
+        fixture.entry_id,
+        fixture.fragment_id,
+        source_text=" ж. ",
+        origin=EntryFieldOrigin.MODEL,
+    )
+    inside = _field(
+        fixture.entry_id,
+        fixture.fragment_id,
+        source_text="вживається ж. у розмові",  # noqa: RUF001
+        origin=EntryFieldOrigin.MODEL,
+    )
+    fixture.lexicography_repository.add_field(whole)
+    fixture.lexicography_repository.add_field(inside)
+
+    created = fixture.service.tag_abbreviations_and_geography(
+        fixture.dictionary.id, fixture.entry_id, fixture.owner_id
+    )
+
+    assert len(created) == 1
+    assert created[0].parent_field_id == inside.id
+
+
 def test_tag_abbreviations_and_geography_returns_empty_without_reference_data() -> None:
     fixture = _AnnotationFixture()
     parent = _field(

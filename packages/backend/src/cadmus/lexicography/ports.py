@@ -1,6 +1,6 @@
 """Application-owned ports for lexicography infrastructure."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from types import TracebackType
 from typing import Any, Protocol, Self
 from uuid import UUID
@@ -15,7 +15,6 @@ from cadmus.lexicography.domain import (
     EntryFragment,
     EntryStatus,
     ExtractedField,
-    FragmentSegment,
     GeneratedSchema,
     Lexeme,
     LexemeEvent,
@@ -195,9 +194,8 @@ class EntryExtractionQueue(Protocol):
 
 class AiSchemaProvider(Protocol):
     """Worker-side port to an AI provider that turns a dictionary's free-text
-    ``article_description`` into a structured schema, and extracts fields
-    from one entry fragment's ALTO-segmented words per that schema (BH-148,
-    experimental variant 1).
+    ``article_description`` into a structured schema, and extracts fields from
+    one entry fragment's plain ``recognized_text`` per that schema (BH-148).
 
     Mirrors the canonical provider-neutral contract shape documented in
     ``docs/architecture.md`` §8 (``OcrProvider``): domain/application code
@@ -207,7 +205,7 @@ class AiSchemaProvider(Protocol):
     def generate_schema(self, article_description: str) -> GeneratedSchema: ...
 
     def extract_fields(
-        self, schema: ArticleSchema, segments: Sequence[FragmentSegment]
+        self, schema: ArticleSchema, text: str
     ) -> list[ExtractedField]: ...
 
 

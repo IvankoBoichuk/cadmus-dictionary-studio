@@ -7,8 +7,6 @@ application code never import this module directly (see
 the same rule applies to any external AI provider SDK).
 """
 
-import json
-from collections.abc import Sequence
 from typing import Any, Final, cast
 from uuid import UUID
 
@@ -24,7 +22,6 @@ from cadmus.lexicography.domain import (
     EntryExtractionSnapshot,
     EntryFieldRole,
     ExtractedField,
-    FragmentSegment,
     GeneratedSchema,
     OcrSuggestionStatus,
 )
@@ -133,31 +130,23 @@ _EXTRACTED_FIELD_ITEM: dict[str, Any] = {
         "field_path": {"type": "string"},
         "role": {"type": "string", "enum": [role.value for role in EntryFieldRole]},
         "value": {"type": "string"},
-        "segment_start": {"type": "integer"},
-        "segment_end": {"type": "integer"},
         "confidence": {"type": "number"},
     },
-    "required": [
-        "field_path",
-        "role",
-        "value",
-        "segment_start",
-        "segment_end",
-        "confidence",
-    ],
+    "required": ["field_path", "role", "value", "confidence"],
     "additionalProperties": False,
 }
 _EXTRACT_FIELDS_TOOL_NAME = "extract_entry_fields"
 _EXTRACT_FIELDS_TOOL: dict[str, Any] = {
     "name": _EXTRACT_FIELDS_TOOL_NAME,
     "description": (
-        "Extract structured fields from one dictionary entry, per the "
-        "given article schema. The entry's text is given as a numbered "
-        "list of OCR-recognized word segments (BH-148 ALTO segmentation, "
-        "experimental). segment_start/segment_end must be the 0-based "
-        "indices of the first and last segment that make up one field's "
-        "value -- an inclusive, contiguous range into the exact segment "
-        "list given, never a character offset or a paraphrase."
+        "Extract structured fields from one dictionary article, per the "
+        "given schema. The article is provided as plain running text. "
+        "'value' MUST be copied verbatim as a contiguous substring of that "
+        "text -- do not paraphrase, normalise, reorder or merge words. "
+        "'field_path' is the dotted chain of schema node names down to the "
+        "field, indexing every repeatable node: 'sense[0].illustration[1]"
+        ".text'. Emit each field once -- never repeat the same "
+        "field_path/value pair."
     ),
     "input_schema": {
         "type": "object",
@@ -167,6 +156,36 @@ _EXTRACT_FIELDS_TOOL: dict[str, Any] = {
     },
     "strict": True,
 }
+
+
+def _compact_schema_fields(definition: dict[str, Any]) -> str:
+    """One line per schema node -- ``dotted.path · role · type`` (plus
+    ``· repeatable`` when it is) -- far cheaper than dumping the nested JSON
+    with ``options``/``required``/``children`` on every extraction call."""
+    lines: list[str] = []
+
+    def _walk(nodes: Any, prefix: str) -> None:
+        if not isinstance(nodes, list):
+            return
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            name = str(node.get("name") or "").strip()
+            if not name:
+                continue
+            path = f"{prefix}.{name}" if prefix else name
+            parts = [
+                path,
+                str(node.get("role") or "other"),
+                str(node.get("type") or "string"),
+            ]
+            if node.get("repeatable"):
+                parts.append("repeatable")
+            lines.append(" · ".join(parts))
+            _walk(node.get("children"), path)
+
+    _walk(definition.get("fields"), "")
+    return "\n".join(lines)
 
 
 class AiSchemaProviderError(RuntimeError):
@@ -228,17 +247,11 @@ class AnthropicAiSchemaProvider:
             presentation_formula=formula if isinstance(formula, str) else "",
         )
 
-    def extract_fields(
-        self, schema: ArticleSchema, segments: Sequence[FragmentSegment]
-    ) -> list[ExtractedField]:
-        segment_count = len(segments)
-        numbered_segments = "\n".join(
-            f"[{segment.index}] {segment.text}" for segment in segments
-        )
+    def extract_fields(self, schema: ArticleSchema, text: str) -> list[ExtractedField]:
         try:
             response = self._client.messages.create(
                 model=self._model,
-                max_tokens=8000,
+                max_tokens=2000,
                 output_config=cast(Any, {"effort": "medium"}),
                 tools=cast(Any, [_EXTRACT_FIELDS_TOOL]),
                 tool_choice=cast(
@@ -251,11 +264,11 @@ class AnthropicAiSchemaProvider:
                             "role": "user",
                             "content": (
                                 "Extract structured fields from this "
-                                "dictionary entry, per the given schema.\n\n"
-                                f"Schema:\n{json.dumps(schema.definition)}\n\n"
-                                "OCR word segments, one per line as "
-                                '"[index] word", in reading order:\n'
-                                f"{numbered_segments}"
+                                "dictionary article, per the given schema.\n\n"
+                                "Schema fields (one per line, "
+                                "path · role · type):\n"
+                                f"{_compact_schema_fields(schema.definition)}\n\n"
+                                f"Article text:\n{text}"
                             ),
                         }
                     ],
@@ -272,21 +285,15 @@ class AnthropicAiSchemaProvider:
         extracted: list[ExtractedField] = []
         for item in payload["fields"]:
             try:
-                segment_start = int(item["segment_start"])
-                segment_end = int(item["segment_end"])
-                if not (0 <= segment_start <= segment_end < segment_count):
-                    raise AiSchemaProviderError(
-                        "field extraction returned an out-of-range segment span: "
-                        f"{segment_start}..{segment_end} (have {segment_count} "
-                        "segments)"
-                    )
+                field_path = str(item["field_path"]).strip()
+                value = str(item["value"])
+                if not field_path or not value.strip():
+                    continue
                 extracted.append(
                     ExtractedField(
-                        field_path=str(item["field_path"]),
+                        field_path=field_path,
                         role=EntryFieldRole(item["role"]),
-                        value=str(item["value"]),
-                        segment_start=segment_start,
-                        segment_end=segment_end,
+                        value=value,
                         confidence=float(item["confidence"]),
                     )
                 )
