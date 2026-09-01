@@ -4,6 +4,75 @@
  */
 
 export interface paths {
+    "/auth/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolve the signed-in user's editable account details */
+        get: operations["get_account_auth_account_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the signed-in user's profile */
+        patch: operations["update_account_auth_account_patch"];
+        trace?: never;
+    };
+    "/auth/account/change-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a confirmed move to a new email address */
+        post: operations["change_email_auth_account_change_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/account/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the password from within an active session */
+        post: operations["change_password_auth_account_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/confirm-email-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a pending email change with a one-time token */
+        post: operations["confirm_email_change_auth_confirm_email_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/forgot-password": {
         parameters: {
             query?: never;
@@ -101,6 +170,57 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the signed-in user's active sessions */
+        get: operations["list_account_sessions_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke every session except the caller's own */
+        post: operations["revoke_other_account_sessions_auth_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the signed-in user's sessions */
+        delete: operations["revoke_account_session_auth_sessions__session_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1155,6 +1275,24 @@ export interface components {
             variants: string[];
         };
         /**
+         * AccountErrorResponse
+         * @description A safe, generic account-action error contract.
+         */
+        AccountErrorResponse: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * AccountMessageResponse
+         * @description A neutral, non-sensitive account-action outcome.
+         */
+        AccountMessageResponse: {
+            /** Message */
+            message: string;
+        };
+        /**
          * AccountStatus
          * @description Lifecycle states currently owned by the identity module.
          * @enum {string}
@@ -1238,6 +1376,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Name */
+            name?: string | null;
         };
         /**
          * AuthenticationErrorResponse
@@ -1270,11 +1410,33 @@ export interface components {
             file: string;
         };
         /**
+         * ChangeEmailRequest
+         * @description Request to move the account to a new, still-unconfirmed email address.
+         */
+        ChangeEmailRequest: {
+            /** Current Password */
+            current_password: string;
+            /** New Email */
+            new_email: string;
+        };
+        /**
          * ChangeMemberRoleRequest
          * @description A BH-170 role change for an existing member.
          */
         ChangeMemberRoleRequest: {
             role: components["schemas"]["Role"];
+        };
+        /**
+         * ChangePasswordRequest
+         * @description Password change carried only in a POST body from an active session.
+         */
+        ChangePasswordRequest: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+            /** New Password Confirmation */
+            new_password_confirmation: string;
         };
         /**
          * CommunityGeometryResponse
@@ -1335,6 +1497,14 @@ export interface components {
             region_id: string;
             /** Website */
             website: string | null;
+        };
+        /**
+         * ConfirmEmailChangeRequest
+         * @description Email-change token supplied in a body so access logs cannot capture it.
+         */
+        ConfirmEmailChangeRequest: {
+            /** Token */
+            token: string;
         };
         /**
          * ContributorRequest
@@ -1616,6 +1786,21 @@ export interface components {
             /** Title */
             title: string | null;
         };
+        /**
+         * EmailChangeErrorResponse
+         * @description Safe email-change-token error contract.
+         */
+        EmailChangeErrorResponse: {
+            code: components["schemas"]["EmailChangeFailure"];
+            /** Message */
+            message: string;
+        };
+        /**
+         * EmailChangeFailure
+         * @description Safe public reasons why confirming an email change failed.
+         * @enum {string}
+         */
+        EmailChangeFailure: "invalid" | "expired" | "used";
         /**
          * EnqueueDictionaryScanResponse
          * @description AC: accepted response for a newly queued whole-dictionary OCR scan.
@@ -2356,6 +2541,14 @@ export interface components {
             message: string;
         };
         /**
+         * RevokeOtherSessionsResponse
+         * @description Count of sessions ended by a "sign out everywhere else" request.
+         */
+        RevokeOtherSessionsResponse: {
+            /** Revoked */
+            revoked: number;
+        };
+        /**
          * Role
          * @description A user's standing on one dictionary ("project").
          * @enum {string}
@@ -2433,6 +2626,39 @@ export interface components {
          * @enum {string}
          */
         SchemaGenerationStatus: "pending" | "running" | "ready" | "failed";
+        /**
+         * SessionListResponse
+         * @description The signed-in user's active sessions, newest first.
+         */
+        SessionListResponse: {
+            /** Sessions */
+            sessions: components["schemas"]["SessionSummary"][];
+        };
+        /**
+         * SessionSummary
+         * @description A user-facing summary of one active server-side session.
+         */
+        SessionSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current */
+            current: boolean;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** User Agent */
+            user_agent: string | null;
+        };
         /**
          * SettlementMappingRequest
          * @description One BH-30 settlement mapping submission (AC7, AC11, AC12).
@@ -2651,6 +2877,14 @@ export interface components {
             y: number;
             /** Y2 */
             y2?: number | null;
+        };
+        /**
+         * UpdateProfileRequest
+         * @description Editable profile fields for a signed-in user.
+         */
+        UpdateProfileRequest: {
+            /** Name */
+            name?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2907,6 +3141,238 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_account_auth_account_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedUserResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_account_auth_account_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticatedUserResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description The profile fields are invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__auth__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    change_email_auth_account_change_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountMessageResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description The current password is incorrect */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description The new email is invalid or already registered */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__auth__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    change_password_auth_account_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountMessageResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description The current password is incorrect */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description The new password is invalid */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__auth__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    confirm_email_change_auth_confirm_email_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountMessageResponse"];
+                };
+            };
+            /** @description The token is invalid, expired, or used */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailChangeErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     forgot_password_auth_forgot_password_post: {
         parameters: {
             query?: never;
@@ -3133,6 +3599,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_account_sessions_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionListResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_other_account_sessions_auth_sessions_revoke_others_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeOtherSessionsResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_account_session_auth_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthenticationErrorResponse"];
+                };
+            };
+            /** @description No such session for this user */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountErrorResponse"];
                 };
             };
             /** @description Validation Error */

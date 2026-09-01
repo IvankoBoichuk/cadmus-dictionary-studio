@@ -18,6 +18,14 @@ const dateFormat = new Intl.DateTimeFormat(UK_LOCALE, {
   year: "numeric",
 });
 
+const dateTimeFormat = new Intl.DateTimeFormat(UK_LOCALE, {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 /** `1234` -> `"1 234"`. */
 export function formatNumber(value: number): string {
   return integerFormat.format(value);
@@ -32,4 +40,10 @@ export function formatPercent(ratio: number): string {
 export function formatDate(iso: string): string {
   const parsed = new Date(iso);
   return Number.isNaN(parsed.getTime()) ? iso : dateFormat.format(parsed);
+}
+
+/** ISO 8601 timestamp -> `"16 серпня 2026 р., 14:05"`. Invalid input is returned as-is. */
+export function formatDateTime(iso: string): string {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? iso : dateTimeFormat.format(parsed);
 }

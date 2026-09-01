@@ -63,7 +63,9 @@ class StubAuthenticationService:
     authenticated_token: str | None = None
     logout_tokens: list[str] | None = None
 
-    def login(self, email: str, password: str) -> LoginResult:
+    def login(
+        self, email: str, password: str, user_agent: str | None = None
+    ) -> LoginResult:
         self.login_input = (email, password)
         if self.login_error is not None:
             raise self.login_error
@@ -233,6 +235,7 @@ def test_login_sets_protected_session_cookie_without_returning_credentials() -> 
     assert response.json() == {
         "id": "8158fd82-2d50-4f4f-af31-e969bab77163",
         "email": "user@example.com",
+        "name": None,
     }
     assert authentication.login_input == ("user@example.com", "secret-password")
     assert "secret-password" not in str(response.request.url)

@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from cadmus.identity import GoogleAuthenticationError, GoogleAuthenticationService
-from fastapi import APIRouter, Cookie
+from fastapi import APIRouter, Cookie, Request
 from fastapi.responses import RedirectResponse
 
 from cadmus_api.routes.auth import set_session_cookie
@@ -57,6 +57,7 @@ def create_google_oauth_router(
         "/callback", summary="Resolve Google's callback into an authenticated session"
     )
     def callback(
+        request: Request,
         code: str | None = None,
         state: str | None = None,
         error: str | None = None,
@@ -80,6 +81,7 @@ def create_google_oauth_router(
                     expected_state=oauth_state,
                     expected_nonce=oauth_nonce,
                     code_verifier=oauth_verifier,
+                    user_agent=request.headers.get("user-agent"),
                 )
             except GoogleAuthenticationError:
                 response = _failure_response()

@@ -8,6 +8,7 @@ from cadmus.access import AuthorizationService, ListMembersService, ManageMember
 from cadmus.config import Settings
 from cadmus.geography import GeographyQueryService
 from cadmus.identity import (
+    AccountService,
     AuthenticationService,
     GoogleAuthenticationService,
     PasswordResetService,
@@ -120,6 +121,7 @@ def create_app(
     authentication_service: AuthenticationService | None = None,
     google_authentication_service: GoogleAuthenticationService | None = None,
     password_reset_service: PasswordResetService | None = None,
+    account_service: AccountService | None = None,
     upload_dictionary_service: UploadDictionaryService | None = None,
     save_dictionary_metadata_service: SaveDictionaryMetadataService | None = None,
     get_dictionary_service: GetDictionaryService | None = None,
@@ -248,6 +250,21 @@ def create_app(
             public_web_url=app_settings.public_web_url,
             token_lifetime=timedelta(
                 hours=app_settings.password_reset_token_lifetime_hours
+            ),
+        )
+    )
+    app.state.account_service = (
+        account_service
+        if account_service is not None
+        else AccountService(
+            unit_of_work_factory=unit_of_work_factory,
+            password_hasher=password_hasher,
+            session_token_provider=SecureSessionTokenProvider(),
+            email_change_token_provider=SecureVerificationTokenProvider(),
+            email_sender=SmtpEmailSender(app_settings),
+            public_web_url=app_settings.public_web_url,
+            token_lifetime=timedelta(
+                hours=app_settings.verification_token_lifetime_hours
             ),
         )
     )
@@ -526,6 +543,7 @@ def create_app(
             app.state.registration_service,
             app.state.authentication_service,
             app.state.password_reset_service,
+            app.state.account_service,
             session_lifetime=timedelta(hours=app_settings.session_lifetime_hours),
             secure_cookie=app_settings.environment.value in {"staging", "production"},
         )
