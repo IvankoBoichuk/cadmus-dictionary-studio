@@ -38,7 +38,7 @@ describe("ConfirmEmailChangePage", () => {
     await waitFor(() =>
       expect(screen.getByText("Email оновлено")).toBeInTheDocument(),
     );
-    const [, requestInit] = fetchMock.mock.calls[0];
+    const requestInit = fetchMock.mock.calls[0]?.[1];
     expect(JSON.parse(requestInit.body)).toEqual({ token: "good-token" });
   });
 
