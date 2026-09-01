@@ -315,6 +315,48 @@ def test_create_entry_field_accepts_value_in_enum_options() -> None:
     assert created.source_text == "ж."
 
 
+def _attach_reference_schema(fixture: _EntryFieldFixture, node_type: str) -> None:
+    schema = ArticleSchema(
+        id=uuid4(),
+        dictionary_id=fixture.dictionary.id,
+        version=1,
+        status=SchemaGenerationStatus.READY,
+        source_description="",
+        definition={
+            "fields": [
+                {"name": "tag", "role": node_type, "type": node_type, "options": []}
+            ]
+        },
+        created_at=NOW,
+        created_by=fixture.owner_id,
+    )
+    fixture._entry.schema_id = schema.id
+    fixture.lexicography_repository.get_article_schema = (  # type: ignore[attr-defined]
+        lambda schema_id: schema if schema_id == schema.id else None
+    )
+
+
+@pytest.mark.parametrize("node_type", ["abbreviation", "geographic_label"])
+def test_create_entry_field_accepts_any_value_for_reference_types(
+    node_type: str,
+) -> None:
+    fixture = _EntryFieldFixture()
+    _attach_reference_schema(fixture, node_type)
+
+    created = fixture.create_service.create(
+        fixture.entry_id,
+        fixture.owner_id,
+        fragment_id=fixture.fragment_id,
+        field_path="tag",
+        role=EntryFieldRole.OTHER,
+        source_text="не з довідника",
+        source_start=0,
+        source_end=0,
+    )
+
+    assert created.source_text == "не з довідника"
+
+
 def test_update_entry_field_rejects_normalized_text_outside_enum_options() -> None:
     fixture = _EntryFieldFixture()
     _attach_enum_schema(fixture, ["ч.", "ж.", "с."])  # noqa: RUF001

@@ -67,6 +67,24 @@ class AuthorizationService:
             memberships = unit_of_work.memberships.list_memberships_for_user(actor_id)
         return [membership.dictionary_id for membership in memberships]
 
+    def list_reviewer_dictionary_ids(self, actor_id: UUID) -> list[UUID]:
+        """Dictionaries ``actor_id`` can review as a non-owner member.
+
+        The membership slice of ``Permission.REVIEW`` -- rows whose role is
+        ``Role.REVIEWER``. Owners hold ``REVIEW`` too, but never through a
+        membership row, so callers union this with the actor's own
+        dictionaries.
+        """
+        if self._membership_unit_of_work_factory is None:
+            return []
+        with self._membership_unit_of_work_factory() as unit_of_work:
+            memberships = unit_of_work.memberships.list_memberships_for_user(actor_id)
+        return [
+            membership.dictionary_id
+            for membership in memberships
+            if membership.role is Role.REVIEWER
+        ]
+
 
 class ManageMembersService:
     """Add, re-role, and remove non-owner project members (BH-170)."""

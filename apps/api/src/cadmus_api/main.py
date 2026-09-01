@@ -21,6 +21,7 @@ from cadmus.infrastructure.ai_schema import (
 )
 from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.email import SmtpEmailSender
+from cadmus.infrastructure.entry_render import Jinja2EntryPresentationRenderer
 from cadmus.infrastructure.geography import create_geography_unit_of_work_factory
 from cadmus.infrastructure.google_oauth import AuthlibGoogleOAuthClient
 from cadmus.infrastructure.identity import create_identity_unit_of_work_factory
@@ -39,6 +40,7 @@ from cadmus.infrastructure.reference_lexicon import (
 from cadmus.infrastructure.reference_links import (
     create_entry_reference_link_unit_of_work_factory,
 )
+from cadmus.infrastructure.review import create_review_unit_of_work_factory
 from cadmus.infrastructure.security import (
     ScryptPasswordHasher,
     SecurePasswordResetTokenProvider,
@@ -62,6 +64,7 @@ from cadmus.lexicography import (
     QueueArticleSchemaGenerationService,
     QueueDictionaryScanService,
     QueueEntryFieldExtractionService,
+    RenderEntryService,
     SaveArticleSchemaService,
     ScanProgressService,
     SuggestLexemesService,
@@ -75,6 +78,7 @@ from cadmus.processing import (
     TaskQueue,
 )
 from cadmus.reference_lexicon import ReferenceLexiconQueryService
+from cadmus.review import ReviewService
 from cadmus.sources import (
     AbbreviationCrudService,
     AbbreviationImportService,
@@ -117,6 +121,7 @@ from cadmus_api.routes.processing_tasks import create_processing_tasks_router
 from cadmus_api.routes.project_members import create_project_members_router
 from cadmus_api.routes.publish_dictionary import create_publish_dictionary_router
 from cadmus_api.routes.reference_lexicons import create_reference_lexicons_router
+from cadmus_api.routes.review import create_review_router
 from cadmus_api.routes.scan_progress import create_scan_progress_router
 from cadmus_api.routes.settlements import create_settlements_router
 from cadmus_api.routes.tasks import create_tasks_router
@@ -171,6 +176,7 @@ def create_app(
     update_entry_field_service: UpdateEntryFieldService | None = None,
     delete_entry_field_service: DeleteEntryFieldService | None = None,
     validate_entry_service: ValidateEntryService | None = None,
+    render_entry_service: RenderEntryService | None = None,
     entry_query_service: EntryQueryService | None = None,
     reference_lexicon_query_service: ReferenceLexiconQueryService | None = None,
     manage_entry_reference_links_service: (
@@ -179,6 +185,7 @@ def create_app(
     authorization_service: AuthorizationService | None = None,
     manage_members_service: ManageMembersService | None = None,
     list_members_service: ListMembersService | None = None,
+    review_service: ReviewService | None = None,
 ) -> FastAPI:
     """Create an API whose lifespan verifies and owns its database connection."""
     app_settings = settings if settings is not None else Settings()
@@ -527,12 +534,32 @@ def create_app(
             dictionary_pages=app.state.get_dictionary_service,
         )
     )
+    app.state.render_entry_service = (
+        render_entry_service
+        if render_entry_service is not None
+        else RenderEntryService(
+            unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_pages=app.state.get_dictionary_service,
+            renderer=Jinja2EntryPresentationRenderer(),
+        )
+    )
     app.state.entry_query_service = (
         entry_query_service
         if entry_query_service is not None
         else EntryQueryService(
             unit_of_work_factory=lexicography_unit_of_work_factory,
             dictionary_pages=app.state.get_dictionary_service,
+        )
+    )
+    app.state.review_service = (
+        review_service
+        if review_service is not None
+        else ReviewService(
+            review_unit_of_work_factory=create_review_unit_of_work_factory(engine),
+            lexicography_unit_of_work_factory=lexicography_unit_of_work_factory,
+            dictionary_service=app.state.get_dictionary_service,
+            authorization=app.state.authorization_service,
+            validate_service=app.state.validate_entry_service,
         )
     )
     app.state.processing_task_service = (
@@ -728,9 +755,16 @@ def create_app(
             app.state.update_entry_field_service,
             app.state.delete_entry_field_service,
             app.state.validate_entry_service,
+            app.state.render_entry_service,
             app.state.entry_query_service,
             app.state.get_dictionary_service,
             app.state.processing_task_service,
+        )
+    )
+    app.include_router(
+        create_review_router(
+            app.state.authentication_service,
+            app.state.review_service,
         )
     )
     app.include_router(

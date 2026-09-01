@@ -75,6 +75,9 @@ export function useArticleSchemaEditor({
   const [sourceDescription, setSourceDescription] = useState(
     initial?.source_description ?? "",
   );
+  const [presentationFormula, setPresentationFormula] = useState(
+    initial?.presentation_formula ?? "",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [rootError, setRootError] = useState<string | null>(null);
@@ -153,6 +156,7 @@ export function useArticleSchemaEditor({
       const saved = await API.articleSchemas.save(dictionaryId, {
         definition: definition as { [key: string]: unknown },
         source_description: sourceDescription.trim() || null,
+        presentation_formula: presentationFormula.trim() || null,
       });
       onSaved(saved);
     } catch (error) {
@@ -169,7 +173,13 @@ export function useArticleSchemaEditor({
     } finally {
       setSubmitting(false);
     }
-  }, [definition, dictionaryId, onSaved, sourceDescription]);
+  }, [
+    definition,
+    dictionaryId,
+    onSaved,
+    sourceDescription,
+    presentationFormula,
+  ]);
 
   return {
     fields,
@@ -178,6 +188,8 @@ export function useArticleSchemaEditor({
     submitting,
     sourceDescription,
     setSourceDescription,
+    presentationFormula,
+    setPresentationFormula,
     appendChild,
     updateNode,
     removeNode,

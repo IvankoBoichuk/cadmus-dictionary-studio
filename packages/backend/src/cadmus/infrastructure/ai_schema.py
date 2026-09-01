@@ -18,6 +18,7 @@ from kombu.exceptions import OperationalError
 from redis.exceptions import RedisError
 
 from cadmus.lexicography.domain import (
+    SCHEMA_FIELD_TYPES,
     ArticleSchema,
     ArticleSchemaGenerationSnapshot,
     EntryExtractionSnapshot,
@@ -41,14 +42,15 @@ _LEAF_NODE_PROPERTIES: dict[str, Any] = {
     "role": {"type": "string", "enum": [role.value for role in EntryFieldRole]},
     "type": {
         "type": "string",
-        "enum": ["string", "number", "boolean", "date", "enum", "list", "group"],
+        "enum": list(SCHEMA_FIELD_TYPES),
     },
     "options": {
         "type": "array",
         "items": {"type": "string"},
         "description": (
             "Allowed string values when type is 'enum'; an empty array for "
-            "every other type."
+            "every other type (including 'abbreviation' and "
+            "'geographic_label')."
         ),
     },
     "repeatable": {"type": "boolean"},
@@ -95,9 +97,11 @@ _GENERATE_SCHEMA_TOOL: dict[str, Any] = {
         "fit the standard roles. Field 'type' is 'string' for free text, "
         "'number' for numeric values, 'boolean' for yes/no flags, 'date' "
         "for calendar dates, 'enum' for a closed set of values (list them "
-        "in 'options'), 'list' for a repeated simple value, or 'group' for "
-        "a node with child fields. 'options' must be an empty array unless "
-        "'type' is 'enum'."
+        "in 'options'), 'list' for a repeated simple value, 'group' for "
+        "a node with child fields, 'abbreviation' for a value the editor "
+        "picks from the dictionary's abbreviation list, or "
+        "'geographic_label' for one from its settlement list. 'options' "
+        "must be an empty array unless 'type' is 'enum'."
     ),
     "input_schema": {
         "type": "object",

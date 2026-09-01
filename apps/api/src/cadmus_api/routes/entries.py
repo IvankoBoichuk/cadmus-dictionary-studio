@@ -25,6 +25,7 @@ from cadmus.lexicography import (
     OcrSuggestionStatus,
     PromoteLexemeToEntryService,
     QueueEntryFieldExtractionService,
+    RenderEntryService,
     UpdateEntryFieldService,
     ValidateEntryService,
 )
@@ -131,6 +132,22 @@ class ExtractionTaskResponse(BaseModel):
     task_id: str
     status: OcrSuggestionStatus
     created_fields: int = 0
+    error: str | None = None
+
+
+class EntryRenderResponse(BaseModel):
+    """The entry rendered to Markdown via its schema's presentation formula.
+
+    ``markdown`` is ``None`` when it could not be produced; ``reason`` then says
+    why (``"no_schema"``, ``"no_formula"`` or ``"template_error"``) and
+    ``error`` carries the template message for the last case. This is a preview,
+    so every one of those is a 200, not an error status.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    markdown: str | None
+    reason: str | None = None
     error: str | None = None
 
 
@@ -291,6 +308,7 @@ def create_entries_router(
     update_field_service: UpdateEntryFieldService,
     delete_field_service: DeleteEntryFieldService,
     validate_service: ValidateEntryService,
+    render_entry_service: RenderEntryService,
     entry_query_service: EntryQueryService,
     dictionary_service: GetDictionaryService,
     processing_task_service: ProcessingTaskService | None = None,
@@ -402,6 +420,24 @@ def create_entries_router(
             return _not_found()
         page_numbers = _page_numbers(dictionary_service, entry.dictionary_id, user.id)
         return _entry_response(entry, fragments, fields, page_numbers)
+
+    @router.get(
+        "/entries/{entry_id}/render",
+        response_model=EntryRenderResponse,
+        responses={**UNAUTHORIZED_RESPONSE, **NOT_FOUND_RESPONSE},
+        summary="Render an entry to Markdown via its schema's presentation formula",
+    )
+    def render_entry(
+        user: AuthenticatedUser,
+        entry_id: Annotated[UUID, Path()],
+    ) -> EntryRenderResponse | JSONResponse:
+        try:
+            result = render_entry_service.render(entry_id, user.id)
+        except EntryAccessError:
+            return _not_found()
+        return EntryRenderResponse(
+            markdown=result.markdown, reason=result.reason, error=result.error
+        )
 
     @router.post(
         "/entries/{entry_id}/extract",

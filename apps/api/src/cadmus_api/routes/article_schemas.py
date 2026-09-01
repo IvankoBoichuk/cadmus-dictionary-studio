@@ -59,6 +59,7 @@ class ArticleSchemaResponse(BaseModel):
     definition: dict[str, Any]
     provider_name: str | None
     error_message: str | None
+    presentation_formula: str | None
     created_at: datetime
     activated_at: datetime | None
 
@@ -70,6 +71,7 @@ class SaveArticleSchemaRequest(BaseModel):
 
     definition: dict[str, Any]
     source_description: str | None = None
+    presentation_formula: str | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -114,6 +116,7 @@ def _article_schema_response(schema: ArticleSchema) -> ArticleSchemaResponse:
         definition=schema.definition,
         provider_name=schema.provider_name,
         error_message=schema.error_message,
+        presentation_formula=schema.presentation_formula,
         created_at=schema.created_at,
         activated_at=schema.activated_at,
     )
@@ -241,6 +244,7 @@ def create_article_schemas_router(
                 user.id,
                 definition=body.definition,
                 source_description=body.source_description,
+                presentation_formula=body.presentation_formula,
             )
         except ArticleSchemaValidationError as error:
             return JSONResponse(

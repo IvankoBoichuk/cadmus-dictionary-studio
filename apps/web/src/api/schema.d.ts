@@ -1090,6 +1090,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/entries/{entry_id}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Render an entry to Markdown via its schema's presentation formula */
+        get: operations["render_entry_entries__entry_id__render_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/geography/areas": {
         parameters: {
             query?: never;
@@ -1218,6 +1235,57 @@ export interface paths {
         };
         /** Search reference lemmas by lemma or generated word form */
         get: operations["search_lemmas_reference_lexicons__code__lemmas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review/entries/{entry_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve an entry: ready_to_review -> complete */
+        post: operations["approve_entry_review_entries__entry_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review/entries/{entry_id}/send-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send an entry back to its editor: ready_to_review -> draft */
+        post: operations["send_back_entry_review_entries__entry_id__send_back_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/review/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every entry awaiting review across the caller's dictionaries */
+        get: operations["list_queue_review_queue_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1408,6 +1476,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Presentation Formula */
+            presentation_formula: string | null;
             /** Provider Name */
             provider_name: string | null;
             /** Source Description */
@@ -2043,6 +2113,23 @@ export interface components {
             validation_status: string;
         };
         /**
+         * EntryRenderResponse
+         * @description The entry rendered to Markdown via its schema's presentation formula.
+         *
+         *     ``markdown`` is ``None`` when it could not be produced; ``reason`` then says
+         *     why (``"no_schema"``, ``"no_formula"`` or ``"template_error"``) and
+         *     ``error`` carries the template message for the last case. This is a preview,
+         *     so every one of those is a 200, not an error status.
+         */
+        EntryRenderResponse: {
+            /** Error */
+            error?: string | null;
+            /** Markdown */
+            markdown: string | null;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * EntryResponse
          * @description A dictionary entry, its source fragments, and its structured fields.
          */
@@ -2675,6 +2762,54 @@ export interface components {
             message: string;
         };
         /**
+         * ReviewDecisionRequest
+         * @description An optional note the reviewer leaves with an approve / send-back.
+         */
+        ReviewDecisionRequest: {
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * ReviewDecisionResponse
+         * @description The entry's new status after a reviewer decision.
+         */
+        ReviewDecisionResponse: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            status: components["schemas"]["EntryStatus"];
+        };
+        /**
+         * ReviewQueueItemResponse
+         * @description One entry awaiting review, across every dictionary the caller reviews.
+         */
+        ReviewQueueItemResponse: {
+            /**
+             * Dictionary Id
+             * Format: uuid
+             */
+            dictionary_id: string;
+            /** Dictionary Title */
+            dictionary_title: string | null;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Field Count */
+            field_count: number;
+            /** Headword */
+            headword: string;
+            status: components["schemas"]["EntryStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * RevokeOtherSessionsResponse
          * @description Count of sessions ended by a "sign out everywhere else" request.
          */
@@ -2697,6 +2832,8 @@ export interface components {
             definition: {
                 [key: string]: unknown;
             };
+            /** Presentation Formula */
+            presentation_formula?: string | null;
             /** Source Description */
             source_description?: string | null;
         };
@@ -3204,6 +3341,16 @@ export interface components {
          * @description Validation errors addressable by form field.
          */
         cadmus_api__routes__project_members__FieldErrorsResponse: {
+            /** Errors */
+            errors: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * FieldErrorsResponse
+         * @description Validation errors addressable by form field.
+         */
+        cadmus_api__routes__review__FieldErrorsResponse: {
             /** Errors */
             errors: {
                 [key: string]: string;
@@ -7302,6 +7449,57 @@ export interface operations {
             };
         };
     };
+    render_entry_entries__entry_id__render_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryRenderResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The dictionary, lexeme, entry, or field does not exist or is not owned by the caller */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_areas_geography_areas_get: {
         parameters: {
             query?: never;
@@ -7619,6 +7817,174 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_entry_review_entries__entry_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReviewDecisionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDecisionResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The entry does not exist or the caller may not review it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The entry is not awaiting review */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The entry does not yet satisfy its article schema */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["cadmus_api__routes__review__FieldErrorsResponse"];
+                };
+            };
+        };
+    };
+    send_back_entry_review_entries__entry_id__send_back_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: string;
+            };
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReviewDecisionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDecisionResponse"];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The entry does not exist or the caller may not review it */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The entry is not awaiting review */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_queue_review_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                cadmus_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewQueueItemResponse"][];
+                };
+            };
+            /** @description The browser has no valid session */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

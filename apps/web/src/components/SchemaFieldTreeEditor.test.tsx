@@ -78,6 +78,7 @@ describe("SchemaFieldTreeEditor", () => {
       definition: { fields: [] },
       provider_name: null,
       error_message: null,
+      presentation_formula: null,
       created_at: "2026-08-20T10:00:00Z",
       activated_at: null,
     };
@@ -143,6 +144,41 @@ describe("SchemaFieldTreeEditor", () => {
     expect(
       screen.queryByText("Додайте щонайменше одне значення переліку."),
     ).not.toBeInTheDocument();
+  });
+
+  it("offers the reference field types without an options editor", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Додати поле" }));
+    fireEvent.change(screen.getByLabelText("Назва поля (рівень 1)"), {
+      target: { value: "abbr" },
+    });
+
+    await user.click(screen.getByRole("combobox", { name: "Тип поля (рівень 1)" }));
+    expect(
+      screen.getByRole("option", { name: "Скорочення" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Географічна мітка" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Скорочення" }));
+
+    expect(
+      screen.queryByRole("button", { name: "Додати значення" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(
+      (fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body as string,
+    );
+    expect(body.definition.fields[0]).toMatchObject({
+      type: "abbreviation",
+      options: [],
+    });
   });
 
   it("surfaces a server-side field error (422)", async () => {

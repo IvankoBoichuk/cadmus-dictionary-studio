@@ -16,13 +16,21 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 /**
- * Routes `fetch` by URL + method. The three GETs the page issues on mount
- * (the entry, its article schemas, its reference links) are answered from
- * `page` regardless of order; every other call is taken from `actions` in
- * call order, then falls back to an empty `200`.
+ * Routes `fetch` by URL + method. The GETs the page issues on mount (the
+ * entry, its article schemas, reference links, the Markdown render, and the
+ * dictionary's abbreviation / settlement lists) are answered from `page`
+ * regardless of order; every other call is taken from `actions` in call
+ * order, then falls back to an empty `200`.
  */
 function stubFetch(
-  page: { entry: unknown; schemas?: unknown; links?: unknown },
+  page: {
+    entry: unknown;
+    schemas?: unknown;
+    links?: unknown;
+    render?: unknown;
+    abbreviations?: unknown;
+    settlements?: unknown;
+  },
   actions: Array<() => Response> = [],
 ) {
   const queue = [...actions];
@@ -35,6 +43,17 @@ function stubFetch(
       }
       if (url.endsWith("/reference-links")) {
         return Promise.resolve(jsonResponse(200, page.links ?? []));
+      }
+      if (/\/entries\/[^/]+\/render$/.test(url)) {
+        return Promise.resolve(
+          jsonResponse(200, page.render ?? { markdown: null, reason: "no_schema" }),
+        );
+      }
+      if (/\/abbreviations(\?|$)/.test(url)) {
+        return Promise.resolve(jsonResponse(200, page.abbreviations ?? []));
+      }
+      if (/\/settlements(\?|$)/.test(url)) {
+        return Promise.resolve(jsonResponse(200, page.settlements ?? []));
       }
       if (/\/entries\/[^/]+$/.test(url)) {
         return Promise.resolve(jsonResponse(200, page.entry));
@@ -412,6 +431,154 @@ describe("EntryDetailPage", () => {
     expect(postCallBody(fetchMock)).toMatchObject({
       field_path: "gender",
       source_text: "ж.",
+    });
+  });
+
+  it("shows the rendered article and re-fetches it after a field edit", async () => {
+    const entry = baseEntry();
+    const updatedField = { ...entry.fields[0], normalized_text: "нове значення" };
+    const fetchMock = stubFetch(
+      {
+        entry,
+        render: { markdown: "щось із формули", reason: null, error: null },
+      },
+      [() => jsonResponse(200, updatedField)],
+    );
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Перегляд статті" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("щось із формули")).toBeInTheDocument();
+    const renderCalls = () =>
+      fetchMock.mock.calls.filter(([url]) =>
+        String(url).endsWith("/render"),
+      ).length;
+    expect(renderCalls()).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Редагувати" }));
+    fireEvent.change(screen.getByDisplayValue("значення"), {
+      target: { value: "нове значення" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() => expect(renderCalls()).toBe(2));
+  });
+
+  it("hints when the schema has no presentation formula", async () => {
+    stubFetch({
+      entry: baseEntry(),
+      render: { markdown: null, reason: "no_formula", error: null },
+    });
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    expect(
+      await screen.findByText(
+        "Для схеми цієї статті не задано формулу подання.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a formula error inline without breaking the page", async () => {
+    stubFetch({
+      entry: baseEntry(),
+      render: {
+        markdown: null,
+        reason: "template_error",
+        error: "unexpected end of template",
+      },
+    });
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    expect(
+      await screen.findByText(
+        /Помилка у формулі подання: unexpected end of template/,
+      ),
+    ).toBeInTheDocument();
+    // the rest of the page still renders
+    expect(screen.getAllByText("слово")[0]).toBeInTheDocument();
+  });
+
+  it("offers a reference-list combobox and still saves an out-of-list value", async () => {
+    const entry = baseEntry();
+    const schema = {
+      id: "88888888-8888-8888-8888-888888888888",
+      dictionary_id: entry.dictionary_id,
+      version: 1,
+      status: "ready" as const,
+      source_description: "опис",
+      definition: {
+        fields: [
+          {
+            name: "label",
+            role: "abbreviation",
+            type: "abbreviation",
+            options: [],
+            repeatable: false,
+            required: false,
+            children: [],
+          },
+        ],
+      },
+      provider_name: "anthropic",
+      error_message: null,
+      presentation_formula: null,
+      created_at: "2026-08-15T12:00:00Z",
+      activated_at: "2026-08-15T12:05:00Z",
+    };
+    const createdField = {
+      ...entry.fields[0]!,
+      id: "99999999-9999-9999-9999-999999999999",
+      field_path: "label",
+      role: "abbreviation",
+      source_text: "власне",
+      origin: "manual",
+    };
+    const fetchMock = stubFetch(
+      {
+        entry,
+        schemas: [schema],
+        abbreviations: [{ abbreviation: "розм." }],
+      },
+      [() => jsonResponse(201, createdField)],
+    );
+
+    renderAt(`/entries/${ENTRY_ID}`);
+    await screen.findByText("слово");
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати поле вручну" }));
+    const pathSelect = await screen.findByLabelText("Поле схеми");
+    await waitFor(() =>
+      expect(
+        Array.from((pathSelect as HTMLSelectElement).options).some(
+          (option) => option.value === "label",
+        ),
+      ).toBe(true),
+    );
+    fireEvent.change(pathSelect, { target: { value: "label" } });
+
+    const combobox = await screen.findByLabelText(/Скорочення/);
+    fireEvent.change(combobox, { target: { value: "власне" } });
+    expect(
+      screen.getByText(/Значення відсутнє у довіднику словника/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Додати поле" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    expect(postCallBody(fetchMock)).toMatchObject({
+      field_path: "label",
+      role: "abbreviation",
+      source_text: "власне",
     });
   });
 

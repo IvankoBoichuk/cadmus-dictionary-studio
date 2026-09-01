@@ -38,14 +38,19 @@ import { cn } from "@/lib/utils";
 
 import { EntryFieldCrop, EntryFragmentCrop } from "../components/EntryFragmentCrop";
 import { EntryReferenceLinksSection } from "../components/EntryReferenceLinksSection";
+import { EntryRenderPanel } from "../components/EntryRenderPanel";
+import { EntryValueCombobox } from "../components/EntryValueCombobox";
 import {
   ENTRY_STATUS_LABELS as STATUS_LABELS,
   ENTRY_STATUS_VARIANT as STATUS_VARIANT,
 } from "../entryStatusLabels";
 import { formatPercent } from "../format";
+import { useAbbreviations } from "../hooks/useAbbreviations";
 import { useArticleSchemas } from "../hooks/useArticleSchemas";
 import { useEntry } from "../hooks/useEntry";
 import { useEntryExtraction } from "../hooks/useEntryExtraction";
+import { useEntryRender } from "../hooks/useEntryRender";
+import { useSettlements } from "../hooks/useSettlements";
 
 const ROLE_LABELS: Record<EntryFieldRole, string> = {
   headword: "Заголовне слово",
@@ -180,15 +185,36 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+/** BH-29 abbreviation / BH-30 settlement lists a reference-typed field is
+ * picked from. `null` for every other field type. */
+function referenceItems(
+  type: string | undefined,
+  abbreviationItems: string[],
+  settlementItems: string[],
+): string[] | null {
+  if (type === "abbreviation") return abbreviationItems;
+  if (type === "geographic_label") return settlementItems;
+  return null;
+}
+
+const REFERENCE_LABEL: Record<string, string> = {
+  abbreviation: "Скорочення",
+  geographic_label: "Географічна мітка",
+};
+
 function AddFieldForm({
   entryId,
   fragments,
   schemaOptions,
+  abbreviationItems,
+  settlementItems,
   onCreated,
 }: {
   entryId: string;
   fragments: EntryFragmentResponse[];
   schemaOptions: SchemaFieldOption[];
+  abbreviationItems: string[];
+  settlementItems: string[];
   onCreated: (field: EntryFieldResponse) => void;
 }) {
   const firstFragment = fragments[0] as EntryFragmentResponse | undefined;
@@ -210,14 +236,26 @@ function AddFieldForm({
     !useCustomPath &&
     chosenOption?.type === "enum" &&
     chosenOption.options.length > 0;
+  const refItems = useCustomPath
+    ? null
+    : referenceItems(chosenOption?.type, abbreviationItems, settlementItems);
+  const isReference = refItems !== null;
 
   const matchIndex = fragment ? fragment.recognized_text.indexOf(sourceText) : -1;
   const textFound = sourceText.trim().length > 0 && matchIndex !== -1;
-  // Enum values are a controlled vocabulary, not necessarily a substring of the
-  // OCR text, so the "text appears in the fragment" gate does not apply.
+  // Enum and reference values are a controlled vocabulary, not necessarily a
+  // substring of the OCR text, so the "text appears in the fragment" gate does
+  // not apply. A reference value outside the dictionary's list is still allowed
+  // (soft hint only).
   const valueOk = isEnum
     ? (chosenOption?.options ?? []).includes(sourceText.trim())
-    : textFound;
+    : isReference
+      ? sourceText.trim().length > 0
+      : textFound;
+  const refNotInList =
+    isReference &&
+    sourceText.trim().length > 0 &&
+    !(refItems ?? []).includes(sourceText.trim());
 
   const reset = () => {
     setSourceText("");
@@ -237,7 +275,9 @@ function AddFieldForm({
       setError(
         isEnum
           ? "Оберіть значення зі списку."
-          : "Текст поля не знайдено у розпізнаному тексті фрагмента.",
+          : isReference
+            ? "Вкажіть значення."
+            : "Текст поля не знайдено у розпізнаному тексті фрагмента.",
       );
       return;
     }
@@ -344,37 +384,54 @@ function AddFieldForm({
       )}
 
       <div className="form-field">
-        <label htmlFor="add-field-source-text">
-          {isEnum
-            ? "Значення"
-            : "Текст поля (як він написаний у фрагменті)"}
-        </label>
-        {isEnum ? (
-          <select
-            id="add-field-source-text"
-            name="source_text"
+        {isReference ? (
+          <EntryValueCombobox
+            label={`${REFERENCE_LABEL[chosenOption?.type ?? ""] ?? "Значення"} (зі списку словника або власне)`}
             value={sourceText}
-            onChange={(event) => setSourceText(event.target.value)}
-          >
-            <option value="">— оберіть значення —</option>
-            {(chosenOption?.options ?? []).map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            id="add-field-source-text"
-            name="source_text"
-            value={sourceText}
-            onChange={(event) => setSourceText(event.target.value)}
-            aria-invalid={sourceText.trim().length > 0 && !textFound}
+            onChange={setSourceText}
+            items={refItems ?? []}
+            placeholder="Почніть вводити…"
           />
+        ) : (
+          <>
+            <label htmlFor="add-field-source-text">
+              {isEnum
+                ? "Значення"
+                : "Текст поля (як він написаний у фрагменті)"}
+            </label>
+            {isEnum ? (
+              <select
+                id="add-field-source-text"
+                name="source_text"
+                value={sourceText}
+                onChange={(event) => setSourceText(event.target.value)}
+              >
+                <option value="">— оберіть значення —</option>
+                {(chosenOption?.options ?? []).map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="add-field-source-text"
+                name="source_text"
+                value={sourceText}
+                onChange={(event) => setSourceText(event.target.value)}
+                aria-invalid={sourceText.trim().length > 0 && !textFound}
+              />
+            )}
+          </>
         )}
-        {!isEnum && sourceText.trim().length > 0 && !textFound && (
+        {!isEnum && !isReference && sourceText.trim().length > 0 && !textFound && (
           <p className="field-error" role="alert">
             Такого тексту немає у розпізнаному тексті фрагмента.
+          </p>
+        )}
+        {refNotInList && (
+          <p className="m-0 text-[0.78rem] text-warning-foreground" role="status">
+            Значення відсутнє у довіднику словника — його буде збережено як є.
           </p>
         )}
       </div>
@@ -399,6 +456,8 @@ function FieldRow({
   pageNumber,
   field,
   schemaOptions,
+  abbreviationItems,
+  settlementItems,
   onSaved,
   onDeleted,
 }: {
@@ -407,6 +466,8 @@ function FieldRow({
   pageNumber: number | null;
   field: EntryFieldResponse;
   schemaOptions: SchemaFieldOption[];
+  abbreviationItems: string[];
+  settlementItems: string[];
   onSaved: (field: EntryFieldResponse) => void;
   onDeleted: (fieldId: string) => void;
 }) {
@@ -421,6 +482,16 @@ function FieldRow({
   );
   const enumOptions =
     schemaNode?.type === "enum" ? schemaNode.options : [];
+  const refItems = referenceItems(
+    schemaNode?.type,
+    abbreviationItems,
+    settlementItems,
+  );
+  const isReference = refItems !== null;
+  const refNotInList =
+    isReference &&
+    draftText.trim().length > 0 &&
+    !(refItems ?? []).includes(draftText.trim());
 
   const hasCrop =
     pageNumber != null &&
@@ -481,30 +552,50 @@ function FieldRow({
               </option>
             ))}
           </select>
-          <label className="sr-only" htmlFor={`field-text-${field.id}`}>
-            {enumOptions.length > 0 ? "Значення" : "Текст поля"}
-          </label>
-          {enumOptions.length > 0 ? (
-            <select
-              id={`field-text-${field.id}`}
-              name="normalized_text"
+          {isReference ? (
+            <EntryValueCombobox
+              label={REFERENCE_LABEL[schemaNode?.type ?? ""] ?? "Значення"}
               value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
-            >
-              <option value="">— оберіть значення —</option>
-              {enumOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              id={`field-text-${field.id}`}
-              name="normalized_text"
-              value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
+              onChange={setDraftText}
+              items={refItems ?? []}
+              placeholder="Почніть вводити…"
             />
+          ) : (
+            <>
+              <label className="sr-only" htmlFor={`field-text-${field.id}`}>
+                {enumOptions.length > 0 ? "Значення" : "Текст поля"}
+              </label>
+              {enumOptions.length > 0 ? (
+                <select
+                  id={`field-text-${field.id}`}
+                  name="normalized_text"
+                  value={draftText}
+                  onChange={(event) => setDraftText(event.target.value)}
+                >
+                  <option value="">— оберіть значення —</option>
+                  {enumOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id={`field-text-${field.id}`}
+                  name="normalized_text"
+                  value={draftText}
+                  onChange={(event) => setDraftText(event.target.value)}
+                />
+              )}
+            </>
+          )}
+          {refNotInList && (
+            <p
+              className="m-0 text-[0.78rem] text-warning-foreground"
+              role="status"
+            >
+              Значення відсутнє у довіднику словника — його буде збережено як є.
+            </p>
           )}
           <div className="mt-1 flex gap-1">
             <RowAction
@@ -633,6 +724,9 @@ function EntryBody({
   triggerExtraction: ReturnType<typeof useEntryExtraction>["trigger"];
 }) {
   const { state: schemasState } = useArticleSchemas(entry.dictionary_id);
+  const { state: abbreviationsState } = useAbbreviations(entry.dictionary_id);
+  const { state: settlementsState } = useSettlements(entry.dictionary_id);
+  const { state: renderState, reload: reloadRender } = useEntryRender(entry.id);
   const [completeErrors, setCompleteErrors] = useState<Record<string, string> | null>(
     null,
   );
@@ -645,6 +739,25 @@ function EntryBody({
     const schema = activeSchema(schemasState.schemas);
     return schema ? flattenSchemaFields(schema.definition) : [];
   }, [schemasState]);
+
+  const abbreviationItems = useMemo(
+    () =>
+      abbreviationsState.status === "loaded" &&
+      Array.isArray(abbreviationsState.abbreviations)
+        ? abbreviationsState.abbreviations
+            .map((item) => item.abbreviation)
+            .filter(Boolean)
+        : [],
+    [abbreviationsState],
+  );
+  const settlementItems = useMemo(
+    () =>
+      settlementsState.status === "loaded" &&
+      Array.isArray(settlementsState.mappings)
+        ? settlementsState.mappings.map((item) => item.source_label).filter(Boolean)
+        : [],
+    [settlementsState],
+  );
 
   const entryId = entry.id;
   const extracting =
@@ -672,6 +785,7 @@ function EntryBody({
       ...entry,
       fields: entry.fields.map((field) => (field.id === updated.id ? updated : field)),
     });
+    reloadRender();
   };
 
   const handleFieldDeleted = (fieldId: string) => {
@@ -679,6 +793,7 @@ function EntryBody({
       ...entry,
       fields: entry.fields.filter((field) => field.id !== fieldId),
     });
+    reloadRender();
   };
 
   const handleComplete = async () => {
@@ -689,6 +804,7 @@ function EntryBody({
       const completed = await API.entries.complete(entryId);
       setEntry(completed);
       setCompleteMessage("Статтю позначено завершеною.");
+      reloadRender();
     } catch (error) {
       const errors = fieldErrorsFrom(error);
       if (errors) {
@@ -841,9 +957,12 @@ function EntryBody({
                     entryId={entry.id}
                     fragments={entry.fragments}
                     schemaOptions={schemaOptions}
+                    abbreviationItems={abbreviationItems}
+                    settlementItems={settlementItems}
                     onCreated={(field) => {
                       setEntry({ ...entry, fields: [...entry.fields, field] });
                       setAddOpen(false);
+                      reloadRender();
                     }}
                   />
                 </PopoverContent>
@@ -875,6 +994,8 @@ function EntryBody({
                           }
                           field={field}
                           schemaOptions={schemaOptions}
+                          abbreviationItems={abbreviationItems}
+                          settlementItems={settlementItems}
                           onSaved={handleFieldSaved}
                           onDeleted={handleFieldDeleted}
                         />
@@ -885,6 +1006,8 @@ function EntryBody({
               </div>
             )}
           </div>
+
+          <EntryRenderPanel state={renderState} />
 
           <EntryReferenceLinksSection entryId={entryId} />
         </div>

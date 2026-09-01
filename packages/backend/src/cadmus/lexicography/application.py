@@ -25,6 +25,7 @@ from cadmus.lexicography.domain import (
     EntryFieldRole,
     EntryFieldValidationError,
     EntryFragment,
+    EntryRenderResult,
     EntryStatus,
     EntryValidationError,
     Lexeme,
@@ -39,7 +40,9 @@ from cadmus.lexicography.domain import (
     LexemeValidationError,
     OcrSuggestionStatus,
     OcrSuggestionTaskSnapshot,
+    PresentationTemplateError,
     SchemaGenerationStatus,
+    build_entry_presentation_context,
     changed_lexeme_fields,
     find_overlapping_lexeme,
     normalize_schema_definition,
@@ -55,6 +58,7 @@ from cadmus.lexicography.ports import (
     ArticleSchemaQueue,
     DictionaryScanQueue,
     EntryExtractionQueue,
+    EntryPresentationRenderer,
     LexicographyUnitOfWork,
     LexicographyUnitOfWorkFactory,
     OcrSuggestionQueue,
@@ -801,6 +805,7 @@ class SaveArticleSchemaService:
         *,
         definition: dict[str, Any],
         source_description: str | None = None,
+        presentation_formula: str | None = None,
     ) -> ArticleSchema:
         try:
             self._dictionary_pages.get(
@@ -828,6 +833,7 @@ class SaveArticleSchemaService:
                 created_at=now,
                 created_by=actor_id,
                 provider_name=None,
+                presentation_formula=(presentation_formula or "").strip() or None,
             )
             unit_of_work.lexicography.add_article_schema(schema)
             unit_of_work.commit()
@@ -1104,6 +1110,60 @@ class ValidateEntryService:
             unit_of_work.lexicography.update_entry(entry)
             unit_of_work.commit()
         return entry
+
+
+class RenderEntryService:
+    """Render one entry to Markdown via its schema's ``presentation_formula``
+    (BH-148).
+
+    Read-only and non-fatal: a missing schema/formula or a broken template
+    yields an ``EntryRenderResult`` with ``markdown=None`` and a ``reason``, so
+    the entry-editor preview panel can show a hint instead of erroring. Uses
+    ``entry.schema_id`` (the version the entry's fields were extracted against),
+    not the dictionary's currently active schema -- consistent with
+    ``ValidateEntryService``.
+    """
+
+    def __init__(
+        self,
+        unit_of_work_factory: LexicographyUnitOfWorkFactory,
+        dictionary_pages: GetDictionaryService,
+        renderer: EntryPresentationRenderer,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._dictionary_pages = dictionary_pages
+        self._renderer = renderer
+
+    def render(self, entry_id: UUID, actor_id: UUID) -> EntryRenderResult:
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            try:
+                self._dictionary_pages.get(entry.dictionary_id, actor_id)
+            except DictionaryAccessError as error:
+                raise EntryAccessError(entry_id) from error
+
+            if entry.schema_id is None:
+                return EntryRenderResult(markdown=None, reason="no_schema")
+            schema = unit_of_work.lexicography.get_article_schema(entry.schema_id)
+            if schema is None:
+                return EntryRenderResult(markdown=None, reason="no_schema")
+
+            formula = (schema.presentation_formula or "").strip()
+            if not formula:
+                return EntryRenderResult(markdown=None, reason="no_formula")
+
+            fields = unit_of_work.lexicography.list_fields_for_entry(entry_id)
+
+        context = build_entry_presentation_context(entry, fields, schema)
+        try:
+            markdown = self._renderer.render(formula, context)
+        except PresentationTemplateError as error:
+            return EntryRenderResult(
+                markdown=None, reason="template_error", error=error.message
+            )
+        return EntryRenderResult(markdown=markdown)
 
 
 class _EntryFieldWriteService:
