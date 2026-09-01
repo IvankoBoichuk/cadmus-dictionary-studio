@@ -213,6 +213,33 @@ describe("EntryDetailPage", () => {
     expect(screen.getByText("Завершено")).toBeInTheDocument();
   });
 
+  it("submits a draft entry for review", async () => {
+    const entry = baseEntry();
+    const submitted = { ...entry, status: "ready_to_review" as const };
+    const fetchMock = stubFetch({ entry }, [
+      () => jsonResponse(200, submitted),
+    ]);
+
+    renderAt(`/entries/${ENTRY_ID}`);
+    await screen.findByText("слово");
+
+    fireEvent.click(screen.getByRole("button", { name: "Подати на перевірку" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("подано на перевірку"),
+    );
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith(`/entries/${ENTRY_ID}/submit-review`) &&
+          (init as RequestInit | undefined)?.method === "POST",
+      ),
+    ).toBe(true);
+    expect(
+      screen.queryByRole("button", { name: "Подати на перевірку" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("surfaces validation errors when completion is rejected", async () => {
     stubFetch({ entry: baseEntry() }, [
       () =>

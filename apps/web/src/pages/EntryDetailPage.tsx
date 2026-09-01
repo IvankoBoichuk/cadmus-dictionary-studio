@@ -819,6 +819,28 @@ function EntryBody({
     }
   };
 
+  const handleSubmitReview = async () => {
+    setCompleting(true);
+    setCompleteErrors(null);
+    setCompleteMessage(null);
+    try {
+      const submitted = await API.entries.submitReview(entryId);
+      setEntry(submitted);
+      setCompleteMessage("Статтю подано на перевірку.");
+    } catch (error) {
+      const errors = fieldErrorsFrom(error);
+      if (errors) {
+        setCompleteErrors(errors);
+      } else {
+        setCompleteErrors({
+          _: apiMessageFrom(error) ?? "Не вдалося подати статтю на перевірку.",
+        });
+      }
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   return (
     <>
       <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] -mt-[clamp(2rem,6vw,3.5rem)] mb-6 border-b border-border bg-background/90 px-[clamp(1rem,4vw,2.5rem)] py-3 backdrop-blur-sm">
@@ -844,6 +866,16 @@ function EntryBody({
               <Sparkles aria-hidden="true" />
               {extracting ? "Розпізнаємо структуру…" : "Розпізнати структуру"}
             </Button>
+            {entry.status === "draft" && (
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={completing}
+                onClick={() => void handleSubmitReview()}
+              >
+                {completing ? "Перевіряємо…" : "Подати на перевірку"}
+              </Button>
+            )}
             <Button
               type="button"
               disabled={completing || entry.status === "complete"}

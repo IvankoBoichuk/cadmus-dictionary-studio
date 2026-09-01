@@ -297,6 +297,11 @@ type CompleteEntryOperation = paths["/entries/{entry_id}/complete"]["post"];
 export type CompleteEntryFieldErrorsResponse =
   CompleteEntryOperation["responses"][422]["content"]["application/json"];
 
+type SubmitEntryReviewOperation =
+  paths["/entries/{entry_id}/submit-review"]["post"];
+export type SubmitEntryReviewFieldErrorsResponse =
+  SubmitEntryReviewOperation["responses"][422]["content"]["application/json"];
+
 type EnqueueExtractionOperation = paths["/entries/{entry_id}/extract"]["post"];
 export type EnqueueExtractionResponse =
   EnqueueExtractionOperation["responses"][202]["content"]["application/json"];
@@ -688,6 +693,10 @@ function dictionaryEntriesPath(dictionaryId: string): keyof paths {
 
 function entryCompletePath(entryId: string): keyof paths {
   return `/entries/${entryId}/complete` as keyof paths;
+}
+
+function entrySubmitReviewPath(entryId: string): keyof paths {
+  return `/entries/${entryId}/submit-review` as keyof paths;
 }
 
 function entryExtractPath(entryId: string): keyof paths {
@@ -1710,6 +1719,16 @@ export const API = {
         EntryResponse,
         CompleteEntryFieldErrorsResponse | EntryNotFoundResponse
       >(entryCompletePath(entryId), options);
+    },
+
+    submitReview(
+      entryId: string,
+      options?: RequestOptions,
+    ): Promise<EntryResponse> {
+      return postWithoutBody<
+        EntryResponse,
+        SubmitEntryReviewFieldErrorsResponse | EntryNotFoundResponse
+      >(entrySubmitReviewPath(entryId), options);
     },
 
     extract(

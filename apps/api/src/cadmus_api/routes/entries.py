@@ -656,4 +656,40 @@ def create_entries_router(
         page_numbers = _page_numbers(dictionary_service, entry.dictionary_id, user.id)
         return _entry_response(entry, fragments, fields, page_numbers)
 
+    @router.post(
+        "/entries/{entry_id}/submit-review",
+        response_model=EntryResponse,
+        responses={
+            **UNAUTHORIZED_RESPONSE,
+            **NOT_FOUND_RESPONSE,
+            status.HTTP_422_UNPROCESSABLE_CONTENT: {
+                "model": FieldErrorsResponse,
+                "description": "The entry does not satisfy its schema, or is "
+                "already complete",
+            },
+        },
+        summary="Submit a draft entry for review (draft -> ready_to_review)",
+    )
+    def submit_entry_for_review(
+        user: AuthenticatedUser,
+        entry_id: Annotated[UUID, Path()],
+    ) -> EntryResponse | JSONResponse:
+        try:
+            entry, fragments, fields = extraction_service.get(entry_id, user.id)
+        except EntryAccessError:
+            return _not_found()
+        try:
+            entry = validate_service.submit_for_review(
+                entry.dictionary_id, entry_id, user.id
+            )
+        except EntryValidationError as error:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content={"errors": error.errors},
+            )
+        except (LexemeAccessError, EntryAccessError):
+            return _not_found()
+        page_numbers = _page_numbers(dictionary_service, entry.dictionary_id, user.id)
+        return _entry_response(entry, fragments, fields, page_numbers)
+
     return router

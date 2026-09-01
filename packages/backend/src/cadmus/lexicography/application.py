@@ -1060,7 +1060,8 @@ class RuleBasedAnnotationService:
 
 
 class ValidateEntryService:
-    """Check an entry against its ``ArticleSchema`` and gate ``COMPLETE`` (BH-148)."""
+    """Check an entry against its ``ArticleSchema`` and gate the
+    ``READY_TO_REVIEW`` and ``COMPLETE`` transitions (BH-148)."""
 
     def __init__(
         self,
@@ -1105,6 +1106,50 @@ class ValidateEntryService:
             if entry is None:
                 raise EntryAccessError(entry_id)
             entry.status = EntryStatus.COMPLETE
+            entry.updated_at = now
+            entry.updated_by = actor_id
+            unit_of_work.lexicography.update_entry(entry)
+            unit_of_work.commit()
+        return entry
+
+    def submit_for_review(
+        self, dictionary_id: UUID, entry_id: UUID, actor_id: UUID
+    ) -> DictionaryEntry:
+        """Move a ``DRAFT`` entry to ``READY_TO_REVIEW`` so it enters the
+        cross-dictionary review queue.
+
+        Gated on the same schema check as :meth:`complete` (an editor submits
+        what they believe is finished). A no-op on an entry already awaiting
+        review; a ``COMPLETE`` entry is rejected with a field error.
+        """
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            if entry.status is EntryStatus.READY_TO_REVIEW:
+                return entry
+            if entry.status is EntryStatus.COMPLETE:
+                raise EntryValidationError(
+                    {"status": "Завершену статтю не можна подати на перевірку."}
+                )
+
+        errors = self.validate(entry_id)
+        if errors:
+            raise EntryValidationError(errors)
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            entry.status = EntryStatus.READY_TO_REVIEW
             entry.updated_at = now
             entry.updated_by = actor_id
             unit_of_work.lexicography.update_entry(entry)
