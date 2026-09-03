@@ -13,6 +13,7 @@ ALTO word-segmentation experiment is retired (its helpers stay dormant in
 
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -27,6 +28,9 @@ from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.lexicography import (
     create_lexicography_unit_of_work_factory,
 )
+from cadmus.infrastructure.reference_lexicon import (
+    create_reference_lexicon_unit_of_work_factory,
+)
 from cadmus.infrastructure.sources import create_sources_unit_of_work_factory
 from cadmus.lexicography import (
     EXTRACT_ENTRY_FIELDS_TASK_NAME,
@@ -36,6 +40,13 @@ from cadmus.lexicography import (
     LexicographyUnitOfWorkFactory,
     RuleBasedAnnotationService,
     dedupe_extracted_fields,
+    dehyphenate_line_breaks,
+)
+from cadmus.reference_lexicon import (
+    VESUM_CODE,
+    ReferenceLexiconNotFoundError,
+    ReferenceLexiconQueryService,
+    normalize_ukrainian_text,
 )
 from cadmus.sources import SourcesUnitOfWorkFactory
 from celery import Task
@@ -57,6 +68,57 @@ class _EntryExtractionDependencies:
     sources_unit_of_work_factory: SourcesUnitOfWorkFactory
     ai_schema_provider: AnthropicAiSchemaProvider
     annotation_service: RuleBasedAnnotationService
+    reference_lexicon_query: ReferenceLexiconQueryService | None = None
+
+
+_UNCERTAIN_HYPHEN_CONFIDENCE = 0.5
+"""Cap on a field's confidence when a line-break hyphen was rejoined without a
+reference-lexicon match either way -- low enough to trip the entry editor's
+"< 0.8" warning badge so an editor confirms the join."""
+
+
+def _make_hyphen_resolver(
+    query: ReferenceLexiconQueryService | None,
+) -> Callable[[str, str], str] | None:
+    """Build a ``dehyphenate_line_breaks`` resolver backed by VESUM: keep the
+    hyphen when the hyphenated form is a known lemma/word-form
+    (``військово-політичний``), drop it when the joined form is
+    (``кожусі``), otherwise leave the decision open. Returns ``None`` when no
+    reference lexicon is wired, and stops probing once VESUM proves absent."""
+    if query is None:
+        return None
+
+    state = {"available": True}
+
+    def _known(candidate: str) -> bool:
+        normalized = normalize_ukrainian_text(candidate)
+        if not normalized:
+            return False
+        try:
+            matches = query.search(VESUM_CODE, candidate, standard_only=True, limit=20)
+        except ReferenceLexiconNotFoundError:
+            state["available"] = False
+            return False
+        for match in matches:
+            if match.lemma.normalized_lemma == normalized:
+                return True
+            if (
+                match.matched_form is not None
+                and normalize_ukrainian_text(match.matched_form) == normalized
+            ):
+                return True
+        return False
+
+    def _resolve(joined: str, hyphenated: str) -> str:
+        if not state["available"]:
+            return "unknown"
+        if _known(hyphenated):
+            return "keep"
+        if _known(joined):
+            return "join"
+        return "unknown"
+
+    return _resolve
 
 
 @lru_cache(maxsize=1)
@@ -78,6 +140,9 @@ def _entry_extraction_dependencies() -> _EntryExtractionDependencies:
         ),
         annotation_service=RuleBasedAnnotationService(
             lexicography_unit_of_work_factory, sources_unit_of_work_factory
+        ),
+        reference_lexicon_query=ReferenceLexiconQueryService(
+            create_reference_lexicon_unit_of_work_factory(engine)
         ),
     )
 
@@ -117,6 +182,7 @@ def extract_entry_fields(task: Task, entry_id: str, actor_id: str) -> dict[str, 
 
     now = datetime.now(UTC)
     created_fields = 0
+    hyphen_resolver = _make_hyphen_resolver(deps.reference_lexicon_query)
     with deps.lexicography_unit_of_work_factory() as unit_of_work:
         for fragment in fragments:
             text = fragment.recognized_text
@@ -150,6 +216,21 @@ def extract_entry_fields(task: Task, entry_id: str, actor_id: str) -> dict[str, 
                     source_text = item.value
                     source_start = source_end = None
                     normalized_text = None
+
+                # Rejoin words the OCR split across a printed line ("ко- жусі"
+                # -> "кожусі"). The verbatim span stays on ``source_text`` /
+                # the offsets; the joined form lands in ``normalized_text``,
+                # which is what the presentation formula and validation read.
+                confidence = item.confidence
+                base = normalized_text if normalized_text is not None else source_text
+                dehyphenated, uncertain = dehyphenate_line_breaks(
+                    base, resolve=hyphen_resolver
+                )
+                if dehyphenated != base:
+                    normalized_text = dehyphenated
+                    if uncertain and confidence is not None:
+                        confidence = min(confidence, _UNCERTAIN_HYPHEN_CONFIDENCE)
+
                 field = EntryField(
                     id=uuid4(),
                     entry_id=entry_uuid,
@@ -161,7 +242,7 @@ def extract_entry_fields(task: Task, entry_id: str, actor_id: str) -> dict[str, 
                     normalized_text=normalized_text,
                     source_start=source_start,
                     source_end=source_end,
-                    confidence=item.confidence,
+                    confidence=confidence,
                     origin=EntryFieldOrigin.MODEL,
                     created_at=now,
                     created_by=actor_uuid,

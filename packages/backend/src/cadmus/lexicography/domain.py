@@ -1,7 +1,7 @@
 """Lexicography domain objects and invariants (BH-54: manual lexeme selection)."""
 
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -1338,3 +1338,72 @@ def build_entry_presentation_context(
         for field in sorted(fields, key=lambda f: f.position)
     ]
     return context
+
+
+_HYPHENS = "-\u00ad\u2010\u2011"
+"""Line-break hyphens OCR leaves between the halves of a split word: ASCII
+``-``, the soft hyphen, and the Unicode HYPHEN / NON-BREAKING HYPHEN."""
+
+_LINE_BREAK_HYPHEN_RE = re.compile(
+    rf"([^\W_]*[^\W\d_])[{_HYPHENS}](?:[^\S\n]*\n[^\S\n]*|[^\S\n]+)([^\W\d_][^\W_]*)"
+)
+"""``<word-tail ending in a letter><hyphen><spaces, at most one newline><word
+head starting with a letter>`` -- the shape of a word broken across a printed
+line. A hyphen with no whitespace after it (``тим-то``) is a real compound and
+never matches."""
+
+HyphenResolution = str
+"""One of ``"join"`` (drop the hyphen), ``"keep"`` (keep the hyphen, drop only
+the whitespace) or ``"unknown"`` (undecidable -- caller joins and flags)."""
+
+
+def dehyphenate_line_breaks(
+    text: str,
+    resolve: Callable[[str, str], HyphenResolution] | None = None,
+) -> tuple[str, bool]:
+    """Rejoin words split by an end-of-line hyphen in OCR ``recognized_text``.
+
+    ``"Клинок ... сорочці, ко- жусі тощо."`` -> ``"Клинок ... сорочці, кожусі
+    тощо."``. Returns ``(cleaned, uncertain)``; ``uncertain`` is ``True`` when
+    at least one break was joined without confirmation the result is a real
+    word, so the caller can lower that field's confidence for editor review.
+
+    ``resolve(joined, hyphenated)`` decides an ambiguous break -- ``"join"``
+    for ``ко- жусі`` -> ``кожусі``, ``"keep"`` for ``військово- політичний`` ->
+    ``військово-політичний``, ``"unknown"`` to join but flag. With no
+    ``resolve`` every break is joined and flagged uncertain.
+    """
+    uncertain = False
+
+    def _replace(match: re.Match[str]) -> str:
+        nonlocal uncertain
+        left, right = match.group(1), match.group(2)
+        decision = resolve(left + right, f"{left}-{right}") if resolve else "unknown"
+        if decision == "keep":
+            return f"{left}-{right}"
+        if decision != "join":
+            uncertain = True
+        return left + right
+
+    return _LINE_BREAK_HYPHEN_RE.sub(_replace, text), uncertain
+
+
+_REPEATED_DELIMITER_RE = re.compile(r"([.,;:])\1+")
+
+
+def collapse_repeated_punctuation(text: str) -> str:
+    """Collapse a run of the same delimiter (``.`` ``,`` ``;`` ``:``) to one.
+
+    A ``presentation_formula`` routinely appends ``.`` after a field value
+    that already ends in one (``ж.`` -> ``ж..``, ``Хот.`` -> ``Хот..``); this
+    tidies the rendered article. A run of three or more dots is left as an
+    ellipsis (``...``); mixed neighbours (``.)``, ``.,``) are untouched.
+    """
+
+    def _replace(match: re.Match[str]) -> str:
+        delimiter = match.group(1)
+        if delimiter == "." and len(match.group(0)) >= 3:
+            return "..."
+        return delimiter
+
+    return _REPEATED_DELIMITER_RE.sub(_replace, text)

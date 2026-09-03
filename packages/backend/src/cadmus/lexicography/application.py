@@ -44,6 +44,7 @@ from cadmus.lexicography.domain import (
     SchemaGenerationStatus,
     build_entry_presentation_context,
     changed_lexeme_fields,
+    collapse_repeated_punctuation,
     find_overlapping_lexeme,
     normalize_schema_definition,
     resolve_ocr_language,
@@ -1262,7 +1263,7 @@ class RenderEntryService:
             return EntryRenderResult(
                 markdown=None, reason="template_error", error=error.message
             )
-        return EntryRenderResult(markdown=markdown)
+        return EntryRenderResult(markdown=collapse_repeated_punctuation(markdown))
 
 
 class _EntryFieldWriteService:

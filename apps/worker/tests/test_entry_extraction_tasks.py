@@ -20,6 +20,13 @@ from cadmus.lexicography import (
     RuleBasedAnnotationService,
     SchemaGenerationStatus,
 )
+from cadmus.reference_lexicon import (
+    ReferenceLemma,
+    ReferenceLemmaMatch,
+    ReferenceLexiconNotFoundError,
+    ReferenceMatchType,
+    normalize_ukrainian_text,
+)
 from cadmus.sources import (
     Dictionary,
     DictionarySettlementMapping,
@@ -233,6 +240,7 @@ class Fixture:
         items: list[ExtractedField] | None = None,
         fragment_text: str = FRAGMENT_TEXT,
         definition: dict[str, object] | None = None,
+        reference_lexicon_query: object | None = None,
     ) -> None:
         self.sources_repository = MemorySourcesRepository()
         self.lexicography_repository = MemoryLexicographyRepository()
@@ -264,6 +272,7 @@ class Fixture:
             ),
             ai_schema_provider=self.provider,  # type: ignore[arg-type]
             annotation_service=annotation_service,
+            reference_lexicon_query=reference_lexicon_query,  # type: ignore[arg-type]
         )
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -322,6 +331,105 @@ def test_extract_entry_fields_value_absent_from_text_stores_no_offsets(
     stored = fixture.stored_fields()[0]
     assert stored.source_text == "вигадане"
     assert stored.source_start is None and stored.source_end is None
+
+
+class FakeReferenceLexiconQuery:
+    """Minimal stand-in for ``ReferenceLexiconQueryService`` -- only ``search``
+    is used, and only its ``lemma.normalized_lemma`` field is read."""
+
+    def __init__(self, known: set[str] | None = None, *, missing: bool = False) -> None:
+        self._known = {normalize_ukrainian_text(word) for word in known or set()}
+        self._missing = missing
+        self.queries: list[str] = []
+
+    def search(
+        self, code: str, query: str, *, standard_only: bool = True, limit: int = 20
+    ) -> list[ReferenceLemmaMatch]:
+        self.queries.append(query)
+        if self._missing:
+            raise ReferenceLexiconNotFoundError(code)
+        normalized = normalize_ukrainian_text(query)
+        if normalized not in self._known:
+            return []
+        lemma = ReferenceLemma(
+            id=uuid4(),
+            lexicon_id=uuid4(),
+            external_key=normalized,
+            lemma=query,
+            normalized_lemma=normalized,
+            part_of_speech="noun",
+            key_tags=[],
+            is_standard=True,
+        )
+        return [ReferenceLemmaMatch(lemma=lemma, match_type=ReferenceMatchType.LEMMA)]
+
+
+_MEANING_DEFINITION: dict[str, object] = {
+    "fields": [{"name": "meaning", "role": "meaning", "type": "string"}]
+}
+
+
+def test_extract_rejoins_line_break_hyphen_into_normalized_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = "Клинок під пахвою у жіночій сорочці, ко- жусі тощо."  # noqa: RUF001
+    fixture = Fixture(
+        definition=_MEANING_DEFINITION,
+        fragment_text=raw,
+        items=[ExtractedField("meaning", EntryFieldRole.MEANING, raw, 0.9)],
+        reference_lexicon_query=FakeReferenceLexiconQuery({"кожусі"}),
+    )
+    fixture.install(monkeypatch)
+
+    fixture.run("task-hy1")
+
+    stored = fixture.stored_fields()[0]
+    # verbatim span + offsets stay on the untouched OCR text ...
+    assert stored.source_text == raw
+    assert (stored.source_start, stored.source_end) == (0, len(raw))
+    # ... the rejoined form is what the presentation formula will read.
+    assert stored.normalized_text == (
+        "Клинок під пахвою у жіночій сорочці, кожусі тощо."  # noqa: RUF001
+    )
+    assert stored.confidence == 0.9  # VESUM confirmed the join
+
+
+def test_extract_keeps_hyphen_for_a_known_compound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = "мова військово- політичний устрій"
+    fixture = Fixture(
+        definition=_MEANING_DEFINITION,
+        fragment_text=raw,
+        items=[ExtractedField("meaning", EntryFieldRole.MEANING, raw, 0.9)],
+        reference_lexicon_query=FakeReferenceLexiconQuery({"військово-політичний"}),
+    )
+    fixture.install(monkeypatch)
+
+    fixture.run("task-hy2")
+
+    stored = fixture.stored_fields()[0]
+    assert stored.normalized_text == "мова військово-політичний устрій"
+    assert stored.confidence == 0.9
+
+
+def test_extract_lowers_confidence_for_an_unresolved_hyphen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = "щось незнай- оме тут"
+    fixture = Fixture(
+        definition=_MEANING_DEFINITION,
+        fragment_text=raw,
+        items=[ExtractedField("meaning", EntryFieldRole.MEANING, raw, 0.95)],
+        reference_lexicon_query=FakeReferenceLexiconQuery(set()),
+    )
+    fixture.install(monkeypatch)
+
+    fixture.run("task-hy3")
+
+    stored = fixture.stored_fields()[0]
+    assert stored.normalized_text == "щось незнайоме тут"
+    assert stored.confidence == 0.5  # flagged for the editor's warning badge
 
 
 def test_extract_entry_fields_dedupes_repeats_for_a_non_repeatable_node(

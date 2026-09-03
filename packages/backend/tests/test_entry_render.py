@@ -386,6 +386,26 @@ def test_service_renders_markdown() -> None:
     assert result.reason is None
 
 
+def test_service_collapses_punctuation_the_formula_doubled() -> None:
+    schema = _schema(
+        [
+            _node("headword", role=EntryFieldRole.HEADWORD),
+            _node("pos", role=EntryFieldRole.PART_OF_SPEECH),
+        ],
+        formula="{{ headword }}, {{ pos }}. Ужив.: {{ pos }}...",
+    )
+    fields = [
+        _field("headword", role=EntryFieldRole.HEADWORD, source_text="АЛТИЦА"),
+        _field("pos", role=EntryFieldRole.PART_OF_SPEECH, source_text="ж.", position=1),
+    ]
+
+    result = _service(_entry(), schema, fields).render(ENTRY_ID, OWNER_ID)
+
+    # raw render is "АЛТИЦА, ж.. Ужив.: ж...." -- the doubled period after the
+    # abbreviation collapses, the trailing run stays an ellipsis.
+    assert result.markdown == "АЛТИЦА, ж. Ужив.: ж..."
+
+
 def test_service_reports_no_schema_when_entry_has_none() -> None:
     result = _service(_entry(schema_id=None)).render(ENTRY_ID, OWNER_ID)
 
