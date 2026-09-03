@@ -20,6 +20,7 @@ import {
   type EntryFieldRole,
   type EntryFragmentResponse,
   type EntryResponse,
+  type SettlementMappingResponse,
 } from "../api";
 
 import { Badge } from "@/components/ui/badge";
@@ -458,6 +459,9 @@ function FieldRow({
   schemaOptions,
   abbreviationItems,
   settlementItems,
+  settlementMappings,
+  linked,
+  onHoverChange,
   onSaved,
   onDeleted,
 }: {
@@ -468,6 +472,10 @@ function FieldRow({
   schemaOptions: SchemaFieldOption[];
   abbreviationItems: string[];
   settlementItems: string[];
+  settlementMappings: SettlementMappingResponse[];
+  /** Highlighted because the hovered/focused row is its parent or child. */
+  linked: boolean;
+  onHoverChange: (fieldId: string | null) => void;
   onSaved: (field: EntryFieldResponse) => void;
   onDeleted: (fieldId: string) => void;
 }) {
@@ -493,6 +501,11 @@ function FieldRow({
     draftText.trim().length > 0 &&
     !(refItems ?? []).includes(draftText.trim());
 
+  const isGeoLabel = field.role === "geographic_label";
+  const linkedMapping = isGeoLabel
+    ? settlementMappings.find((m) => m.id === field.settlement_mapping_id)
+    : undefined;
+
   const hasCrop =
     pageNumber != null &&
     field.x != null &&
@@ -511,9 +524,16 @@ function FieldRow({
     setSaving(true);
     setError(null);
     try {
+      const geoNow = draftRole === "geographic_label";
+      const mappingId = geoNow
+        ? (settlementMappings.find(
+            (m) => m.source_label === draftText.trim(),
+          )?.id ?? null)
+        : undefined;
       const updated = await API.entries.updateField(entryId, field.id, {
         normalized_text: draftText.trim() || null,
         role: draftRole,
+        ...(geoNow ? { settlement_mapping_id: mappingId } : {}),
       });
       onSaved(updated);
       setEditing(false);
@@ -535,7 +555,23 @@ function FieldRow({
   };
 
   return (
-    <li className="group grid gap-1.5 rounded-md border border-border bg-surface p-2">
+    <li
+      data-linked={linked || undefined}
+      className={cn(
+        "group grid gap-1.5 rounded-md border bg-surface p-2 transition-colors",
+        linked
+          ? "border-lexeme bg-lexeme/5 ring-1 ring-lexeme/40"
+          : "border-border",
+      )}
+      onMouseEnter={() => onHoverChange(field.id)}
+      onMouseLeave={() => onHoverChange(null)}
+      onFocus={() => onHoverChange(field.id)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          onHoverChange(null);
+        }
+      }}
+    >
       {editing ? (
         <div className="form-field text-[0.9rem]">
           <label className="sr-only" htmlFor={`field-role-${field.id}`}>
@@ -671,6 +707,42 @@ function FieldRow({
               {field.field_path}
             </span>
           </div>
+          {isGeoLabel &&
+            (linkedMapping ? (
+              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-[0.75rem]">
+                <dt className="text-muted-foreground">Населений пункт</dt>
+                <dd className="m-0">
+                  {linkedMapping.modern_settlement_name ??
+                    linkedMapping.source_label}
+                </dd>
+                <dt className="text-muted-foreground">Район</dt>
+                <dd className="m-0">{linkedMapping.district ?? "—"}</dd>
+                <dt className="text-muted-foreground">Громада</dt>
+                <dd className="m-0">{linkedMapping.community_name ?? "—"}</dd>
+                <dt className="text-muted-foreground">Статус</dt>
+                <dd className="m-0">
+                  <Badge
+                    variant={
+                      linkedMapping.status === "confirmed"
+                        ? "secondary"
+                        : linkedMapping.status === "suggested"
+                          ? "info"
+                          : "warning"
+                    }
+                  >
+                    {linkedMapping.status === "confirmed"
+                      ? "підтверджено"
+                      : linkedMapping.status === "suggested"
+                        ? "запропоновано"
+                        : "не зіставлено"}
+                  </Badge>
+                </dd>
+              </dl>
+            ) : (
+              <p className="m-0 text-[0.75rem] text-muted-foreground">
+                Не прив'язано до довідника географічних міток.
+              </p>
+            ))}
         </>
       )}
       {error && (
@@ -733,6 +805,23 @@ function EntryBody({
   const [completeMessage, setCompleteMessage] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
+
+  /** Ids of the fields directly linked to the hovered one: its parent field
+   * plus every field extracted from it (e.g. the geographic labels / abbrevi-
+   * ations a rule pass tagged inside an example). Empty when the hovered field
+   * has no such relations, so unrelated rows never light up. */
+  const linkedFieldIds = useMemo(() => {
+    const linked = new Set<string>();
+    if (!hoveredFieldId) return linked;
+    const hovered = entry.fields.find((field) => field.id === hoveredFieldId);
+    if (hovered?.parent_field_id) linked.add(hovered.parent_field_id);
+    for (const field of entry.fields) {
+      if (field.parent_field_id === hoveredFieldId) linked.add(field.id);
+    }
+    if (linked.size > 0) linked.add(hoveredFieldId);
+    return linked;
+  }, [hoveredFieldId, entry.fields]);
 
   const schemaOptions = useMemo(() => {
     if (schemasState.status !== "loaded") return [];
@@ -750,13 +839,17 @@ function EntryBody({
         : [],
     [abbreviationsState],
   );
-  const settlementItems = useMemo(
+  const settlementMappings = useMemo(
     () =>
       settlementsState.status === "loaded" &&
       Array.isArray(settlementsState.mappings)
-        ? settlementsState.mappings.map((item) => item.source_label).filter(Boolean)
+        ? settlementsState.mappings
         : [],
     [settlementsState],
+  );
+  const settlementItems = useMemo(
+    () => settlementMappings.map((item) => item.source_label).filter(Boolean),
+    [settlementMappings],
   );
 
   const entryId = entry.id;
@@ -819,6 +912,28 @@ function EntryBody({
     }
   };
 
+  const handleSubmitReview = async () => {
+    setCompleting(true);
+    setCompleteErrors(null);
+    setCompleteMessage(null);
+    try {
+      const submitted = await API.entries.submitReview(entryId);
+      setEntry(submitted);
+      setCompleteMessage("Статтю подано на перевірку.");
+    } catch (error) {
+      const errors = fieldErrorsFrom(error);
+      if (errors) {
+        setCompleteErrors(errors);
+      } else {
+        setCompleteErrors({
+          _: apiMessageFrom(error) ?? "Не вдалося подати статтю на перевірку.",
+        });
+      }
+    } finally {
+      setCompleting(false);
+    }
+  };
+
   return (
     <>
       <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] -mt-[clamp(2rem,6vw,3.5rem)] mb-6 border-b border-border bg-background/90 px-[clamp(1rem,4vw,2.5rem)] py-3 backdrop-blur-sm">
@@ -844,6 +959,16 @@ function EntryBody({
               <Sparkles aria-hidden="true" />
               {extracting ? "Розпізнаємо структуру…" : "Розпізнати структуру"}
             </Button>
+            {entry.status === "draft" && (
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={completing}
+                onClick={() => void handleSubmitReview()}
+              >
+                {completing ? "Перевіряємо…" : "Подати на перевірку"}
+              </Button>
+            )}
             <Button
               type="button"
               disabled={completing || entry.status === "complete"}
@@ -996,6 +1121,9 @@ function EntryBody({
                           schemaOptions={schemaOptions}
                           abbreviationItems={abbreviationItems}
                           settlementItems={settlementItems}
+                          settlementMappings={settlementMappings}
+                          linked={linkedFieldIds.has(field.id)}
+                          onHoverChange={setHoveredFieldId}
                           onSaved={handleFieldSaved}
                           onDeleted={handleFieldDeleted}
                         />

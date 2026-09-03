@@ -219,6 +219,7 @@ dictionary_settlement_mappings = Table(
     ),
     Column("source_label", String(512), nullable=False),
     Column("source_note", Text, nullable=True),
+    Column("district", String(64), nullable=True),
     Column("modern_settlement_name", String(255), nullable=True),
     Column("settlement_category", String(64), nullable=True),
     Column(

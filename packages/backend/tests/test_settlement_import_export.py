@@ -409,6 +409,7 @@ def test_json_export_round_trips_through_import() -> None:
     mapping = _mapping(
         dictionary_id,
         source_note="уточнення",
+        district="Льв.",
         modern_settlement_name="Петрівське",
         settlement_category="село",
         status=SettlementMappingStatus.CONFIRMED,
@@ -427,6 +428,7 @@ def test_json_export_round_trips_through_import() -> None:
         {
             "source_label": "Іванівка",
             "source_note": "уточнення",
+            "district": "Льв.",
             "modern_settlement_name": "Петрівське",
             "settlement_category": "село",
             "status": "confirmed",

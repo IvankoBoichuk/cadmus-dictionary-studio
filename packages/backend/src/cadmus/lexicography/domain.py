@@ -1,8 +1,8 @@
 """Lexicography domain objects and invariants (BH-54: manual lexeme selection)."""
 
 import re
-from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -687,11 +687,11 @@ class EntryField:
 
     Two, independently optional kinds of source span: ``source_start``/
     ``source_end`` are character offsets into the fragment's
-    ``recognized_text`` (set by the manual-add flow, which lets an editor
-    type/select text directly); ``x``/``y``/``width``/``height`` are a real
-    page-pixel bounding box (set by ALTO segment-based extraction --
-    BH-148 experimental variant 1 -- as the union of the OCR segments the
-    field was extracted from). A field may have either, both, or neither.
+    ``recognized_text`` (set by the manual-add flow and by AI extraction,
+    which both work off that text); ``x``/``y``/``width``/``height`` are a
+    real page-pixel bounding box, only ever set by the retired ALTO
+    segment-based extraction experiment (see ADR-0008). A field may have
+    either, both, or neither.
     ``parent_field_id`` lets fields nest (e.g. an ``example`` under a
     ``meaning``) and repeat (several fields sharing the same
     ``parent_field_id`` and role, ordered by ``position``). ``field_path``
@@ -721,6 +721,10 @@ class EntryField:
     y: float | None = None
     width: float | None = None
     height: float | None = None
+    settlement_mapping_id: UUID | None = None
+    """For a ``geographic_label`` field: the BH-30 ``DictionarySettlementMapping``
+    it was resolved to (`RuleBasedAnnotationService.resolve_geographic_labels`),
+    so the editor can show its район / громада / status."""
 
 
 @dataclass(frozen=True)
@@ -734,6 +738,10 @@ class GeneratedSchema:
     definition: dict[str, Any]
     raw_response: dict[str, Any]
     provider_name: str
+    presentation_formula: str = ""
+    """The AI's proposed Jinja2 -> Markdown rendering template for an entry
+    built on this schema (BH-148). Always requested from the model; ``""``
+    only if a provider omits it."""
 
 
 @dataclass(frozen=True)
@@ -765,17 +773,66 @@ class ExtractedField:
     Ephemeral by design: never persisted directly -- the application layer
     wraps it into a new ``EntryField`` row (``origin=EntryFieldOrigin.MODEL``).
 
-    ``segment_start``/``segment_end`` are an inclusive index range into the
-    ``FragmentSegment`` list the provider was given -- the field's text and
-    bounding box are derived by the caller from the segments they cover.
+    ``value`` is meant to be a verbatim slice of the fragment's
+    ``recognized_text``; the caller locates it there to derive
+    ``source_start``/``source_end`` (BH-148, per ADR-0008). No bounding box:
+    the AI extraction path is plain-text only.
     """
 
     field_path: str
     role: EntryFieldRole
     value: str
-    segment_start: int
-    segment_end: int
     confidence: float
+
+
+def dedupe_extracted_fields(
+    schema: "ArticleSchema", items: Sequence[ExtractedField]
+) -> list[ExtractedField]:
+    """Collapse an AI extraction result's noise (BH-148).
+
+    - exact ``(field_path, value)`` repeats (case/space-insensitive on the
+      value) become one item, keeping the highest ``confidence``;
+    - a ``field_path`` whose schema node is not ``repeatable`` keeps only its
+      single best item;
+    - first-seen order is otherwise preserved.
+    """
+    best: dict[tuple[str, str], ExtractedField] = {}
+    order: list[tuple[str, str]] = []
+    for raw in items:
+        item = (
+            raw
+            if raw.value == raw.value.strip()
+            else replace(raw, value=raw.value.strip())
+        )
+        key = (item.field_path, " ".join(item.value.split()).casefold())
+        current = best.get(key)
+        if current is None:
+            best[key] = item
+            order.append(key)
+        elif item.confidence > current.confidence:
+            # keep the first-seen spelling (likeliest to match the text);
+            # only raise its confidence to the best a duplicate reported
+            best[key] = replace(current, confidence=item.confidence)
+
+    def _repeatable(field_path: str) -> bool:
+        node = resolve_schema_node(schema.definition, field_path)
+        # unknown path -> keep every value (don't silently drop data)
+        return node is None or bool(node.get("repeatable"))
+
+    kept: list[ExtractedField] = []
+    singleton_index: dict[str, int] = {}  # field_path -> its slot in ``kept``
+    for key in order:
+        item = best[key]
+        if _repeatable(item.field_path):
+            kept.append(item)
+            continue
+        slot = singleton_index.get(item.field_path)
+        if slot is None:
+            singleton_index[item.field_path] = len(kept)
+            kept.append(item)
+        elif item.confidence > kept[slot].confidence:
+            kept[slot] = item  # a non-repeatable field keeps only its best value
+    return kept
 
 
 def _walk_schema_nodes(nodes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1266,14 +1323,87 @@ def build_entry_presentation_context(
 
     context = _assemble(schema.definition.get("fields", []), [])
     context.setdefault("headword", entry.headword)
-    context["entry"] = {"headword": entry.headword, "status": entry.status.value}
+    # ``status``/``role``/``origin`` come back from the imperative SQLAlchemy
+    # mapping as plain strings (the columns are ``String``, not ``Enum``), so
+    # ``str(...)`` -- not ``.value`` -- is what normalises both a persisted
+    # entity and a hand-built ``StrEnum`` one.
+    context["entry"] = {"headword": entry.headword, "status": str(entry.status)}
     context["fields"] = [
         {
             "field_path": field.field_path,
-            "role": field.role.value,
+            "role": str(field.role),
             "value": _value(field),
-            "origin": field.origin.value,
+            "origin": str(field.origin),
         }
         for field in sorted(fields, key=lambda f: f.position)
     ]
     return context
+
+
+_HYPHENS = "-\u00ad\u2010\u2011"
+"""Line-break hyphens OCR leaves between the halves of a split word: ASCII
+``-``, the soft hyphen, and the Unicode HYPHEN / NON-BREAKING HYPHEN."""
+
+_LINE_BREAK_HYPHEN_RE = re.compile(
+    rf"([^\W_]*[^\W\d_])[{_HYPHENS}](?:[^\S\n]*\n[^\S\n]*|[^\S\n]+)([^\W\d_][^\W_]*)"
+)
+"""``<word-tail ending in a letter><hyphen><spaces, at most one newline><word
+head starting with a letter>`` -- the shape of a word broken across a printed
+line. A hyphen with no whitespace after it (``тим-то``) is a real compound and
+never matches."""
+
+HyphenResolution = str
+"""One of ``"join"`` (drop the hyphen), ``"keep"`` (keep the hyphen, drop only
+the whitespace) or ``"unknown"`` (undecidable -- caller joins and flags)."""
+
+
+def dehyphenate_line_breaks(
+    text: str,
+    resolve: Callable[[str, str], HyphenResolution] | None = None,
+) -> tuple[str, bool]:
+    """Rejoin words split by an end-of-line hyphen in OCR ``recognized_text``.
+
+    ``"Клинок ... сорочці, ко- жусі тощо."`` -> ``"Клинок ... сорочці, кожусі
+    тощо."``. Returns ``(cleaned, uncertain)``; ``uncertain`` is ``True`` when
+    at least one break was joined without confirmation the result is a real
+    word, so the caller can lower that field's confidence for editor review.
+
+    ``resolve(joined, hyphenated)`` decides an ambiguous break -- ``"join"``
+    for ``ко- жусі`` -> ``кожусі``, ``"keep"`` for ``військово- політичний`` ->
+    ``військово-політичний``, ``"unknown"`` to join but flag. With no
+    ``resolve`` every break is joined and flagged uncertain.
+    """
+    uncertain = False
+
+    def _replace(match: re.Match[str]) -> str:
+        nonlocal uncertain
+        left, right = match.group(1), match.group(2)
+        decision = resolve(left + right, f"{left}-{right}") if resolve else "unknown"
+        if decision == "keep":
+            return f"{left}-{right}"
+        if decision != "join":
+            uncertain = True
+        return left + right
+
+    return _LINE_BREAK_HYPHEN_RE.sub(_replace, text), uncertain
+
+
+_REPEATED_DELIMITER_RE = re.compile(r"([.,;:])\1+")
+
+
+def collapse_repeated_punctuation(text: str) -> str:
+    """Collapse a run of the same delimiter (``.`` ``,`` ``;`` ``:``) to one.
+
+    A ``presentation_formula`` routinely appends ``.`` after a field value
+    that already ends in one (``ж.`` -> ``ж..``, ``Хот.`` -> ``Хот..``); this
+    tidies the rendered article. A run of three or more dots is left as an
+    ellipsis (``...``); mixed neighbours (``.)``, ``.,``) are untouched.
+    """
+
+    def _replace(match: re.Match[str]) -> str:
+        delimiter = match.group(1)
+        if delimiter == "." and len(match.group(0)) >= 3:
+            return "..."
+        return delimiter
+
+    return _REPEATED_DELIMITER_RE.sub(_replace, text)

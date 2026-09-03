@@ -33,7 +33,7 @@ function schema(overrides: Partial<ArticleSchemaResponse> = {}): ArticleSchemaRe
     definition: { fields: [{ name: "meaning", role: "meaning", type: "string" }] },
     provider_name: "anthropic:claude-opus-5",
     error_message: null,
-    presentation_formula: null,
+    presentation_formula: "**{{ headword }}**",
     created_at: "2026-08-15T12:00:00Z",
     activated_at: null,
     ...overrides,
@@ -169,11 +169,12 @@ describe("ArticleSchemaPage", () => {
   });
 
   it("round-trips a presentation formula through the editor", async () => {
+    const FORMULA = "### {{ headword }} — {{ meaning }}";
     const v1 = schema({ version: 1 });
     const v2 = schema({
       id: "44444444-4444-4444-4444-444444444444",
       version: 2,
-      presentation_formula: "**{{ headword }}**",
+      presentation_formula: FORMULA,
     });
     const fetchMock = vi
       .fn()
@@ -190,10 +191,9 @@ describe("ArticleSchemaPage", () => {
     renderAt(`/dictionaries/${DICTIONARY_ID}/article-schema`);
 
     fireEvent.click(await screen.findByRole("button", { name: "Редагувати" }));
-    fireEvent.change(
-      await screen.findByLabelText(/Формула подання/),
-      { target: { value: "**{{ headword }}**" } },
-    );
+    fireEvent.change(await screen.findByLabelText(/Формула подання/), {
+      target: { value: FORMULA },
+    });
     fireEvent.click(
       screen.getByRole("button", { name: "Зберегти як нову версію" }),
     );
@@ -205,9 +205,28 @@ describe("ArticleSchemaPage", () => {
       (call) => (call[1]?.method ?? "GET") === "POST",
     );
     const body = JSON.parse((postCall![1] as RequestInit).body as string);
-    expect(body.presentation_formula).toBe("**{{ headword }}**");
+    expect(body.presentation_formula).toBe(FORMULA);
     // and the saved version's formula is shown back in the viewer
-    expect(await screen.findByText("**{{ headword }}**")).toBeInTheDocument();
+    expect(await screen.findByText(FORMULA)).toBeInTheDocument();
+  });
+
+  it("blocks saving a version with no presentation formula", async () => {
+    const v1 = schema({ version: 1, presentation_formula: "" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, [v1])),
+    );
+
+    renderAt(`/dictionaries/${DICTIONARY_ID}/article-schema`);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Редагувати" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Зберегти як нову версію" }),
+    );
+
+    expect(
+      await screen.findByText("Додайте формулу подання статті."),
+    ).toBeInTheDocument();
   });
 
   it("shows a removed field when comparing two versions", async () => {

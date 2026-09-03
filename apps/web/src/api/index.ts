@@ -297,6 +297,11 @@ type CompleteEntryOperation = paths["/entries/{entry_id}/complete"]["post"];
 export type CompleteEntryFieldErrorsResponse =
   CompleteEntryOperation["responses"][422]["content"]["application/json"];
 
+type SubmitEntryReviewOperation =
+  paths["/entries/{entry_id}/submit-review"]["post"];
+export type SubmitEntryReviewFieldErrorsResponse =
+  SubmitEntryReviewOperation["responses"][422]["content"]["application/json"];
+
 type EnqueueExtractionOperation = paths["/entries/{entry_id}/extract"]["post"];
 export type EnqueueExtractionResponse =
   EnqueueExtractionOperation["responses"][202]["content"]["application/json"];
@@ -443,6 +448,8 @@ export type SettlementMappingRequest =
   components["schemas"]["SettlementMappingRequest"];
 export type SettlementMappingResponse =
   components["schemas"]["SettlementMappingResponse"];
+export type SetDistrictByCommunityResponse =
+  components["schemas"]["SetDistrictByCommunityResponse"];
 export type SettlementSuggestionResponse =
   components["schemas"]["SettlementSuggestionResponse"];
 export type DuplicateSettlementMappingResponse =
@@ -690,6 +697,10 @@ function entryCompletePath(entryId: string): keyof paths {
   return `/entries/${entryId}/complete` as keyof paths;
 }
 
+function entrySubmitReviewPath(entryId: string): keyof paths {
+  return `/entries/${entryId}/submit-review` as keyof paths;
+}
+
 function entryExtractPath(entryId: string): keyof paths {
   return `/entries/${entryId}/extract` as keyof paths;
 }
@@ -856,6 +867,10 @@ function settlementsPath(dictionaryId: string): keyof paths {
 
 function settlementPath(dictionaryId: string, mappingId: string): keyof paths {
   return `/dictionaries/${dictionaryId}/settlements/${mappingId}` as keyof paths;
+}
+
+function settlementDistrictByCommunityPath(dictionaryId: string): keyof paths {
+  return `/dictionaries/${dictionaryId}/settlements/district-by-community` as keyof paths;
 }
 
 function settlementConfirmPath(dictionaryId: string, mappingId: string): keyof paths {
@@ -1567,6 +1582,18 @@ export const API = {
       );
     },
 
+    setDistrictByCommunity(
+      dictionaryId: string,
+      body: { community_id: string; district: string | null },
+      options?: RequestOptions,
+    ): Promise<SetDistrictByCommunityResponse> {
+      return post<
+        { community_id: string; district: string | null },
+        SetDistrictByCommunityResponse,
+        SettlementMappingFieldErrorsResponse | SettlementMappingsNotFoundResponse
+      >(settlementDistrictByCommunityPath(dictionaryId), body, options);
+    },
+
     confirm(
       dictionaryId: string,
       mappingId: string,
@@ -1710,6 +1737,16 @@ export const API = {
         EntryResponse,
         CompleteEntryFieldErrorsResponse | EntryNotFoundResponse
       >(entryCompletePath(entryId), options);
+    },
+
+    submitReview(
+      entryId: string,
+      options?: RequestOptions,
+    ): Promise<EntryResponse> {
+      return postWithoutBody<
+        EntryResponse,
+        SubmitEntryReviewFieldErrorsResponse | EntryNotFoundResponse
+      >(entrySubmitReviewPath(entryId), options);
     },
 
     extract(

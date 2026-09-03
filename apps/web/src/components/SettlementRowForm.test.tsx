@@ -14,6 +14,7 @@ function existing(
     source_label: "Іванівка",
     status: "unresolved",
     source_note: null,
+    district: null,
     modern_settlement_name: null,
     settlement_category: null,
     area_id: null,

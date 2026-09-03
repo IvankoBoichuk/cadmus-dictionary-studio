@@ -736,6 +736,82 @@ def test_validate_service_allows_completion_when_schema_satisfied() -> None:
     assert completed.status is EntryStatus.COMPLETE
 
 
+def _draft_entry_with_headword(fixture: "Fixture") -> DictionaryEntry:
+    schema = fixture.add_schema(
+        {"fields": [{"name": "headword", "role": "headword", "required": True}]}
+    )
+    lexeme = fixture.add_lexeme()
+    entry = fixture.promote_service.create(
+        fixture.dictionary.id, lexeme.id, fixture.owner_id
+    )
+    entry.schema_id = schema.id
+    fixture.lexicography_repository.update_entry(entry)
+    fragment = fixture.lexicography_repository.list_fragments_for_entry(entry.id)[0]
+    fixture.lexicography_repository.add_field(
+        _field(entry.id, fragment.id, "headword", EntryFieldRole.HEADWORD)
+    )
+    return entry
+
+
+def test_submit_for_review_moves_draft_to_ready_to_review() -> None:
+    fixture = Fixture()
+    entry = _draft_entry_with_headword(fixture)
+
+    submitted = fixture.validate_service.submit_for_review(
+        fixture.dictionary.id, entry.id, fixture.owner_id
+    )
+
+    assert submitted.status is EntryStatus.READY_TO_REVIEW
+    stored = fixture.lexicography_repository.get_entry(entry.id)
+    assert stored is not None and stored.status is EntryStatus.READY_TO_REVIEW
+
+
+def test_submit_for_review_blocked_when_schema_unsatisfied() -> None:
+    fixture = Fixture()
+    schema = fixture.add_schema(
+        {"fields": [{"name": "headword", "role": "headword", "required": True}]}
+    )
+    lexeme = fixture.add_lexeme()
+    entry = fixture.promote_service.create(
+        fixture.dictionary.id, lexeme.id, fixture.owner_id
+    )
+    entry.schema_id = schema.id
+    fixture.lexicography_repository.update_entry(entry)
+
+    with pytest.raises(EntryValidationError):
+        fixture.validate_service.submit_for_review(
+            fixture.dictionary.id, entry.id, fixture.owner_id
+        )
+
+    stored = fixture.lexicography_repository.get_entry(entry.id)
+    assert stored is not None and stored.status is EntryStatus.DRAFT
+
+
+def test_submit_for_review_is_a_noop_when_already_awaiting_review() -> None:
+    fixture = Fixture()
+    entry = _draft_entry_with_headword(fixture)
+    fixture.validate_service.submit_for_review(
+        fixture.dictionary.id, entry.id, fixture.owner_id
+    )
+
+    again = fixture.validate_service.submit_for_review(
+        fixture.dictionary.id, entry.id, fixture.owner_id
+    )
+
+    assert again.status is EntryStatus.READY_TO_REVIEW
+
+
+def test_submit_for_review_rejects_a_completed_entry() -> None:
+    fixture = Fixture()
+    entry = _draft_entry_with_headword(fixture)
+    fixture.validate_service.complete(fixture.dictionary.id, entry.id, fixture.owner_id)
+
+    with pytest.raises(EntryValidationError):
+        fixture.validate_service.submit_for_review(
+            fixture.dictionary.id, entry.id, fixture.owner_id
+        )
+
+
 # --- EntryQueryService ---------------------------------------------------------
 
 

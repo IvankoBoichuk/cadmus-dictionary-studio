@@ -139,14 +139,21 @@ function SchemaEditorPanel({
       </label>
 
       <label className="grid gap-1 text-[0.85rem]">
-        Формула подання (Jinja2 → Markdown, необов'язково)
+        Формула подання (Jinja2 → Markdown)
         <Textarea
           className="min-h-[7rem] font-mono text-[0.8rem]"
           value={editor.presentationFormula}
-          onChange={(event) =>
-            editor.setPresentationFormula(event.target.value)
-          }
+          aria-invalid={Boolean(editor.errors.presentation_formula)}
+          onChange={(event) => {
+            editor.setPresentationFormula(event.target.value);
+            editor.clearError("presentation_formula");
+          }}
         />
+        {editor.errors.presentation_formula && (
+          <span className="field-error">
+            {editor.errors.presentation_formula}
+          </span>
+        )}
         <span className="section-hint">
           Доступні змінні: {formulaVariables(editor.fields)}. Приклад:{" "}
           <code>{"**{{ headword }}** — {{ meaning }}"}</code>.

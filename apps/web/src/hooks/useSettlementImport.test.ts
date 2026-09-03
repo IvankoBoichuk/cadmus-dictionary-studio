@@ -74,6 +74,7 @@ describe("useSettlementImport", () => {
           input: {
             source_label: "Іванівка",
             source_note: null,
+            district: null,
             modern_settlement_name: null,
             settlement_category: null,
             settlement_id: null,
@@ -126,6 +127,7 @@ describe("useSettlementImport", () => {
           source_label: "Іванівка",
           status: "unresolved",
           source_note: null,
+          district: null,
           modern_settlement_name: null,
           settlement_category: null,
           area_id: null,
@@ -162,6 +164,7 @@ describe("useSettlementImport", () => {
           input: {
             source_label: "Іванівка",
             source_note: null,
+            district: null,
             modern_settlement_name: null,
             settlement_category: null,
             settlement_id: null,

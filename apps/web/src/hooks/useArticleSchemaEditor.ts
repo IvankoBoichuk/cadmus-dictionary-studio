@@ -145,6 +145,9 @@ export function useArticleSchemaEditor({
   const submit = useCallback(async () => {
     setRootError(null);
     const validation = validateSchemaDefinition(definition);
+    if (!presentationFormula.trim()) {
+      validation.presentation_formula = "Додайте формулу подання статті.";
+    }
     if (Object.keys(validation).length > 0) {
       setErrors(validation);
       setRootError("Виправте позначені поля перед збереженням.");

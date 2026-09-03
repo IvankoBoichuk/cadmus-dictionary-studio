@@ -147,6 +147,18 @@ export function SettlementRowForm({
         </TableCell>
 
         <TableCell>
+          <Input
+            className={CELL_INPUT}
+            aria-label="Скорочення району"
+            onKeyDown={onEnter}
+            {...form.register("district")}
+          />
+          {errors.district && (
+            <span className="field-error">{errors.district.message}</span>
+          )}
+        </TableCell>
+
+        <TableCell>
           {editing ? (
             <Badge variant={STATUS_BADGE_VARIANT[editing.status]}>
               {STATUS_LABELS[editing.status]}
@@ -191,7 +203,7 @@ export function SettlementRowForm({
       </TableRow>
 
       <TableRow className="bg-accent/40">
-        <TableCell colSpan={5}>
+        <TableCell colSpan={6}>
           <span className="flex min-w-[16rem] items-center gap-2">
             <span className="text-[0.82rem] whitespace-nowrap text-muted-foreground">
               Примітка з оригіналу

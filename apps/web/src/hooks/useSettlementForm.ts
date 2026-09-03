@@ -15,6 +15,7 @@ const settlementSchema = z
   .object({
     source_label: z.string(),
     source_note: z.string(),
+    district: z.string(),
     modern_settlement_name: z.string(),
     settlement_category: z.string(),
     settlement_id: z.string().nullable(),
@@ -34,6 +35,7 @@ export type SettlementFormValues = z.infer<typeof settlementSchema>;
 const EMPTY_VALUES: SettlementFormValues = {
   source_label: "",
   source_note: "",
+  district: "",
   modern_settlement_name: "",
   settlement_category: "",
   settlement_id: null,
@@ -46,6 +48,7 @@ function valuesFrom(
   return {
     source_label: editing.source_label,
     source_note: editing.source_note ?? "",
+    district: editing.district ?? "",
     modern_settlement_name: editing.modern_settlement_name ?? "",
     settlement_category: editing.settlement_category ?? "",
     settlement_id: editing.settlement_id,
@@ -85,6 +88,7 @@ export function useSettlementForm(
     const body = {
       source_label: values.source_label.trim(),
       source_note: values.source_note.trim() || null,
+      district: values.district.trim() || null,
       modern_settlement_name: values.modern_settlement_name.trim() || null,
       settlement_category: values.settlement_category.trim() || null,
       settlement_id: values.settlement_id,

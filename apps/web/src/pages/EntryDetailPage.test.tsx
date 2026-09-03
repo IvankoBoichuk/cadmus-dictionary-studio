@@ -127,6 +127,7 @@ function baseEntry(overrides: Partial<EntryResponse> = {}): EntryResponse {
         normalized_text: null,
         confidence: 0.9,
         origin: "model",
+        settlement_mapping_id: null,
         created_at: "2026-08-15T12:00:00Z",
         updated_at: "2026-08-15T12:00:00Z",
       },
@@ -211,6 +212,33 @@ describe("EntryDetailPage", () => {
       expect(screen.getByRole("status")).toHaveTextContent("завершеною"),
     );
     expect(screen.getByText("Завершено")).toBeInTheDocument();
+  });
+
+  it("submits a draft entry for review", async () => {
+    const entry = baseEntry();
+    const submitted = { ...entry, status: "ready_to_review" as const };
+    const fetchMock = stubFetch({ entry }, [
+      () => jsonResponse(200, submitted),
+    ]);
+
+    renderAt(`/entries/${ENTRY_ID}`);
+    await screen.findByText("слово");
+
+    fireEvent.click(screen.getByRole("button", { name: "Подати на перевірку" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("подано на перевірку"),
+    );
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith(`/entries/${ENTRY_ID}/submit-review`) &&
+          (init as RequestInit | undefined)?.method === "POST",
+      ),
+    ).toBe(true);
+    expect(
+      screen.queryByRole("button", { name: "Подати на перевірку" }),
+    ).not.toBeInTheDocument();
   });
 
   it("surfaces validation errors when completion is rejected", async () => {
@@ -639,5 +667,82 @@ describe("EntryDetailPage", () => {
         ),
       ).toEqual(["grammatical_info", "usual_plural_form", "label", "custom"]),
     );
+  });
+
+  it("highlights a field's parent/child rows on hover, both ways", async () => {
+    const template = baseEntry().fields[0]!;
+    const example = {
+      ...template,
+      id: "ex000000-0000-0000-0000-000000000001",
+      parent_field_id: null,
+      field_path: "example",
+      role: "example" as const,
+      source_text: "чорний кіт з Полтави",
+    };
+    const geoLabel = {
+      ...template,
+      id: "geo00000-0000-0000-0000-000000000002",
+      parent_field_id: example.id,
+      field_path: "example.geographic_label",
+      role: "geographic_label" as const,
+      source_text: "Полтава",
+      origin: "rule" as const,
+    };
+    stubFetch({ entry: baseEntry({ fields: [example, geoLabel] }) });
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    const exampleRow = (await screen.findByText("чорний кіт з Полтави")).closest(
+      "li",
+    )!;
+    const geoRow = screen.getByText("Полтава").closest("li")!;
+    expect(exampleRow).not.toHaveAttribute("data-linked");
+    expect(geoRow).not.toHaveAttribute("data-linked");
+
+    fireEvent.mouseEnter(exampleRow);
+    expect(geoRow).toHaveAttribute("data-linked", "true");
+    expect(exampleRow).toHaveAttribute("data-linked", "true");
+
+    fireEvent.mouseLeave(exampleRow);
+    expect(geoRow).not.toHaveAttribute("data-linked");
+
+    fireEvent.mouseEnter(geoRow);
+    expect(exampleRow).toHaveAttribute("data-linked", "true");
+  });
+
+  it("shows the район / громада for a geo label linked to a settlement mapping", async () => {
+    const template = baseEntry().fields[0]!;
+    const geoLabel = {
+      ...template,
+      id: "geo00000-0000-0000-0000-00000000000a",
+      field_path: "sense[0].settlement",
+      role: "geographic_label" as const,
+      source_text: "Атаки",
+      normalized_text: "Атаки",
+      settlement_mapping_id: "map00000-0000-0000-0000-00000000000b",
+    };
+    stubFetch({
+      entry: baseEntry({ fields: [geoLabel] }),
+      settlements: [
+        {
+          id: "map00000-0000-0000-0000-00000000000b",
+          source_label: "Атаки",
+          status: "confirmed",
+          district: "Хот.",
+          modern_settlement_name: "Атаки",
+          community_name: "Хотинська територіальна громада",
+        },
+      ],
+    });
+
+    renderAt(`/entries/${ENTRY_ID}`);
+
+    await screen.findByText("Атаки");
+    expect(screen.getByText("Район")).toBeInTheDocument();
+    const districtTerm = screen.getByText("Район");
+    expect(districtTerm.nextElementSibling).toHaveTextContent("Хот.");
+    expect(
+      screen.getByText("Хотинська територіальна громада"),
+    ).toBeInTheDocument();
   });
 });

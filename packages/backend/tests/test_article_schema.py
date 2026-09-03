@@ -361,6 +361,7 @@ def test_save_appends_a_ready_inactive_version() -> None:
         fixture.owner_id,
         definition=_VALID_DEFINITION,
         source_description="  headword; meaning  ",
+        presentation_formula="# {{ headword }}",
     )
 
     assert saved.version == 2
@@ -368,6 +369,7 @@ def test_save_appends_a_ready_inactive_version() -> None:
     assert saved.activated_at is None
     assert saved.provider_name is None
     assert saved.source_description == "headword; meaning"
+    assert saved.presentation_formula == "# {{ headword }}"
     assert fixture.lexicography_repository.article_schemas[saved.id] is saved
 
 
@@ -375,7 +377,10 @@ def test_save_normalizes_the_stored_definition() -> None:
     fixture = Fixture()
 
     saved = fixture.save_service.save(
-        fixture.dictionary.id, fixture.owner_id, definition=_VALID_DEFINITION
+        fixture.dictionary.id,
+        fixture.owner_id,
+        definition=_VALID_DEFINITION,
+        presentation_formula="{{ headword }}",
     )
 
     top = saved.definition["fields"][0]
@@ -560,21 +565,18 @@ def test_save_persists_a_trimmed_presentation_formula() -> None:
     assert saved.presentation_formula == "# {{ headword }}"
 
 
-def test_save_leaves_presentation_formula_none_when_omitted_or_blank() -> None:
+def test_save_requires_a_presentation_formula() -> None:
     fixture = Fixture()
 
-    omitted = fixture.save_service.save(
-        fixture.dictionary.id, fixture.owner_id, definition=_VALID_DEFINITION
-    )
-    blank = fixture.save_service.save(
-        fixture.dictionary.id,
-        fixture.owner_id,
-        definition=_VALID_DEFINITION,
-        presentation_formula="   ",
-    )
-
-    assert omitted.presentation_formula is None
-    assert blank.presentation_formula is None
+    for missing in (None, "   "):
+        with pytest.raises(ArticleSchemaValidationError) as caught:
+            fixture.save_service.save(
+                fixture.dictionary.id,
+                fixture.owner_id,
+                definition=_VALID_DEFINITION,
+                presentation_formula=missing,
+            )
+        assert "presentation_formula" in caught.value.errors
 
 
 def test_validate_schema_definition_accepts_reference_field_types() -> None:

@@ -98,6 +98,7 @@ class FakeAiSchemaProvider:
             },
             raw_response={"ok": True},
             provider_name="fake:test",
+            presentation_formula="# {{ headword }}",
         )
 
     def extract_fields(self, schema, source_text):  # type: ignore[no-untyped-def]
@@ -164,6 +165,7 @@ def test_generate_article_schema_persists_a_ready_version(
     assert len(schemas) == 1
     assert schemas[0].status is SchemaGenerationStatus.READY
     assert schemas[0].definition["fields"][0]["name"] == "headword"
+    assert schemas[0].presentation_formula == "# {{ headword }}"
     assert str(schemas[0].id) == result["schema_id"]
 
 

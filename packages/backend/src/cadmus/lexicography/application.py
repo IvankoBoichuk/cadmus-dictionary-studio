@@ -44,6 +44,7 @@ from cadmus.lexicography.domain import (
     SchemaGenerationStatus,
     build_entry_presentation_context,
     changed_lexeme_fields,
+    collapse_repeated_punctuation,
     find_overlapping_lexeme,
     normalize_schema_definition,
     resolve_ocr_language,
@@ -68,6 +69,7 @@ from cadmus.sources import (
     Dictionary,
     DictionaryAccessError,
     DictionaryPage,
+    DictionarySettlementMapping,
     DictionaryStatus,
     MarkDictionaryScannedService,
     ProcessingSignals,
@@ -815,6 +817,8 @@ class SaveArticleSchemaService:
             raise LexemeAccessError(dictionary_id) from error
 
         errors = validate_schema_definition(definition)
+        if not (presentation_formula or "").strip():
+            errors["presentation_formula"] = "Додайте формулу подання статті."
         if errors:
             raise ArticleSchemaValidationError(errors)
 
@@ -1030,7 +1034,10 @@ class RuleBasedAnnotationService:
                 if source_field.origin == EntryFieldOrigin.RULE:
                     continue  # don't re-tag matches found by this same pass
                 haystack = source_field.source_text.lower()
+                whole = source_field.source_text.strip().casefold()
                 for needle, role in needles:
+                    if whole == needle.strip().casefold():
+                        continue  # the field already *is* this abbreviation/label
                     start = haystack.find(needle.lower())
                     if start < 0:
                         continue
@@ -1058,9 +1065,58 @@ class RuleBasedAnnotationService:
                 unit_of_work.commit()
         return created
 
+    def resolve_geographic_labels(
+        self, dictionary_id: UUID, entry_id: UUID, actor_id: UUID
+    ) -> list[EntryField]:
+        """Link each of the entry's ``geographic_label`` fields to the BH-30
+        settlement mapping whose ``source_label`` / ``modern_settlement_name``
+        it matches (case/space-insensitive), stamping ``settlement_mapping_id``
+        and ``normalized_text``. Leaves the район abbreviation alone. Returns
+        the fields it changed."""
+        with self._sources_unit_of_work_factory() as sources_unit_of_work:
+            settlements = sources_unit_of_work.sources.list_settlement_mappings(
+                dictionary_id
+            )
+
+        def _key(text: str) -> str:
+            return " ".join(text.split()).casefold()
+
+        by_key: dict[str, DictionarySettlementMapping] = {}
+        for mapping in settlements:
+            for label in (mapping.source_label, mapping.modern_settlement_name):
+                if label and label.strip():
+                    by_key.setdefault(_key(label), mapping)
+        if not by_key:
+            return []
+
+        now = self._clock()
+        changed: list[EntryField] = []
+        with self._unit_of_work_factory() as unit_of_work:
+            for field in unit_of_work.lexicography.list_fields_for_entry(entry_id):
+                if (
+                    field.role is not EntryFieldRole.GEOGRAPHIC_LABEL
+                    or field.settlement_mapping_id is not None
+                ):
+                    continue
+                value = (field.normalized_text or field.source_text).strip()
+                match = by_key.get(_key(value)) if value else None
+                if match is None:
+                    continue
+                field.settlement_mapping_id = match.id
+                if match.modern_settlement_name:
+                    field.normalized_text = match.modern_settlement_name
+                field.updated_at = now
+                field.updated_by = actor_id
+                unit_of_work.lexicography.update_field(field)
+                changed.append(field)
+            if changed:
+                unit_of_work.commit()
+        return changed
+
 
 class ValidateEntryService:
-    """Check an entry against its ``ArticleSchema`` and gate ``COMPLETE`` (BH-148)."""
+    """Check an entry against its ``ArticleSchema`` and gate the
+    ``READY_TO_REVIEW`` and ``COMPLETE`` transitions (BH-148)."""
 
     def __init__(
         self,
@@ -1105,6 +1161,50 @@ class ValidateEntryService:
             if entry is None:
                 raise EntryAccessError(entry_id)
             entry.status = EntryStatus.COMPLETE
+            entry.updated_at = now
+            entry.updated_by = actor_id
+            unit_of_work.lexicography.update_entry(entry)
+            unit_of_work.commit()
+        return entry
+
+    def submit_for_review(
+        self, dictionary_id: UUID, entry_id: UUID, actor_id: UUID
+    ) -> DictionaryEntry:
+        """Move a ``DRAFT`` entry to ``READY_TO_REVIEW`` so it enters the
+        cross-dictionary review queue.
+
+        Gated on the same schema check as :meth:`complete` (an editor submits
+        what they believe is finished). A no-op on an entry already awaiting
+        review; a ``COMPLETE`` entry is rejected with a field error.
+        """
+        try:
+            self._dictionary_pages.get(
+                dictionary_id, actor_id, required_permission=Permission.EDIT
+            )
+        except DictionaryAccessError as error:
+            raise LexemeAccessError(dictionary_id) from error
+
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            if entry.status is EntryStatus.READY_TO_REVIEW:
+                return entry
+            if entry.status is EntryStatus.COMPLETE:
+                raise EntryValidationError(
+                    {"status": "Завершену статтю не можна подати на перевірку."}
+                )
+
+        errors = self.validate(entry_id)
+        if errors:
+            raise EntryValidationError(errors)
+
+        now = self._clock()
+        with self._unit_of_work_factory() as unit_of_work:
+            entry = unit_of_work.lexicography.get_entry(entry_id)
+            if entry is None:
+                raise EntryAccessError(entry_id)
+            entry.status = EntryStatus.READY_TO_REVIEW
             entry.updated_at = now
             entry.updated_by = actor_id
             unit_of_work.lexicography.update_entry(entry)
@@ -1163,7 +1263,7 @@ class RenderEntryService:
             return EntryRenderResult(
                 markdown=None, reason="template_error", error=error.message
             )
-        return EntryRenderResult(markdown=markdown)
+        return EntryRenderResult(markdown=collapse_repeated_punctuation(markdown))
 
 
 class _EntryFieldWriteService:
@@ -1237,6 +1337,7 @@ class CreateEntryFieldService(_EntryFieldWriteService):
         source_end: int,
         parent_field_id: UUID | None = None,
         normalized_text: str | None = None,
+        settlement_mapping_id: UUID | None = None,
     ) -> EntryField:
         entry = self._authorize(entry_id, actor_id)
         if not source_text.strip():
@@ -1260,6 +1361,7 @@ class CreateEntryFieldService(_EntryFieldWriteService):
                 source_start=source_start,
                 source_end=source_end,
                 normalized_text=normalized_text,
+                settlement_mapping_id=settlement_mapping_id,
                 origin=EntryFieldOrigin.MANUAL,
                 created_at=now,
                 created_by=actor_id,
@@ -1292,6 +1394,8 @@ class UpdateEntryFieldService(_EntryFieldWriteService):
         role: EntryFieldRole | None = None,
         source_text: str | None = None,
         normalized_text: str | None = None,
+        settlement_mapping_id: UUID | None = None,
+        settlement_mapping_id_set: bool = False,
     ) -> EntryField:
         entry = self._authorize(entry_id, actor_id)
         if source_text is not None and not source_text.strip():
@@ -1317,6 +1421,8 @@ class UpdateEntryFieldService(_EntryFieldWriteService):
                 field.role = role
             if normalized_text is not None:
                 field.normalized_text = normalized_text
+            if settlement_mapping_id_set:
+                field.settlement_mapping_id = settlement_mapping_id
             field.origin = EntryFieldOrigin.MANUAL
             field.updated_at = now
             field.updated_by = actor_id
