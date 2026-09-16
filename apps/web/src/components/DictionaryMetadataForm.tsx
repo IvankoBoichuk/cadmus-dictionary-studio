@@ -185,7 +185,7 @@ export function DictionaryMetadataForm({
         {portalActionsInto ? (
           portalNode && createPortal(actions, portalNode)
         ) : (
-          <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] -mt-[clamp(2rem,6vw,3.5rem)] mb-6 border-b border-border bg-background/90 px-[clamp(1rem,4vw,2.5rem)] py-3 backdrop-blur-sm">
+          <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] mb-6 border-b border-border bg-background/90 px-[clamp(1rem,4vw,2.5rem)] py-3 backdrop-blur-sm">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <p className="text-[0.7rem] font-[750] tracking-[0.12em] text-muted-foreground uppercase">

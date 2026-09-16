@@ -47,7 +47,7 @@ export function DictionaryLayout() {
 
   return (
     <>
-      <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] -mt-[clamp(2rem,6vw,3.5rem)] mb-6 bg-background/90 px-[clamp(1rem,4vw,2.5rem)] pt-3 backdrop-blur-sm">
+      <header className="sticky top-0 z-20 -mx-[clamp(1rem,4vw,2.5rem)] mb-6 bg-background/90 px-[clamp(1rem,4vw,2.5rem)] pt-3 backdrop-blur-sm">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <img
             src={dictionaryThumbnailUrl(dictionary.id)}
@@ -80,7 +80,7 @@ export function DictionaryLayout() {
           />
         </div>
         <nav
-          className="flex gap-1 overflow-x-auto border-b border-border pt-3"
+          className="flex gap-1 border-b border-border pt-3"
           aria-label="Розділи словника"
         >
           {TABS.map((tab) => (

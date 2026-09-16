@@ -13,9 +13,9 @@ const PAGES: PageProgress[] = [
 function renderNav(overrides: Partial<Parameters<typeof PageNavigator>[0]> = {}) {
   return render(
     <PageNavigator
-      pages={PAGES}
       currentPage={2}
       totalPages={3}
+      pages={PAGES}
       onNavigate={vi.fn()}
       {...overrides}
     />,
@@ -51,26 +51,17 @@ describe("PageNavigator", () => {
     expect(screen.getByRole("button", { name: "← Попередня" })).toBeEnabled();
   });
 
-  it("marks processed pages and navigates when a chip is clicked", () => {
+  it("opens the page grid combobox from the counter and navigates from it", async () => {
     const onNavigate = vi.fn();
     renderNav({ onNavigate });
 
-    expect(screen.getByRole("button", { name: "1" })).toHaveAttribute(
-      "title",
-      "Сторінка 1 — опрацьована",
-    );
-    expect(screen.getByRole("button", { name: "2" })).toHaveAttribute(
-      "title",
-      "Сторінка 2",
-    );
+    expect(screen.queryByRole("button", { name: "3" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "3" }));
+    fireEvent.click(screen.getByRole("button", { name: /Сторінка 2 \/ 3/ }));
+
+    const chip = await screen.findByRole("button", { name: "3" });
+    fireEvent.click(chip);
+
     expect(onNavigate).toHaveBeenCalledWith(3);
-  });
-
-  it("omits the chip grid when there is no progress data", () => {
-    renderNav({ pages: [] });
-    expect(screen.queryByRole("button", { name: "1" })).not.toBeInTheDocument();
-    expect(screen.getByText("Сторінка 2 / 3")).toBeInTheDocument();
   });
 });

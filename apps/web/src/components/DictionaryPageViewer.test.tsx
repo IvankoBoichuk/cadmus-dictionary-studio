@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DictionaryPageViewer } from "./DictionaryPageViewer";
 
@@ -52,7 +52,16 @@ function stubContainerRect() {
 }
 
 describe("DictionaryPageViewer", () => {
+  beforeEach(() => {
+    // Mirrors the `#page-area-portal` target `AppShell` renders in production;
+    // without it the canvas panel (and its `CanvasToolbar`) never mounts.
+    const portalNode = document.createElement("div");
+    portalNode.id = "page-area-portal";
+    document.body.appendChild(portalNode);
+  });
+
   afterEach(() => {
+    document.getElementById("page-area-portal")?.remove();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });

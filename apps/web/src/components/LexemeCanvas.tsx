@@ -183,15 +183,20 @@ export function LexemeCanvas({
   // The image is rendered at `fitWidth * zoom` px wide; the frame scrolls when
   // that exceeds the panel. `displayedSize` (and thus `scale`) is derived from
   // it, so every `scaleRect` call downstream stays correct as the user zooms.
+  // `clientWidth` (not `getBoundingClientRect().width`) so a vertical scrollbar
+  // is excluded from the measurement -- otherwise the image is sized into the
+  // scrollbar's own width and a spurious horizontal scrollbar appears at 100%
+  // zoom. A `ResizeObserver` (not just a `resize` listener) is required too,
+  // since the vertical scrollbar toggling on/off changes this width without
+  // the window itself resizing.
   useEffect(() => {
-    function measureFit() {
-      if (scrollRef.current) {
-        setFitWidth(scrollRef.current.getBoundingClientRect().width);
-      }
-    }
-    measureFit();
-    window.addEventListener("resize", measureFit);
-    return () => window.removeEventListener("resize", measureFit);
+    const node = scrollRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver(() => {
+      setFitWidth(node.clientWidth);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -208,7 +213,7 @@ export function LexemeCanvas({
     const image = event.currentTarget;
     setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
     if (scrollRef.current) {
-      setFitWidth(scrollRef.current.getBoundingClientRect().width);
+      setFitWidth(scrollRef.current.clientWidth);
     }
   };
 
@@ -434,7 +439,7 @@ export function LexemeCanvas({
   };
 
   return (
-    <div className="grid gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {redrawingLexemeId && (
         <p className="lede" role="status">
           Намалюйте нову область для вибраної лексеми.{" "}
@@ -458,7 +463,7 @@ export function LexemeCanvas({
       )}
       <div
         ref={scrollRef}
-        className="max-h-[80vh] w-full overflow-auto overscroll-contain rounded-[0.75rem] border bg-surface"
+        className="min-h-0 w-full flex-1 overflow-auto overscroll-contain [scrollbar-gutter:stable]"
       >
         <div
           ref={containerRef}

@@ -660,9 +660,12 @@ class EntryFragment:
     An entry may have several fragments across pages, for an article split
     by a page break; box fields mirror ``Lexeme``'s convention (pixel
     coordinates, top-left origin, optional second box). ``recognized_text``
-    is the immutable source text this fragment's fields are spans over --
-    it is never mutated or trimmed, so any text a field doesn't cover
-    remains visible to a reviewer by construction.
+    is the source text this fragment's fields are spans over -- extraction
+    never trims it, so any text a field doesn't cover remains visible to a
+    reviewer by construction, but it is re-OCR'd from this fragment's box
+    (and rewritten) each time "Розпізнати структуру" runs, so an editor who
+    strips it down to a headword can recover the rest by re-running
+    extraction rather than by retyping it.
     """
 
     id: UUID

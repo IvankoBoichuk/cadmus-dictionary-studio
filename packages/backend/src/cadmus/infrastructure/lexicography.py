@@ -491,6 +491,9 @@ class SqlAlchemyLexicographyRepository:
             )
         )
 
+    def update_fragment(self, fragment: EntryFragment) -> None:
+        self._session.add(fragment)
+
     def add_field(self, field: EntryField) -> None:
         self._session.add(field)
 

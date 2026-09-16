@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: true,
     },
     server: {
+      allowedHosts: ["cds.in.ua"],
       proxy: {
         "/api": {
           target:

@@ -12,6 +12,14 @@ function renderToolbar(overrides: Partial<Parameters<typeof CanvasToolbar>[0]> =
       onZoomIn={vi.fn()}
       onZoomOut={vi.fn()}
       onZoomReset={vi.fn()}
+      currentPage={1}
+      totalPages={3}
+      pages={[]}
+      onNavigate={vi.fn()}
+      ocrRunning={false}
+      onTriggerOcr={vi.fn()}
+      scanRunning={false}
+      onTriggerScan={vi.fn()}
       {...overrides}
     />,
   );
@@ -49,5 +57,46 @@ describe("CanvasToolbar", () => {
     expect(onZoomIn).toHaveBeenCalledTimes(1);
     expect(onZoomOut).toHaveBeenCalledTimes(1);
     expect(onZoomReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("wires up the OCR trigger buttons and shows their running state", () => {
+    const onTriggerOcr = vi.fn();
+    const onTriggerScan = vi.fn();
+    const { rerender } = renderToolbar({ onTriggerOcr, onTriggerScan });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Автоматично знайти слова (OCR)" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Запустити чергу OCR для всього словника" }),
+    );
+    expect(onTriggerOcr).toHaveBeenCalledTimes(1);
+    expect(onTriggerScan).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <CanvasToolbar
+        mode="select"
+        onModeChange={vi.fn()}
+        zoom={1}
+        onZoomIn={vi.fn()}
+        onZoomOut={vi.fn()}
+        onZoomReset={vi.fn()}
+        currentPage={1}
+        totalPages={3}
+        pages={[]}
+        onNavigate={vi.fn()}
+        ocrRunning
+        onTriggerOcr={onTriggerOcr}
+        scanRunning
+        onTriggerScan={onTriggerScan}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Розпізнаємо слова…" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Опрацьовуємо чергу…" }),
+    ).toBeDisabled();
   });
 });

@@ -15,11 +15,16 @@ export function PublicLayout() {
       </a>
       <header className="flex min-h-[4.5rem] items-center border-b bg-white/[0.72] px-[6vw]">
         <Link
-          className="font-serif text-[1.45rem] font-bold tracking-[0.02em] no-underline"
+          className="flex items-center gap-2 font-serif text-[1.45rem] font-bold tracking-[0.02em] no-underline"
           to="/"
           translate="no"
           aria-label="Cadmus — головна"
         >
+          <img
+            src="/logo.jpg"
+            alt=""
+            className="size-9 shrink-0 rounded-full object-cover"
+          />
           Cadmus
         </Link>
         <AuthActions />

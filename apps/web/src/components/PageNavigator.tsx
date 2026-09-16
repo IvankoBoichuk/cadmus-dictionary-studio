@@ -1,72 +1,82 @@
+import { ChevronDown } from "lucide-react";
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import type { PageProgress } from "../api";
+import { PageChipGrid } from "./PageChipGrid";
 
-/** Page navigation for the control panel: prev/next, a counter, and the
- * per-page chip grid (extracted from the former `ScanProgressBar`, BH-57). */
+/** Prev/next page navigation with a counter, for the canvas toolbar. The
+ * counter opens a combobox popover with the per-page chip grid. */
 export function PageNavigator({
-  pages,
   currentPage,
   totalPages,
+  pages,
   onNavigate,
 }: {
-  pages: PageProgress[];
   currentPage: number;
   totalPages: number;
+  pages: PageProgress[];
   onNavigate: (pageNumber: number) => void;
 }) {
-  return (
-    <div className="grid gap-2">
-      <div className="flex items-center gap-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          type="button"
-          onClick={() => onNavigate(currentPage - 1)}
-          disabled={currentPage <= 1}
-        >
-          ← Попередня
-        </Button>
-        <span
-          className="min-w-32 text-center text-[0.85rem] font-[650] tabular-nums"
-          role="status"
-        >
-          Сторінка {currentPage} / {totalPages}
-        </span>
-        <Button
-          variant="secondary"
-          size="sm"
-          type="button"
-          onClick={() => onNavigate(currentPage + 1)}
-          disabled={currentPage >= totalPages}
-        >
-          Наступна →
-        </Button>
-      </div>
+  const [isGridOpen, setIsGridOpen] = useState(false);
 
-      {pages.length > 0 && (
-        <div className="flex max-h-20 flex-wrap gap-[0.3rem] overflow-y-auto overscroll-contain">
-          {pages.map((page) => (
-            <button
-              key={page.page_number}
-              type="button"
+  return (
+    <div className="flex items-center gap-3">
+      <Button
+        variant="secondary"
+        size="sm"
+        type="button"
+        onClick={() => onNavigate(currentPage - 1)}
+        disabled={currentPage <= 1}
+      >
+        ← Попередня
+      </Button>
+      <Popover open={isGridOpen} onOpenChange={setIsGridOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex min-w-32 items-center justify-center gap-1 rounded-md px-2 py-1 text-[0.85rem] font-[650] text-foreground tabular-nums",
+              "hover:bg-accent focus-visible:[outline:2px_solid_var(--color-ring)]",
+              "data-[state=open]:bg-accent",
+            )}
+          >
+            Сторінка {currentPage} / {totalPages}
+            <ChevronDown
+              aria-hidden="true"
               className={cn(
-                "min-w-8 rounded-[0.35rem] border bg-surface px-[0.4rem] py-1 text-center text-[0.8rem] text-foreground tabular-nums [contain-intrinsic-size:auto_1.8rem] [content-visibility:auto] aria-[current=page]:[outline:2px_solid_var(--color-selected)] aria-[current=page]:outline-offset-1",
-                page.has_lexemes &&
-                  "border-primary bg-secondary font-[650] text-primary",
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                isGridOpen && "rotate-180",
               )}
-              aria-current={
-                page.page_number === currentPage ? "page" : undefined
-              }
-              title={`Сторінка ${page.page_number}${page.has_lexemes ? " — опрацьована" : ""}`}
-              onClick={() => onNavigate(page.page_number)}
-            >
-              {page.page_number}
-            </button>
-          ))}
-        </div>
-      )}
+            />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="center"
+          className="w-[min(90vw,22rem)] p-2"
+        >
+          <PageChipGrid
+            pages={pages}
+            currentPage={currentPage}
+            onNavigate={(pageNumber) => {
+              onNavigate(pageNumber);
+              setIsGridOpen(false);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      <Button
+        variant="secondary"
+        size="sm"
+        type="button"
+        onClick={() => onNavigate(currentPage + 1)}
+        disabled={currentPage >= totalPages}
+      >
+        Наступна →
+      </Button>
     </div>
   );
 }

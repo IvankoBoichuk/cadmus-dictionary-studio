@@ -15,7 +15,7 @@ export function ScanProgressBar({
 
   return (
     <div
-      className="sticky bottom-0 z-10 -mx-[clamp(1rem,4vw,2.5rem)] mt-2 grid gap-1 border-t border-border bg-background/95 px-[clamp(1rem,4vw,2.5rem)] py-2 backdrop-blur-sm"
+      className="sticky bottom-0 z-10 -mx-[clamp(1rem,4vw,2.5rem)] grid gap-1 border-t border-border bg-background/95 px-[clamp(1rem,4vw,2.5rem)] py-2 backdrop-blur-sm"
       aria-labelledby="scan-progress-heading"
     >
       <h3 id="scan-progress-heading" className="sr-only">

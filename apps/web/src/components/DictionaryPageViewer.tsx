@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-
-import { Button } from "@/components/ui/button";
 
 import {
   API,
@@ -23,7 +22,6 @@ import { lexemeToUpdateInput, useUpdateLexeme } from "../hooks/useUpdateLexeme";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { LexemeCanvas } from "./LexemeCanvas";
 import { LexemeList } from "./LexemeList";
-import { PageNavigator } from "./PageNavigator";
 import { ScanProgressBar } from "./ScanProgressBar";
 
 /** BH-53: paginated viewer over a dictionary's rendered, in-range pages. */
@@ -72,6 +70,16 @@ export function DictionaryPageViewer({
   );
   const [mode, setMode] = useState<CanvasMode>("select");
   const [zoom, setZoom] = useState(1);
+
+  // Resolve the out-of-flow portal target once after mount, mirroring
+  // `PageRangeEditor`/`DictionaryMetadataForm`.
+  const [pageAreaPortalNode, setPageAreaPortalNode] = useState<HTMLElement | null>(
+    null,
+  );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot DOM sync
+    setPageAreaPortalNode(document.getElementById("page-area-portal"));
+  }, []);
   const pageKey = `${dictionaryId}:${currentPage}`;
   const [previousPageKey, setPreviousPageKey] = useState(pageKey);
   if (pageKey !== previousPageKey) {
@@ -229,30 +237,12 @@ export function DictionaryPageViewer({
   };
 
   return (
-    <div className="grid gap-4" aria-labelledby="page-viewer-heading">
+    <div className="flex flex-col flex-1" aria-labelledby="page-viewer-heading">
       <h2 id="page-viewer-heading" className="sr-only">
         Перегляд сторінки словника
       </h2>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="secondary"
-          type="button"
-          onClick={() => void triggerOcrSuggestions()}
-          disabled={ocrRunning}
-        >
-          {ocrRunning ? "Розпізнаємо слова…" : "Автоматично знайти слова (OCR)"}
-        </Button>
-        <Button
-          variant="secondary"
-          type="button"
-          onClick={() => void triggerScan()}
-          disabled={scanRunning}
-        >
-          {scanRunning
-            ? "Опрацьовуємо чергу…"
-            : "Запустити чергу OCR для всього словника"}
-        </Button>
+      <div className="flex flex-wrap items-center gap-3 empty:hidden">
         {ocrState.status === "succeeded" && (
           <span className="lede" role="status">
             Знайдено пропозицій: {ocrState.suggestions.length}
@@ -289,76 +279,79 @@ export function DictionaryPageViewer({
         </p>
       )}
 
-      <div className="grid w-full items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(24rem,1fr)]">
-        <div className="grid gap-3 rounded-xl border border-border bg-surface p-3">
-          <CanvasToolbar
-            mode={mode}
-            onModeChange={setMode}
-            zoom={zoom}
-            onZoomIn={() => setZoom((value) => clampZoom(value + ZOOM_STEP))}
-            onZoomOut={() => setZoom((value) => clampZoom(value - ZOOM_STEP))}
-            onZoomReset={() => setZoom(1)}
-          />
-          <PageNavigator
-            pages={progressPages}
-            currentPage={currentPage}
-            totalPages={summary.totalPages}
-            onNavigate={onNavigate}
-          />
-          <LexemeCanvas
-            dictionaryId={dictionaryId}
-            pageNumber={currentPage}
-            imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
-            imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
-            lexemes={lexemesState.status === "loaded" ? lexemesState.lexemes : []}
-            onLexemeCreated={addLexeme}
-            selectedLexemeId={selectedLexemeId}
-            onSelectLexeme={setSelectedLexemeId}
-            redrawingLexemeId={redrawingLexemeId}
-            onLexemeRedrawn={handleLexemeRedrawn}
-            onCancelRedraw={() => setRedrawingLexemeId(null)}
-            onSubmitUpdate={submitUpdate}
-            suggestions={suggestions}
-            onAcceptSuggestion={dismissSuggestion}
-            secondBoxDraftLexemeId={secondBoxDraftLexemeId}
-            onSecondBoxDrawn={handleSecondBoxDrawn}
-            onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
-            mode={mode}
-            zoom={zoom}
-            onEraseLexeme={handleDelete}
-          />
-        </div>
-
-        <section
-          className="grid content-start gap-[0.6rem]"
-          aria-labelledby="lexeme-list-heading"
-        >
-          <h3 id="lexeme-list-heading" className="text-base">
-            Лексеми сторінки
-          </h3>
-          <LexemeList
-            lexemesState={lexemesState}
-            pageNumber={currentPage}
-            selectedLexemeId={selectedLexemeId}
-            onSelectLexeme={setSelectedLexemeId}
-            redrawingLexemeId={redrawingLexemeId}
-            onStartRedraw={handleStartRedraw}
-            onCancelRedraw={() => setRedrawingLexemeId(null)}
-            onSaveText={handleSaveText}
-            updateState={updateState}
-            onDelete={handleDelete}
-            secondBoxDraftLexemeId={secondBoxDraftLexemeId}
-            onStartAddSecondBox={handleStartAddSecondBox}
-            onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
-            onRemoveSecondBox={handleRemoveSecondBox}
-            onMarkComplete={handleMarkComplete}
-            onPromoteToEntry={handlePromoteToEntry}
-            promotingLexemeId={promotingLexemeId}
-          />
-        </section>
-      </div>
+      <section
+        className="grid content-start gap-3 flex-1"
+        aria-label="Лексеми сторінки"
+      >
+        <LexemeList
+          lexemesState={lexemesState}
+          pageNumber={currentPage}
+          selectedLexemeId={selectedLexemeId}
+          onSelectLexeme={setSelectedLexemeId}
+          redrawingLexemeId={redrawingLexemeId}
+          onStartRedraw={handleStartRedraw}
+          onCancelRedraw={() => setRedrawingLexemeId(null)}
+          onSaveText={handleSaveText}
+          updateState={updateState}
+          onDelete={handleDelete}
+          secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+          onStartAddSecondBox={handleStartAddSecondBox}
+          onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
+          onRemoveSecondBox={handleRemoveSecondBox}
+          onMarkComplete={handleMarkComplete}
+          onPromoteToEntry={handlePromoteToEntry}
+          promotingLexemeId={promotingLexemeId}
+        />
+      </section>
 
       <ScanProgressBar processed={processedPages} total={progressTotalPages} />
+
+      {pageAreaPortalNode &&
+        createPortal(
+          <div className="flex h-full min-h-0 flex-col gap-3 rounded-l-xl border-l border-y border-border bg-surface p-3">
+            <CanvasToolbar
+              mode={mode}
+              onModeChange={setMode}
+              zoom={zoom}
+              onZoomIn={() => setZoom((value) => clampZoom(value + ZOOM_STEP))}
+              onZoomOut={() => setZoom((value) => clampZoom(value - ZOOM_STEP))}
+              onZoomReset={() => setZoom(1)}
+              currentPage={currentPage}
+              totalPages={summary.totalPages}
+              pages={progressPages}
+              onNavigate={onNavigate}
+              ocrRunning={ocrRunning}
+              onTriggerOcr={() => void triggerOcrSuggestions()}
+              scanRunning={scanRunning}
+              onTriggerScan={() => void triggerScan()}
+            />
+            <div className="min-h-0 flex-1">
+              <LexemeCanvas
+                dictionaryId={dictionaryId}
+                pageNumber={currentPage}
+                imageUrl={dictionaryPageImageUrl(dictionaryId, currentPage)}
+                imageAlt={`Сторінка ${currentPage} з ${summary.totalPages}`}
+                lexemes={lexemesState.status === "loaded" ? lexemesState.lexemes : []}
+                onLexemeCreated={addLexeme}
+                selectedLexemeId={selectedLexemeId}
+                onSelectLexeme={setSelectedLexemeId}
+                redrawingLexemeId={redrawingLexemeId}
+                onLexemeRedrawn={handleLexemeRedrawn}
+                onCancelRedraw={() => setRedrawingLexemeId(null)}
+                onSubmitUpdate={submitUpdate}
+                suggestions={suggestions}
+                onAcceptSuggestion={dismissSuggestion}
+                secondBoxDraftLexemeId={secondBoxDraftLexemeId}
+                onSecondBoxDrawn={handleSecondBoxDrawn}
+                onCancelSecondBoxDraft={() => setSecondBoxDraftLexemeId(null)}
+                mode={mode}
+                zoom={zoom}
+                onEraseLexeme={handleDelete}
+              />
+            </div>
+          </div>,
+          pageAreaPortalNode,
+        )}
     </div>
   );
 }

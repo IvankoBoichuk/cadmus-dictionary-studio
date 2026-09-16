@@ -45,6 +45,7 @@ install:
 	cd apps/web && bun install --frozen-lockfile
 
 api:
+	set -a; [ -f .env ] && . ./.env; set +a; \
 	$(UV) run --locked --package cadmus-api uvicorn cadmus_api.main:create_app --factory \
 		--reload --reload-dir apps/api/src --reload-dir packages/backend/src
 

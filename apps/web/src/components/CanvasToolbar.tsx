@@ -1,4 +1,12 @@
-import { Eraser, Minus, MousePointer2, Plus, SquareDashedMousePointer } from "lucide-react";
+import {
+  Eraser,
+  Layers,
+  Minus,
+  MousePointer2,
+  Plus,
+  ScanText,
+  SquareDashedMousePointer,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +16,9 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+import type { PageProgress } from "../api";
 import { CANVAS_MODE_LABELS, type CanvasMode } from "../canvasTools";
+import { PageNavigator } from "./PageNavigator";
 
 const TOOL_ICONS: Record<CanvasMode, typeof MousePointer2> = {
   select: MousePointer2,
@@ -26,6 +36,14 @@ export function CanvasToolbar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
+  currentPage,
+  totalPages,
+  pages,
+  onNavigate,
+  ocrRunning,
+  onTriggerOcr,
+  scanRunning,
+  onTriggerScan,
 }: {
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
@@ -33,9 +51,62 @@ export function CanvasToolbar({
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
+  currentPage: number;
+  totalPages: number;
+  pages: PageProgress[];
+  onNavigate: (pageNumber: number) => void;
+  ocrRunning: boolean;
+  onTriggerOcr: () => void;
+  scanRunning: boolean;
+  onTriggerScan: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <div className="flex gap-1" role="group" aria-label="Розпізнавання">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon-sm"
+              variant="secondary"
+              type="button"
+              aria-label={
+                ocrRunning ? "Розпізнаємо слова…" : "Автоматично знайти слова (OCR)"
+              }
+              onClick={onTriggerOcr}
+              disabled={ocrRunning}
+            >
+              <ScanText aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {ocrRunning ? "Розпізнаємо слова…" : "Автоматично знайти слова (OCR)"}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon-sm"
+              variant="secondary"
+              type="button"
+              aria-label={
+                scanRunning
+                  ? "Опрацьовуємо чергу…"
+                  : "Запустити чергу OCR для всього словника"
+              }
+              onClick={onTriggerScan}
+              disabled={scanRunning}
+            >
+              <Layers aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {scanRunning
+              ? "Опрацьовуємо чергу…"
+              : "Запустити чергу OCR для всього словника"}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
       <div className="flex gap-1" role="group" aria-label="Інструменти">
         {TOOLS.map((tool) => {
           const Icon = TOOL_ICONS[tool];
@@ -60,6 +131,15 @@ export function CanvasToolbar({
         })}
       </div>
 
+      <div className="flex flex-1 justify-center">
+        <PageNavigator
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pages={pages}
+          onNavigate={onNavigate}
+        />
+      </div>
+
       <div
         className="ml-auto flex items-center gap-1"
         role="group"
@@ -79,17 +159,15 @@ export function CanvasToolbar({
           </TooltipTrigger>
           <TooltipContent>Зменшити</TooltipContent>
         </Tooltip>
-        <button
+        <Button
           type="button"
+          size="sm"
           aria-label="Скинути масштаб"
           onClick={onZoomReset}
-          className={cn(
-            "min-w-[3.25rem] rounded-md px-1 py-1 text-center text-[0.82rem] font-[650] tabular-nums",
-            "hover:bg-accent focus-visible:[outline:2px_solid_var(--color-ring)]",
-          )}
+          variant="secondary"
         >
           {Math.round(zoom * 100)}%
-        </button>
+        </Button>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

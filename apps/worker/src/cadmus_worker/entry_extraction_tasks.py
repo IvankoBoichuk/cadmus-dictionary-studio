@@ -3,12 +3,14 @@ separate from ``article_schema_tasks.py`` -- extracting one entry's fields
 against an already-active schema is a different capability from generating
 that schema in the first place.
 
-Fields are extracted from each fragment's immutable ``recognized_text``
-(plain running text). The model returns verbatim substrings; this task
-locates each value in the text to record its ``source_start``/``source_end``
-offsets (ADR-0008). No OCR pass, no per-field bounding box -- the earlier
-ALTO word-segmentation experiment is retired (its helpers stay dormant in
-``infrastructure/ocr.py``).
+Before extracting, each fragment's ``recognized_text`` is refreshed by
+re-running Tesseract on just that fragment's box (the dormant
+``segment_region`` ALTO helper, ADR-0008) -- a click of "Розпізнати
+структуру" is the one moment recognized_text is rewritten, so a fragment
+whose text was trimmed or under-recognized at scan time gets a fresh chance
+every time extraction runs. Fields are then extracted from that flat text;
+the model returns verbatim substrings, and this task locates each value in
+the text to record its ``source_start``/``source_end`` offsets (ADR-0008).
 """
 
 import json
@@ -17,6 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
+from io import BytesIO
 from uuid import UUID, uuid4
 
 from cadmus.config import Settings
@@ -28,6 +31,8 @@ from cadmus.infrastructure.database import create_database_engine
 from cadmus.infrastructure.lexicography import (
     create_lexicography_unit_of_work_factory,
 )
+from cadmus.infrastructure.object_storage import create_object_storage
+from cadmus.infrastructure.ocr import OcrExecutionError, TesseractAltoOcrProvider
 from cadmus.infrastructure.reference_lexicon import (
     create_reference_lexicon_unit_of_work_factory,
 )
@@ -36,11 +41,13 @@ from cadmus.lexicography import (
     EXTRACT_ENTRY_FIELDS_TASK_NAME,
     EntryField,
     EntryFieldOrigin,
+    EntryFragment,
     EntryStatus,
     LexicographyUnitOfWorkFactory,
     RuleBasedAnnotationService,
     dedupe_extracted_fields,
     dehyphenate_line_breaks,
+    resolve_ocr_language,
 )
 from cadmus.reference_lexicon import (
     VESUM_CODE,
@@ -48,7 +55,8 @@ from cadmus.reference_lexicon import (
     ReferenceLexiconQueryService,
     normalize_ukrainian_text,
 )
-from cadmus.sources import SourcesUnitOfWorkFactory
+from cadmus.sources import ObjectNotFoundError, ObjectStorage, SourcesUnitOfWorkFactory
+from cadmus.sources.application import GetDictionaryService
 from celery import Task
 
 from cadmus_worker.celery_app import celery_app
@@ -66,6 +74,9 @@ def _log_task_event(event: str, task_id: str, **fields: object) -> None:
 class _EntryExtractionDependencies:
     lexicography_unit_of_work_factory: LexicographyUnitOfWorkFactory
     sources_unit_of_work_factory: SourcesUnitOfWorkFactory
+    dictionary_pages: GetDictionaryService
+    object_storage: ObjectStorage
+    ocr_provider: TesseractAltoOcrProvider
     ai_schema_provider: AnthropicAiSchemaProvider
     annotation_service: RuleBasedAnnotationService
     reference_lexicon_query: ReferenceLexiconQueryService | None = None
@@ -133,6 +144,11 @@ def _entry_extraction_dependencies() -> _EntryExtractionDependencies:
     return _EntryExtractionDependencies(
         lexicography_unit_of_work_factory=lexicography_unit_of_work_factory,
         sources_unit_of_work_factory=sources_unit_of_work_factory,
+        dictionary_pages=GetDictionaryService(sources_unit_of_work_factory),
+        object_storage=create_object_storage(settings),
+        ocr_provider=TesseractAltoOcrProvider(
+            timeout_seconds=settings.ocr_task_timeout_seconds
+        ),
         ai_schema_provider=AnthropicAiSchemaProvider(
             api_key=api_key.get_secret_value() if api_key is not None else "",
             model=settings.ai_schema_model,
@@ -145,6 +161,54 @@ def _entry_extraction_dependencies() -> _EntryExtractionDependencies:
             create_reference_lexicon_unit_of_work_factory(engine)
         ),
     )
+
+
+def _refresh_fragment_text(
+    deps: _EntryExtractionDependencies,
+    dictionary_id: UUID,
+    actor_id: UUID,
+    fragment: EntryFragment,
+    language: str,
+    task_id: str,
+) -> str:
+    """Re-OCR this fragment's box(es) and return the fresh text.
+
+    Falls back to ``fragment.recognized_text`` (whatever it already holds)
+    on any failure -- a missing page image or a Tesseract error must never
+    block extraction, and a blank re-OCR result must never wipe out text
+    that was already there.
+    """
+    boxes: list[tuple[float, float, float, float]] = [
+        (fragment.x, fragment.y, fragment.width, fragment.height)
+    ]
+    if (
+        fragment.x2 is not None
+        and fragment.y2 is not None
+        and fragment.width2 is not None
+        and fragment.height2 is not None
+    ):
+        boxes.append((fragment.x2, fragment.y2, fragment.width2, fragment.height2))
+
+    try:
+        page = deps.dictionary_pages.get_page_by_id(
+            dictionary_id, actor_id, fragment.page_id
+        )
+        if page is None:
+            return fragment.recognized_text
+        buffer = BytesIO()
+        deps.object_storage.download(page.processed_asset_key, buffer)
+        segments = deps.ocr_provider.segment_region(buffer.getvalue(), boxes, language)
+    except (ObjectNotFoundError, OcrExecutionError) as error:
+        _log_task_event(
+            "entry_extraction_fragment_reocr_failed",
+            task_id,
+            fragment_id=str(fragment.id),
+            error=str(error),
+        )
+        return fragment.recognized_text
+
+    text = " ".join(segment.text for segment in segments).strip()
+    return text or fragment.recognized_text
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -180,12 +244,23 @@ def extract_entry_fields(task: Task, entry_id: str, actor_id: str) -> dict[str, 
 
         fragments = unit_of_work.lexicography.list_fragments_for_entry(entry_uuid)
 
+    dictionary = deps.dictionary_pages.get(entry.dictionary_id, actor_uuid)
+    language = resolve_ocr_language(
+        [lang.language_code for lang in dictionary.languages]
+    )
+
     now = datetime.now(UTC)
     created_fields = 0
     hyphen_resolver = _make_hyphen_resolver(deps.reference_lexicon_query)
     with deps.lexicography_unit_of_work_factory() as unit_of_work:
         for fragment in fragments:
-            text = fragment.recognized_text
+            text = _refresh_fragment_text(
+                deps, entry.dictionary_id, actor_uuid, fragment, language, task_id
+            )
+            if text != fragment.recognized_text:
+                fragment.recognized_text = text
+                unit_of_work.lexicography.update_fragment(fragment)
+
             if not text.strip():
                 _log_task_event(
                     "entry_extraction_fragment_no_text",

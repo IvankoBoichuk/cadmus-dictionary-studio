@@ -29,6 +29,7 @@ from cadmus.reference_lexicon import (
 )
 from cadmus.sources import (
     Dictionary,
+    DictionaryPage,
     DictionarySettlementMapping,
     DictionaryStatus,
     SettlementMappingStatus,
@@ -129,6 +130,14 @@ class MemoryLexicographyRepository:
         for bucket in self.fields.values():
             bucket[:] = [f for f in bucket if f.id != field_id]
 
+    def update_fragment(self, fragment: EntryFragment) -> None:
+        bucket = self.fragments.setdefault(fragment.entry_id, [])
+        for index, existing in enumerate(bucket):
+            if existing.id == fragment.id:
+                bucket[index] = fragment
+                return
+        bucket.append(fragment)
+
 
 class MemoryLexicographyUnitOfWork:
     def __init__(self, repository: MemoryLexicographyRepository) -> None:
@@ -172,6 +181,88 @@ class FakeAiSchemaProvider:
         if self.fail:
             raise AiSchemaProviderError("provider unavailable")
         return list(self.items)
+
+
+class FakeDictionaryPages:
+    """Minimal stand-in for ``GetDictionaryService`` -- only the two lookups
+    ``_refresh_fragment_text``/the task body use."""
+
+    def __init__(self, dictionary: Dictionary, page: DictionaryPage) -> None:
+        self.dictionary = dictionary
+        self.page = page
+
+    def get(self, dictionary_id: UUID, actor_id: UUID, **kwargs: object) -> Dictionary:
+        return self.dictionary
+
+    def get_page_by_id(
+        self, dictionary_id: UUID, actor_id: UUID, page_id: UUID
+    ) -> DictionaryPage | None:
+        return self.page if page_id == self.page.id else None
+
+
+class FakeObjectStorage:
+    """Minimal stand-in for ``ObjectStorage`` -- ``download`` only, since
+    re-OCR never uploads or deletes."""
+
+    def __init__(self, *, missing: bool = False) -> None:
+        self.missing = missing
+        self.downloaded_keys: list[str] = []
+
+    def download(self, key: str, destination: object) -> None:
+        from cadmus.sources import ObjectNotFoundError
+
+        self.downloaded_keys.append(key)
+        if self.missing:
+            raise ObjectNotFoundError(key)
+        destination.write(b"fake-png-bytes")  # type: ignore[attr-defined]
+
+
+class FakeOcrProvider:
+    """Minimal stand-in for ``TesseractAltoOcrProvider`` -- returns no
+    segments by default, so ``_refresh_fragment_text`` falls back to the
+    fragment's existing ``recognized_text`` and every pre-existing test's
+    fixed ``fragment_text`` still reaches the AI provider unchanged."""
+
+    def __init__(self, *, text: str | None = None, fail: bool = False) -> None:
+        self.text = text
+        self.fail = fail
+        self.calls: list[tuple[list[tuple[float, float, float, float]], str]] = []
+
+    def suggest_words(self, image_bytes: bytes, language: str) -> list[object]:
+        raise AssertionError("not used by extraction")
+
+    def segment_region(
+        self,
+        image_bytes: bytes,
+        boxes: list[tuple[float, float, float, float]],
+        language: str,
+    ) -> list[object]:
+        from cadmus.infrastructure.ocr import OcrExecutionError
+        from cadmus.lexicography import FragmentSegment
+
+        self.calls.append((list(boxes), language))
+        if self.fail:
+            raise OcrExecutionError("tesseract failed")
+        if self.text is None:
+            return []
+        return [
+            FragmentSegment(
+                index=0, text=self.text, x=0, y=0, width=1, height=1, confidence=1.0
+            )
+        ]
+
+
+def _page(page_id: UUID) -> DictionaryPage:
+    return DictionaryPage(
+        id=page_id,
+        source_file_id=uuid4(),
+        page_index=0,
+        processed_asset_key="sources/x/pages/00001.png",
+        width=1000,
+        height=1000,
+        checksum_sha256="0" * 64,
+        created_at=NOW,
+    )
 
 
 def _dictionary() -> Dictionary:
@@ -241,6 +332,9 @@ class Fixture:
         fragment_text: str = FRAGMENT_TEXT,
         definition: dict[str, object] | None = None,
         reference_lexicon_query: object | None = None,
+        ocr_text: str | None = None,
+        ocr_fails: bool = False,
+        object_storage_missing: bool = False,
     ) -> None:
         self.sources_repository = MemorySourcesRepository()
         self.lexicography_repository = MemoryLexicographyRepository()
@@ -254,6 +348,11 @@ class Fixture:
         self.lexicography_repository.fragments[self.entry.id] = [self.fragment]
         self.schema = _schema(self.dictionary.id, definition)
         self.lexicography_repository.article_schemas[self.schema.id] = self.schema
+
+        self.page = _page(self.fragment.page_id)
+        self.dictionary_pages = FakeDictionaryPages(self.dictionary, self.page)
+        self.object_storage = FakeObjectStorage(missing=object_storage_missing)
+        self.ocr_provider = FakeOcrProvider(text=ocr_text, fail=ocr_fails)
 
         annotation_service = RuleBasedAnnotationService(
             unit_of_work_factory=lambda: MemoryLexicographyUnitOfWork(
@@ -270,6 +369,9 @@ class Fixture:
             sources_unit_of_work_factory=lambda: MemorySourcesUnitOfWork(
                 self.sources_repository
             ),
+            dictionary_pages=self.dictionary_pages,  # type: ignore[arg-type]
+            object_storage=self.object_storage,  # type: ignore[arg-type]
+            ocr_provider=self.ocr_provider,  # type: ignore[arg-type]
             ai_schema_provider=self.provider,  # type: ignore[arg-type]
             annotation_service=annotation_service,
             reference_lexicon_query=reference_lexicon_query,  # type: ignore[arg-type]
@@ -290,6 +392,15 @@ class Fixture:
 
     def stored_fields(self) -> list[EntryField]:
         return self.lexicography_repository.list_fields_for_entry(self.entry.id)
+
+    def stored_fragment(self) -> EntryFragment:
+        return next(
+            f
+            for f in self.lexicography_repository.list_fragments_for_entry(
+                self.entry.id
+            )
+            if f.id == self.fragment.id
+        )
 
 
 def test_extract_entry_fields_persists_model_fields_from_text(
@@ -331,6 +442,62 @@ def test_extract_entry_fields_value_absent_from_text_stores_no_offsets(
     stored = fixture.stored_fields()[0]
     assert stored.source_text == "вигадане"
     assert stored.source_start is None and stored.source_end is None
+
+
+def test_extract_entry_fields_re_ocrs_the_fragment_before_extracting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fragment trimmed down to just the headword (e.g. by an editor) gets
+    a fresh chance at its full text every time extraction runs."""
+    fresh_text = "КИРИНЯ, -і, ж. Безладдя, бруд."  # noqa: RUF001
+    fixture = Fixture(fragment_text="КИРИНЯ", ocr_text=fresh_text)
+    fixture.install(monkeypatch)
+
+    result = fixture.run("task-reocr-1")
+
+    assert result["status"] == "succeeded"
+    assert fixture.provider.received_text == fresh_text
+    assert fixture.stored_fragment().recognized_text == fresh_text
+    assert fixture.ocr_provider.calls == [([(0.0, 0.0, 100.0, 40.0)], "ukr+eng")]
+
+
+def test_extract_entry_fields_falls_back_to_old_text_on_ocr_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = Fixture(fragment_text=FRAGMENT_TEXT, ocr_fails=True)
+    fixture.install(monkeypatch)
+
+    result = fixture.run("task-reocr-2")
+
+    assert result["status"] == "succeeded"
+    assert fixture.provider.received_text == FRAGMENT_TEXT
+    assert fixture.stored_fragment().recognized_text == FRAGMENT_TEXT
+
+
+def test_extract_entry_fields_falls_back_to_old_text_when_page_image_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = Fixture(fragment_text=FRAGMENT_TEXT, object_storage_missing=True)
+    fixture.install(monkeypatch)
+
+    result = fixture.run("task-reocr-3")
+
+    assert result["status"] == "succeeded"
+    assert fixture.provider.received_text == FRAGMENT_TEXT
+    assert fixture.stored_fragment().recognized_text == FRAGMENT_TEXT
+
+
+def test_extract_entry_fields_falls_back_to_old_text_when_re_ocr_finds_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = Fixture(fragment_text=FRAGMENT_TEXT, ocr_text=None)
+    fixture.install(monkeypatch)
+
+    result = fixture.run("task-reocr-4")
+
+    assert result["status"] == "succeeded"
+    assert fixture.provider.received_text == FRAGMENT_TEXT
+    assert fixture.stored_fragment().recognized_text == FRAGMENT_TEXT
 
 
 class FakeReferenceLexiconQuery:

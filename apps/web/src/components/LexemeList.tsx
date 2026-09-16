@@ -140,7 +140,7 @@ export function LexemeList({
 
   return (
     <ul
-      className="m-0 grid max-h-[70vh] list-none gap-2 overflow-y-auto overscroll-contain p-0 sm:grid-cols-2"
+      className="m-0 grid list-none gap-2 overflow-y-auto overscroll-contain p-0 sm:columns-2"
       aria-label="Лексеми на сторінці"
     >
       {lexemesState.lexemes.map((lexeme) => {
@@ -150,7 +150,7 @@ export function LexemeList({
         const hasSecondBox = lexeme.x2 != null;
         const isComplete = lexeme.status === "complete";
         return (
-          <li key={lexeme.id} className="group grid content-start gap-[0.35rem]">
+          <li key={lexeme.id} className="group ">
             <button
               type="button"
               ref={(element) => {
